@@ -80,7 +80,7 @@ ts(){ date +%H:%M:%S; }
 problem(){ printf '%s\t%s\n' "$2" "$1" >> "$PROBLEM_LOG"; }
 
 ff_run() {
-  "$FFMPEG" -nostdin -hide_banner -loglevel error -stats "$@"
+  "$FFMPEG" -nostdin -hide_banner -loglevel error "$@"
 }
 
 # Probe a single stream attribute from the first video stream
