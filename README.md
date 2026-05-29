@@ -1,6 +1,9 @@
 # thoughtful_h264_to_h265_conversion
 
-Selectively re-encodes H.264 MP4 files to H.265/HEVC using FFmpeg. "Thoughtful" because it only encodes files where the saving is genuinely worth the CPU cost — it pre-scans each file, models the expected output size, and skips files that won't meet your threshold before spending time encoding them.
+Selectively re-encodes H.264 MP4 files to H.265/HEVC using FFmpeg. "Thoughtful" because it:
+- only encodes files where the space saving is genuinely worth a transcode 
+- modifies the bitrate of the target file based on the bits per pixel of the original file. So heavily compressed originals do not get heavily compressed again, where very high bitrate originals get compressed more. 
+- it pre-scans each file, models the expected output size, and skips files that defintyely won't meet your threshold before spending time encoding them.
 
 ## Features
 
