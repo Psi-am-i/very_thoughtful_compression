@@ -3,8 +3,8 @@
 Selectively re-encodes H.264 MP4 files to H.265/HEVC using FFmpeg. "Thoughtful" because it:
 - only makes an H.265 version when it is the same perceptual quality AND substantially smaller.
 - uses the original files "bits per pixel per frame" when deciding how to encode the H.265 file. Heavily compressed originals do not get heavily compressed again, while generously encoding originals get compressed more.
-- pre-scans each file, models the expected output size, and skips files that definitely won't meet the threshold of space saving and quality before spending  encoding them.
-- fully configurable to your taste
+- pre-scans each file, models the expected output size, and skips files that definitely won't meet the threshold of space saving and quality before spending encoding time on them.
+- fully configurable!
 
 ## Features
 
