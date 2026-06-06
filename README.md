@@ -1,10 +1,11 @@
 # thoughtful_h264_to_h265_conversion
 
 Selectively re-encodes H.264 MP4 files to H.265/HEVC using FFmpeg. "Thoughtful" because it:
-- only makes an H.265 version when it is the same perceptual quality AND substantially smaller.
-- uses the original files "bits per pixel per frame" when deciding how to encode the H.265 file. Heavily compressed originals do not get heavily compressed again, while generously encoding originals get compressed more.
-- pre-scans each file, models the expected output size, and skips files that definitely won't meet the threshold of space saving and quality before spending encoding time on them.
-- fully configurable!
+
+- only makes an H.265 version when it is the same perceptual quality AND substantially smaller
+- uses the source's bits-per-pixel-per-frame to derive the target bitrate — heavily compressed originals are not compressed harder, while generously encoded originals get more headroom to shrink
+- pre-scans each file, models the expected output size, and skips files that definitely won't meet your saving threshold before spending time encoding them
+- fully configurable
 
 ## Features
 
@@ -13,8 +14,10 @@ Selectively re-encodes H.264 MP4 files to H.265/HEVC using FFmpeg. "Thoughtful" 
 - **Adaptive bitrate model** — target bitrate is derived from the source's bits-per-pixel-per-frame, not a fixed number, so dense and lean sources are treated differently
 - **Apple VideoToolbox** — uses `hevc_videotoolbox` hardware encoder when available; falls back to software `libx265`
 - **10-bit preservation** — detects 10-bit pixel formats (`yuv420p10le` etc.) and selects the `main10` HEVC profile automatically
+- **Video-only support** — audio map uses optional (`?`) flag so video-only files encode without errors
 - **Safe replacement** — output replaces the source only if it is meaningfully smaller (configurable ratio threshold)
-- **Original backup** — optionally copies source files to `_originals/` (preserving relative directory structure) before deleting them
+- **Original archiving** — optionally moves source files to an archive folder (preserving relative directory structure) before replacing them
+- **Safe from home directory** — `~/Library` and other macOS system folders are excluded from the `find` scan
 - **Problem summary** — prints a consolidated list of files that need attention at the end of each run
 
 ## Requirements
@@ -26,42 +29,37 @@ Selectively re-encodes H.264 MP4 files to H.265/HEVC using FFmpeg. "Thoughtful" 
 ## Usage
 
 ```bash
-./h264_to_h265.sh [SRC] [DST] [JOBS]
+./h264_to_h265.sh [SRC]
 ```
 
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `SRC` | `.` | Source directory (or single file) to process |
-| `DST` | Same as `SRC` | Destination root for output files; defaults to in-place replacement |
-| `JOBS` | Prompted | Number of parallel encoding jobs |
+`SRC` is the directory to scan recursively (default: current directory). The script prompts interactively for all options on startup:
 
-The script prompts interactively on first run. Set the environment variables below to skip all prompts for scripted/scheduled use.
+- **Output location** — in place, or a separate folder (flat or mirrored structure)
+- **Original handling** — archive to a folder, delete, or leave in place
+- **Parallel encoding jobs** — 1 (default), 2, or 4
+- **Minimum size saving** — how much smaller the output must be to replace the source (default: 15%)
+
+### Graceful stop
+
+```bash
+touch /tmp/hevc_stop   # finish current file(s), skip the rest
+rm /tmp/hevc_stop      # clear the stop flag to resume/re-run
+```
 
 ### Environment variables
 
-| Variable | Values | Description |
-|----------|--------|-------------|
-| `JOBS` | integer | Number of parallel jobs — skips the prompt |
-| `MIN_SAVING_RATIO` | `0.0`–`1.0` | Output must be smaller than `source_size × ratio` to replace the source. Default `0.85` (requires 15% saving). |
-| `MIN_SAVING_SET` | any non-empty value | Set to skip the saving-threshold prompt |
-| `DELETE_SOURCE` | `0` / `1` | Remove (and back up) source after a successful encode |
-| `DELETE_SOURCE_SET` | any non-empty value | Set to skip the delete-source prompt |
-| `FFMPEG` | path | Override the `ffmpeg` binary location |
-| `FFPROBE` | path | Override the `ffprobe` binary location |
-
-### Examples
-
-```bash
-# Interactive
-./h264_to_h265.sh /Volumes/NAS/Movies
-
-# Non-interactive: 1 job, keep source, require 20% saving
-JOBS=1 MIN_SAVING_RATIO=0.80 MIN_SAVING_SET=1 DELETE_SOURCE=0 DELETE_SOURCE_SET=1 \
-  ./h264_to_h265.sh /Volumes/NAS/Movies
-
-# Single file
-./h264_to_h265.sh /Volumes/NAS/Movies/BigFilm.mp4
-```
+| Variable | Description |
+|----------|-------------|
+| `FFMPEG` | Override the `ffmpeg` binary path |
+| `FFPROBE` | Override the `ffprobe` binary path |
+| `FORCE_VT` | `1` to force VideoToolbox, `0` to force software `libx265` |
+| `BITRATE_FLOOR` | Minimum target bitrate in kbps (default: `3800`) |
+| `BITRATE_CAP_HD` | Maximum target bitrate for HD (≤ 1080p) in kbps (default: `8000`) |
+| `BITRATE_CAP_4K` | Maximum target bitrate for 4K (≥ 2160p) in kbps (default: `16000`) |
+| `BPP_HIGH` | Bits-per-pixel threshold for maximum compression ratio (default: `0.08`) |
+| `BPP_LOW` | Bits-per-pixel threshold for minimum compression ratio (default: `0.03`) |
+| `RATIO_HIGH` | Compression ratio at `BPP_HIGH` (default: `0.55` — 55% of source) |
+| `RATIO_LOW` | Compression ratio at `BPP_LOW` (default: `0.70` — 70% of source) |
 
 ## Bitrate model
 
@@ -87,13 +85,13 @@ A file is queued for encoding only if it meets **all** of the following:
 
 1. The video codec is H.264 (`h264` / `avc`)
 2. Either: the source width is ≥ 3840 px (4K), **or** the file size is ≥ 4 GB
-3. The pre-scan estimates the output will be at least `MIN_SAVING_RATIO` smaller than the source
+3. The pre-scan estimates the output will be meaningfully smaller than the source (per `MIN_SAVING_RATIO`)
 
 Files in H.265, VP9, AV1, or any non-H.264 codec are skipped without modification.
 
 ## Encoding strategy
 
-The script tries audio-copy first (preserving the original audio track without re-encoding), then falls back to AAC at 384 kbps if the audio codec is incompatible with the MP4 container.
+The script tries audio stream-copy first (preserving the original audio without re-encoding), then falls back to AAC at 384 kbps if the audio codec is incompatible with the MP4 container.
 
 On macOS, VideoToolbox hardware encoding is used when available. On Linux or when VideoToolbox is unavailable, `libx265 crf=21 preset=medium` is used.
 

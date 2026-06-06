@@ -3,31 +3,18 @@
 # h264_to_h265.sh — Batch re-encode H.264 video files to H.265/HEVC
 #
 # USAGE:
-#   ./h264_to_h265.sh [SRC] [DST] [JOBS]
+#   ./h264_to_h265.sh [SRC]
 #
-#   SRC   Source directory (default: current directory)
-#   DST   Destination directory (default: same as SRC)
-#   JOBS  Parallel jobs passed as 3rd argument (overrides interactive prompt)
-#
-# ENV VARS (skip the interactive prompts):
-#   JOBS=1|2|4              Parallel encoding jobs
-#   MIN_SAVING_RATIO=0.85   Minimum size ratio to replace source (default: 0.85 = 15% saving)
-#   DELETE_SOURCE=0|1       Delete source after successful encode (default: 0)
+#   SRC   Directory to scan (default: current directory)
 #
 # GRACEFUL STOP:
 #   touch /tmp/hevc_stop     — finish current file(s), skip the rest
 #   rm /tmp/hevc_stop        — clear the stop flag to resume/re-run
-#
-# EXAMPLES:
-#   ./h264_to_h265.sh /Volumes/Media /Volumes/Media 2
-#   JOBS=4 DELETE_SOURCE=1 ./h264_to_h265.sh /Volumes/Media
 # ══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
 SRC="${1:-.}"
 SRC="${SRC%/}"
-DST="${2:-$SRC}"
-DST="${DST%/}"
 TMPROOT="/tmp/hevcwork"
 
 # Bitrate logic:
@@ -46,44 +33,68 @@ BPP_LOW=0.03
 RATIO_HIGH=0.55
 RATIO_LOW=0.7
 
-# ── Interactive prompts (skip by pre-setting env vars) ───────────────────────
+# ── Interactive prompts ───────────────────────────────────────────────────────
 
-if [[ -n "${3:-}" ]]; then
-  JOBS="$3"
-elif [[ -n "${JOBS:-}" ]]; then
-  :
+printf '\nWhere should the new H.265 file be written?\n  1) Replace source in place  [default]\n  2) Write to a separate folder\n' >&2
+read -r -p "  Choice [1/2]: " _ochoice </dev/tty 2>/dev/tty || _ochoice=1
+case "${_ochoice:-1}" in
+  2)
+    OUTPUT_MODE=separate
+    printf '\nDestination folder for new files?\n  (default: %s/new versions)\n' "$SRC" >&2
+    read -r -p "  Path: " _opath </dev/tty 2>/dev/tty || _opath=""
+    OUTPUT_DIR="${_opath:-$SRC/new versions}"
+    printf '\nFolder structure in destination?\n  1) Mirror source folder structure  [default]\n  2) Flat — all files in destination root\n' >&2
+    read -r -p "  Choice [1/2]: " _fchoice </dev/tty 2>/dev/tty || _fchoice=1
+    case "${_fchoice:-1}" in
+      2) OUTPUT_FLAT=1 ;;
+      *) OUTPUT_FLAT=0 ;;
+    esac
+    ;;
+  *)
+    OUTPUT_MODE=inplace
+    OUTPUT_DIR="$SRC"
+    OUTPUT_FLAT=0
+    ;;
+esac
+export OUTPUT_MODE OUTPUT_DIR OUTPUT_FLAT
+
+printf '\nWhat should happen to the original file?\n  1) Archive (move to a folder)  [default]\n  2) Delete\n  3) Leave it where it is\n' >&2
+read -r -p "  Choice [1/2/3]: " _schoice </dev/tty 2>/dev/tty || _schoice=1
+case "${_schoice:-1}" in
+  2) SOURCE_ACTION=delete ;;
+  3) SOURCE_ACTION=keep ;;
+  *) SOURCE_ACTION=archive ;;
+esac
+
+if [[ "$SOURCE_ACTION" == "archive" ]]; then
+  printf '\nWhere should originals be archived?\n  (default: %s/originals)\n' "$SRC" >&2
+  read -r -p "  Path: " _apath </dev/tty 2>/dev/tty || _apath=""
+  ARCHIVE_DIR="${_apath:-$SRC/originals}"
 else
-  printf '\nParallel encoding jobs? (H.265 is CPU-heavy)\n  1) 1 job  [default]\n  2) 2 jobs\n  3) 4 jobs\n' >&2
-  read -r -p "  Choice [1/2/3]: " _jchoice </dev/tty 2>/dev/tty || _jchoice=1
-  case "${_jchoice:-1}" in
-    2) JOBS=2 ;;
-    3) JOBS=4 ;;
-    *) JOBS=1 ;;
-  esac
+  ARCHIVE_DIR=""
 fi
+export SOURCE_ACTION ARCHIVE_DIR
+
+printf '\nParallel encoding jobs? (H.265 is CPU-heavy)\n  1) 1 job  [default]\n  2) 2 jobs\n  3) 4 jobs\n' >&2
+read -r -p "  Choice [1/2/3]: " _jchoice </dev/tty 2>/dev/tty || _jchoice=1
+case "${_jchoice:-1}" in
+  2) JOBS=2 ;;
+  3) JOBS=4 ;;
+  *) JOBS=1 ;;
+esac
 export JOBS
 
-if [[ -z "${MIN_SAVING_SET:-}" ]]; then
-  printf '\nMinimum size saving required to replace source?\n  1) 15%%  [default]\n  2) 10%%\n  3) 5%%\n  4) None — always replace if encode succeeds\n' >&2
-  read -r -p "  Choice [1/2/3/4]: " _schoice </dev/tty 2>/dev/tty || _schoice=1
-  case "${_schoice:-1}" in
-    2) MIN_SAVING_RATIO="0.90" ;;
-    3) MIN_SAVING_RATIO="0.95" ;;
-    4) MIN_SAVING_RATIO="1.00" ;;
-    *) MIN_SAVING_RATIO="0.85" ;;
-  esac
-fi
+printf '\nMinimum size saving required to keep the new file?\n  1) 15%%  [default]\n  2) 10%%\n  3) 5%%\n  4) None — always keep if encode succeeds\n' >&2
+read -r -p "  Choice [1/2/3/4]: " _mschoice </dev/tty 2>/dev/tty || _mschoice=1
+case "${_mschoice:-1}" in
+  2) MIN_SAVING_RATIO="0.90" ;;
+  3) MIN_SAVING_RATIO="0.95" ;;
+  4) MIN_SAVING_RATIO="1.00" ;;
+  *) MIN_SAVING_RATIO="0.85" ;;
+esac
 export MIN_SAVING_RATIO
 
-if [[ -z "${DELETE_SOURCE_SET:-}" ]]; then
-  printf '\nDelete source file after successful encode?\n  1) Keep source  [default]\n  2) Delete source (backed up to _originals/)\n' >&2
-  read -r -p "  Choice [1/2]: " _del </dev/tty 2>/dev/tty || _del=1
-  case "${_del:-1}" in
-    2) DELETE_SOURCE=1 ;;
-    *) DELETE_SOURCE=0 ;;
-  esac
-fi
-export DELETE_SOURCE
+# ── Setup ─────────────────────────────────────────────────────────────────────
 
 FFMPEG="${FFMPEG:-ffmpeg}"
 FFPROBE="${FFPROBE:-ffprobe}"
@@ -96,6 +107,13 @@ STOP_FILE="/tmp/hevc_stop"
 export PROBLEM_LOG STOP_FILE
 trap 'rm -f "$PROBLEM_LOG"' EXIT
 
+TTY=/dev/tty
+log(){ printf '%s\n' "$*" > "$TTY"; }
+ts(){ date +%H:%M:%S; }
+problem(){ printf '%s\t%s\n' "$2" "$1" >> "$PROBLEM_LOG"; }
+fsize(){ du -sh "$1" 2>/dev/null | awk '{print $1}'; }
+sname(){ local b; b="$(basename "$1")"; printf '%s' "${b%.*}"; }
+
 check_stop_requested() {
   if [[ -f "$STOP_FILE" ]]; then
     log "$(ts) STOP  : stop file found ($STOP_FILE) — skipping remaining files"
@@ -104,17 +122,8 @@ check_stop_requested() {
   return 1
 }
 
-TTY=/dev/tty
-log(){ printf '%s\n' "$*" > "$TTY"; }
-ts(){ date +%H:%M:%S; }
-problem(){ printf '%s\t%s\n' "$2" "$1" >> "$PROBLEM_LOG"; }
-fsize(){ du -sh "$1" 2>/dev/null | awk '{print $1}'; }
-sname(){ local b; b="$(basename "$1")"; printf '%s' "${b%.*}"; }
-
 # Progress-aware ffmpeg wrapper.
 #   ff_run_progress LABEL DURATION_SECS START_TS [ffmpeg args...]
-# Writes progress to a temp file via -progress, spawns a monitor,
-# cleans up on exit.  Returns ffmpeg's exit code.
 ff_run_progress() {
   local label="$1" dur_secs="$2" start_ts="$3"
   shift 3
@@ -123,38 +132,30 @@ ff_run_progress() {
   _e=$(mktemp /tmp/fferr.XXXXXX)
   _prog=$(mktemp /tmp/ffprog.XXXXXX)
 
-  # Stagger reporting interval: 1 job → 10s; >1 job → 20s with per-file offset
-  # so parallel encodes don't all log simultaneously.
   local interval offset monitor_pid
   if [[ "${JOBS:-1}" -le 1 ]]; then
-    interval=10
-    offset=0
+    interval=10; offset=0
   else
     interval=20
-    # Hash the label to a 0–19 second offset
     offset=$(( $(printf '%s' "$label" | cksum | awk '{print $1}') % interval ))
   fi
 
-  # Background monitor: sleeps for initial offset, then logs every interval
   ( sleep "$offset"
     while true; do
       sleep "$interval"
       [[ -f "$_prog" ]] || break
-
-      # Parse the most recent ffmpeg progress snapshot
-      local out_time_us speed bitrate pct eta_str elapsed
+      local out_time_us speed bitrate elapsed
       out_time_us=$(grep '^out_time_us=' "$_prog" 2>/dev/null | tail -1 | cut -d= -f2)
       speed=$(grep       '^speed='       "$_prog" 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' ')
       bitrate=$(grep     '^bitrate='     "$_prog" 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' ')
       elapsed=$(( $(date +%s) - start_ts ))
-
-      # Percent complete — requires a valid duration and timestamp
       if [[ -n "$out_time_us" && "$out_time_us" =~ ^[0-9]+$ && \
             -n "$dur_secs"    && "$dur_secs"    =~ ^[0-9]+$  && \
             "$dur_secs" -gt 0 ]]; then
         local done_secs=$(( out_time_us / 1000000 ))
+        local pct
         pct=$(python3 -c "print(f'{min($done_secs/$dur_secs*100,100):.1f}')")
-        # ETA
+        local eta_str=""
         if [[ "$elapsed" -gt 2 && $(python3 -c "print(1 if $done_secs>0 else 0)") == "1" ]]; then
           local remain
           remain=$(python3 -c "
@@ -167,12 +168,9 @@ else:
     print('?')
 ")
           eta_str="  ETA=${remain}"
-        else
-          eta_str=""
         fi
         log "$(ts)  ...  : ${pct}%  speed=${speed:-?}  bitrate=${bitrate:-?}  elapsed=${elapsed}s${eta_str}  — ${label}"
       else
-        # Duration unknown — fall back to elapsed + whatever stats we have
         log "$(ts)  ...  : elapsed=${elapsed}s  speed=${speed:-?}  bitrate=${bitrate:-?}  — ${label}"
       fi
     done ) &
@@ -197,7 +195,6 @@ else:
   return "$_rc"
 }
 
-# Legacy no-progress wrapper (used for audio-probe pass, VT check, etc.)
 ff_run() {
   local _e _rc
   _e=$(mktemp /tmp/fferr.XXXXXX)
@@ -231,11 +228,8 @@ file_size() {
 }
 
 check_videotoolbox() {
-  # Prefer an explicit env override: FORCE_VT=1 or FORCE_VT=0
   if [[ "${FORCE_VT:-}" == "1" ]]; then return 0; fi
   if [[ "${FORCE_VT:-}" == "0" ]]; then return 1; fi
-  # Check encoder list rather than doing a test encode — the test encode
-  # fails over SSH even when hardware is perfectly available
   "$FFMPEG" -hide_banner -encoders 2>/dev/null | grep -q 'hevc_videotoolbox'
 }
 
@@ -355,20 +349,22 @@ should_encode() {
 }
 
 process_one() {
-  local src="$1" dst="$2" file="$3"
-
-  local src_base dst_base
-  if [[ -f "$src" ]]; then
-    src_base="$(dirname "$src")"
-    dst_base="$(dirname "$dst")"
-  else
-    src_base="$src"
-    dst_base="$dst"
-  fi
+  local src="$1" file="$2"
 
   local rel out
-  rel="${file#"$src_base"/}"
-  out="$dst_base/${rel%.*}.mp4"
+  rel="${file#"$src"/}"
+
+  # Determine output path
+  if [[ "${OUTPUT_MODE:-inplace}" == "separate" ]]; then
+    if [[ "${OUTPUT_FLAT:-0}" == "1" ]]; then
+      out="${OUTPUT_DIR}/$(basename "${rel%.*}").mp4"
+    else
+      out="${OUTPUT_DIR}/${rel%.*}.mp4"
+    fi
+  else
+    out="${src}/${rel%.*}.mp4"
+  fi
+
   local n; n="$(sname "$file")"
 
   mkdir -p "$(dirname "$out")"
@@ -380,13 +376,8 @@ process_one() {
     return 0
   fi
 
-  if ! should_encode "$file"; then
-    return 0
-  fi
-
-  if ! prescan_worth_encoding "$file"; then
-    return 0
-  fi
+  if ! should_encode "$file"; then return 0; fi
+  if ! prescan_worth_encoding "$file"; then return 0; fi
 
   # Probe source
   local src_bps width height fps fps_raw dur_secs
@@ -402,7 +393,6 @@ try:    print(float(Fraction('${fps_raw:-30/1}')))
 except: print(30.0)
 ")"
 
-  # Duration in whole seconds - used by the progress monitor for % complete
   local dur_raw
   dur_raw="$("$FFPROBE" -v error -show_entries format=duration \
     -of csv=p=0 "$file" 2>/dev/null | head -1)"
@@ -459,7 +449,7 @@ except: print(30.0)
     if [[ "$use_vt" -eq 1 ]]; then
       if ff_run_progress "$n" "$dur_secs" "$start" \
           -y -i "$file" \
-          -map 0:v:0 -map 0:a \
+          -map 0:v:0 -map 0:a? \
           -c:v hevc_videotoolbox -b:v "$bitrate" \
           -profile:v "$profile" \
           -tag:v hvc1 \
@@ -473,7 +463,7 @@ except: print(30.0)
     else
       if ff_run_progress "$n" "$dur_secs" "$start" \
           -y -i "$file" \
-          -map 0:v:0 -map 0:a \
+          -map 0:v:0 -map 0:a? \
           -c:v libx265 -crf 21 -preset medium \
           -profile:v "$profile" \
           "${audio_flags[@]}" \
@@ -507,21 +497,26 @@ except: print(30.0)
     return 0
   fi
 
-  log "$(ts) MOVE  : $n"
   mv -f "$tmp" "$out"
 
   if [[ -s "$out" ]]; then
-    if [[ "$DELETE_SOURCE" == "1" ]]; then
-      local orig_dir rel_dir
-      rel_dir="$(dirname "$rel")"
-      orig_dir="$src_base/_originals${rel_dir:+/$rel_dir}"
-      mkdir -p "$orig_dir"
-      cp -f "$file" "$orig_dir/$(basename "$file")"
-      [[ "$file" != "$out" ]] && rm -f "$file"
-      log "$(ts) DONE  : ${elapsed}s  [$(fsize "$out")]  $n  (original backed up)"
-    else
-      log "$(ts) DONE  : ${elapsed}s  [$(fsize "$out")]  $n"
-    fi
+    case "${SOURCE_ACTION:-archive}" in
+      delete)
+        [[ "$file" != "$out" ]] && rm -f "$file"
+        log "$(ts) DONE  : ${elapsed}s  [$(fsize "$out")]  $n  (original deleted)"
+        ;;
+      archive)
+        local arc_rel arc_dest
+        arc_rel="$(dirname "$rel")"
+        arc_dest="${ARCHIVE_DIR}${arc_rel:+/$arc_rel}"
+        mkdir -p "$arc_dest"
+        [[ "$file" != "$out" ]] && mv -f "$file" "$arc_dest/$(basename "$file")"
+        log "$(ts) DONE  : ${elapsed}s  [$(fsize "$out")]  $n  (original → $(basename "$ARCHIVE_DIR"))"
+        ;;
+      keep)
+        log "$(ts) DONE  : ${elapsed}s  [$(fsize "$out")]  $n"
+        ;;
+    esac
   else
     log "$(ts) WARN  : output empty after encode — $n"
     problem "$file" "WARN: output missing or empty after encode — source not deleted"
@@ -532,20 +527,26 @@ except: print(30.0)
 export -f process_one should_encode prescan_worth_encoding probe_video probe_container_bitrate \
            file_size check_videotoolbox calc_bitrate log ts ff_run ff_run_progress problem fsize sname \
            check_stop_requested
-export FFMPEG FFPROBE TMPROOT SIZE_THRESHOLD DELETE_SOURCE PROBLEM_LOG STOP_FILE TTY
+export FFMPEG FFPROBE TMPROOT SIZE_THRESHOLD SOURCE_ACTION ARCHIVE_DIR \
+       OUTPUT_MODE OUTPUT_DIR OUTPUT_FLAT PROBLEM_LOG STOP_FILE TTY
 export BITRATE_FLOOR BITRATE_CAP_4K BITRATE_CAP_HD MIN_SAVING_RATIO BPP_HIGH BPP_LOW RATIO_HIGH RATIO_LOW
 
+log ""
 log "SRC:         $SRC"
-log "DST:         $DST"
+log "OUTPUT:      $( [[ "$OUTPUT_MODE" == "separate" ]] && echo "$OUTPUT_DIR ($( [[ $OUTPUT_FLAT == 1 ]] && echo flat || echo mirrored ))" || echo "in place" )"
+log "ORIGINALS:   $( case "$SOURCE_ACTION" in archive) echo "archive → $ARCHIVE_DIR" ;; delete) echo "delete" ;; keep) echo "keep" ;; esac )"
 log "JOBS:        $JOBS"
 log "BITRATE:     adaptive ${RATIO_HIGH}-${RATIO_LOW} of source | floor=${BITRATE_FLOOR}k | cap_4k=${BITRATE_CAP_4K}k | cap_hd=${BITRATE_CAP_HD}k"
 log "MIN_SAVING:  output must be <$(python3 -c "print(int((1-$MIN_SAVING_RATIO)*100))")% smaller than source to replace"
-log "STOP:        touch $STOP_FILE   (completes in-progress encodes, skips the rest)"
+log "STOP:        touch $STOP_FILE   (finish current file, skip the rest)"
+log "             rm $STOP_FILE      (clear stop flag to re-run)"
+log ""
 
 find "$SRC" \
-  \( -name '.Trashes' -o -name '.Spotlight-V100' -o -name '.fseventsd' -o -name '.TemporaryItems' \) -prune \
+  \( -name '.Trashes' -o -name '.Spotlight-V100' -o -name '.fseventsd' -o -name '.TemporaryItems' \
+     -o -name 'originals' -o -name 'new versions' -o -name 'Library' \) -prune \
   -o \( -type f -not -name '._*' \( -iname "*.mkv" -o -iname "*.mp4" \) -print0 \) \
-  | xargs -0 -n 1 -P "$JOBS" bash -c 'process_one "$@"' _ "$SRC" "$DST"
+  | xargs -0 -n 1 -P "$JOBS" bash -c 'process_one "$@"' _ "$SRC"
 
 if [[ -s "$PROBLEM_LOG" ]]; then
   count="$(wc -l < "$PROBLEM_LOG" | tr -d ' ')"
