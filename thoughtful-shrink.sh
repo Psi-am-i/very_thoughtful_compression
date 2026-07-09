@@ -136,6 +136,19 @@ SIZE_THRESHOLD=$(( 4 * 1024 * 1024 * 1024 ))
 
 mkdir -p "$TMPROOT"
 
+# Sweep orphaned scratch files left by previously killed/crashed runs (a hard
+# SIGKILL or power loss bypasses the per-file cleanup trap below). Safe because
+# this run hasn't created any temps yet — but skip if another instance of this
+# script is already running, so we don't delete its in-progress work.
+_others="$(pgrep -f 'thoughtful-shrink.sh' 2>/dev/null | grep -vw "$$" | wc -l | tr -d ' ')"
+if [[ "${_others:-0}" -eq 0 ]]; then
+  _swept="$(find "$TMPROOT" -maxdepth 1 -type f -name '*.mp4' 2>/dev/null | wc -l | tr -d ' ')"
+  if [[ "${_swept:-0}" -gt 0 ]]; then
+    find "$TMPROOT" -maxdepth 1 -type f -name '*.mp4' -delete 2>/dev/null || true
+    printf '\nSwept %s orphaned scratch file(s) from %s\n' "$_swept" "$TMPROOT" >&2
+  fi
+fi
+
 PROBLEM_LOG="$(mktemp /tmp/hevc_problems.XXXXXX)"
 STOP_FILE="/tmp/hevc_stop"
 export PROBLEM_LOG STOP_FILE
@@ -479,6 +492,11 @@ print(f'{max($BITRATE_FLOOR,int(cap))}k')
   base="$(basename "${out%.mp4}")"
   tmp="$TMPROOT/${base}.$$.$RANDOM.mp4"
   src_size="$(file_size "$file")"
+
+  # Remove this worker's scratch file if it is interrupted mid-encode (Ctrl-C,
+  # graceful stop, TERM) so partial temps never accumulate. A successful encode
+  # moves $tmp to $out first, making this a harmless no-op.
+  trap 'rm -f "$tmp"' EXIT INT TERM
 
   log "$(ts) START : [$(fsize "$file")]  $n"
   log "$(ts) INFO  : ${width}x${height}  fps=$fps  pix=$pix_fmt — $n"
