@@ -6,7 +6,7 @@
 # USAGE:
 #   ./thoughtful-shrink.sh [SRC]
 #
-#   SRC   Directory to scan (default: current directory)
+#   SRC   Directory to scan (prompted for if not given; default: current dir)
 #
 # The script prompts interactively for: output codec (H.265 or H.264), quality
 # tier (STANDARD/HIGH/EXCELLENT/STELLAR/INSANE — each a resolution-anchored
@@ -25,8 +25,18 @@
 # ══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
-SRC="${1:-.}"
+SRC="${1:-}"
+if [[ -z "$SRC" ]]; then
+  printf '\nDirectory to scan for videos (recursively)?\n  (default: current directory — %s)\n' "$PWD" >&2
+  read -r -p "  Path: " SRC </dev/tty 2>/dev/tty || SRC=""
+  SRC="${SRC:-.}"
+fi
+SRC="${SRC/#\~/$HOME}"        # expand a typed leading ~
 SRC="${SRC%/}"
+if [[ ! -d "$SRC" ]]; then
+  printf 'ERROR: "%s" is not a directory\n' "$SRC" >&2
+  exit 1
+fi
 TMPROOT="/tmp/hevcwork"
 
 # ── Bitrate strategy ──────────────────────────────────────────────────────────
