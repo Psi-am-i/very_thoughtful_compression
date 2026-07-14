@@ -10,14 +10,21 @@
 #
 # The script prompts interactively for: output codec (H.265 or H.264), quality
 # tier (STANDARD/HIGH/EXCELLENT/STELLAR/INSANE — each a resolution-anchored
-# quality ceiling), output location, what to do with originals, parallel jobs,
-# and minimum saving. Set FORCE_VT=1/0 to force or disable hardware
-# (VideoToolbox) encoding.
+# quality ceiling), hardware vs software encoder (if a working hardware
+# encoder is detected), output location, what to do with originals, parallel
+# jobs, and minimum saving. Set FORCE_VT=1/0 to force or disable hardware
+# (VideoToolbox) encoding and skip that prompt entirely.
 #
 # Text subtitles are embedded into the MP4 (mov_text), or extracted to sidecar
 # .srt files if embedding fails. Image subtitles (PGS/DVD) can't live in MP4;
 # when any subtitle track would be lost the original is archived — even in
 # delete mode — and the run report explains why.
+#
+# The scan also covers .mov/.avi/.webm/.m4v/.ts/.wmv/.flv, and flags files
+# whose codec/container combination is a poor fit for MP4/typical players
+# (AV1/VP9 in WebM/MKV, legacy MPEG-2/VC-1/Xvid/WMV) regardless of size —
+# offering to transcode them using the same codec/tier settings, once you
+# confirm.
 #
 # GRACEFUL STOP:
 #   touch /tmp/hevc_stop     — finish current file(s), skip the rest
@@ -33,11 +40,34 @@ if [[ -z "$SRC" ]]; then
 fi
 SRC="${SRC/#\~/$HOME}"        # expand a typed leading ~
 SRC="${SRC%/}"
+# People often paste a shell-escaped path (backslashes before spaces) into the
+# prompt, but read -r keeps those backslashes literal. If the path as typed
+# isn't a directory yet unescaping it yields a real one, use that.
+if [[ ! -d "$SRC" ]]; then
+  _unescaped="$(printf '%s' "$SRC" | sed 's/\\\(.\)/\1/g')"
+  _unescaped="${_unescaped%/}"
+  [[ -d "$_unescaped" ]] && SRC="$_unescaped"
+fi
 if [[ ! -d "$SRC" ]]; then
   printf 'ERROR: "%s" is not a directory\n' "$SRC" >&2
+  printf '       (tip: type the path with plain spaces — no backslashes or quotes)\n' >&2
   exit 1
 fi
 TMPROOT="/tmp/hevcwork"
+
+FFMPEG="${FFMPEG:-ffmpeg}"
+FFPROBE="${FFPROBE:-ffprobe}"
+
+# Resolved this early (rather than in "Setup" below) so the encoder-choice
+# prompt can call it before any per-file work begins. FORCE_VT=1/0 overrides
+# and skips the probe entirely.
+check_videotoolbox() {
+  if [[ "${FORCE_VT:-}" == "1" ]]; then return 0; fi
+  if [[ "${FORCE_VT:-}" == "0" ]]; then return 1; fi
+  local enc
+  enc="$( [[ "${OUT_CODEC:-h265}" == "h264" ]] && echo h264_videotoolbox || echo hevc_videotoolbox )"
+  "$FFMPEG" -hide_banner -encoders 2>/dev/null | grep -q "$enc"
+}
 
 # ── Bitrate strategy ──────────────────────────────────────────────────────────
 # The target bitrate comes from a quality TIER chosen per-run (see prompt below).
@@ -73,7 +103,18 @@ BPP_LOW=0.03
 RATIO_HIGH=0.55
 RATIO_LOW=0.7
 
+# Max-fidelity transcode ceiling — used only for the compatibility transcode of
+# legacy/MP4-incompatible codecs (MPEG-2/VC-1/Xvid/WMV): quality-targeted CRF
+# capped at the SOURCE's own bitrate so quality is preserved, not squeezed to a
+# tier. Falls back to these caps only when the source bitrate can't be probed.
+XCODE_CAP_HD="${XCODE_CAP_HD:-8000}"    # kbps, sources < 3840px wide
+XCODE_CAP_4K="${XCODE_CAP_4K:-20000}"   # kbps, 4K sources
+
 # ── Interactive prompts ───────────────────────────────────────────────────────
+# Ordered to flow: QUALITY (what & how good) → COMPATIBILITY (what else to
+# convert) → EXECUTION (how it runs) → DESTINATION (where files go).
+
+# ── 1. Quality ────────────────────────────────────────────────────────────────
 
 printf '\nOutput codec?\n  1) H.265 / HEVC  — ~50%% smaller at the same quality; plays on anything reasonably modern  [default]\n  2) H.264 / AVC   — almost universally playable, but ~2x larger — and increasingly inefficient\n                     above 1080p (for 4K+ sources H.265 is strongly recommended)\n' >&2
 read -r -p "  Choice [1/2]: " _cchoice </dev/tty 2>/dev/tty || _cchoice=1
@@ -93,6 +134,83 @@ case "${_tchoice:-3}" in
   *) TIER_NAME=EXCELLENT; TIER_MBPS=10;  TIER_PIXELS=$((1920*1080));  TIER_RES_LABEL="1080p" ;;
 esac
 export TIER_NAME TIER_MBPS TIER_PIXELS TIER_RES_LABEL
+
+# Sensible minimum saving depends on the codec: a healthy H.265 re-encode saves
+# 30-45%, so a small predicted saving means the source was already efficient and
+# re-encoding would only cost a generation of quality. H.264->H.264 can only trim
+# fat, so smaller savings are still worthwhile.
+if [[ "$OUT_CODEC" == "h265" ]]; then
+  printf '\nMinimum size saving required to keep a re-encoded file?\n  (H.265 typically saves 30-45%%; below ~25%% the source was already efficient)\n  1) 25%%  [default]\n  2) 15%%\n  3) 35%%\n  4) None — always keep if encode succeeds\n' >&2
+  read -r -p "  Choice [1/2/3/4]: " _mschoice </dev/tty 2>/dev/tty || _mschoice=1
+  case "${_mschoice:-1}" in
+    2) MIN_SAVING_RATIO="0.85" ;;
+    3) MIN_SAVING_RATIO="0.65" ;;
+    4) MIN_SAVING_RATIO="1.00" ;;
+    *) MIN_SAVING_RATIO="0.75" ;;
+  esac
+else
+  printf '\nMinimum size saving required to keep a re-encoded file?\n  1) 15%%  [default]\n  2) 10%%\n  3) 5%%\n  4) None — always keep if encode succeeds\n' >&2
+  read -r -p "  Choice [1/2/3/4]: " _mschoice </dev/tty 2>/dev/tty || _mschoice=1
+  case "${_mschoice:-1}" in
+    2) MIN_SAVING_RATIO="0.90" ;;
+    3) MIN_SAVING_RATIO="0.95" ;;
+    4) MIN_SAVING_RATIO="1.00" ;;
+    *) MIN_SAVING_RATIO="0.85" ;;
+  esac
+fi
+export MIN_SAVING_RATIO
+
+# ── 2. Compatibility ──────────────────────────────────────────────────────────
+# Instant preferences — applied per-file during the run, no folder pre-scan.
+
+printf '\nIf possible, convert files into MP4 for maximum compatibility with NO loss of\nquality? (a file already using an MP4-friendly codec — H.264, H.265, AV1, VP9 —\nbut sitting in another container like MKV or WebM is remuxed into MP4: a fast,\nlossless copy, no re-encode.)\n  1) Yes  [default]\n  2) No\n' >&2
+read -r -p "  Choice [1/2]: " _rmxchoice </dev/tty 2>/dev/tty || _rmxchoice=1
+case "${_rmxchoice:-1}" in
+  2) REMUX_TO_MP4=0 ;;
+  *) REMUX_TO_MP4=1 ;;
+esac
+export REMUX_TO_MP4
+
+printf '\nIf a file uses a codec incompatible with MP4 (MPEG-2, VC-1, Xvid/DivX, WMV …),\ntranscode it with maximum fidelity and convert it to MP4? (Modern high-compression\ncodecs — H.265, AV1, VP9 — are never transcoded, only remuxed as above.)\n  1) Yes  [default]\n  2) No\n' >&2
+read -r -p "  Choice [1/2]: " _xcodechoice </dev/tty 2>/dev/tty || _xcodechoice=1
+case "${_xcodechoice:-1}" in
+  2) COMPAT_TRANSCODE=0 ;;
+  *) COMPAT_TRANSCODE=1 ;;
+esac
+export COMPAT_TRANSCODE
+
+# ── 3. Execution ──────────────────────────────────────────────────────────────
+
+# Hardware (VideoToolbox) vs software (libx264/libx265) choice. FORCE_VT=1/0
+# short-circuits this entirely (for scripted/non-interactive use); otherwise,
+# if no working hardware encoder is even available, there's nothing to choose
+# between and software is used silently, same as before.
+if [[ "${FORCE_VT:-}" == "1" ]]; then
+  USE_VT=1
+elif [[ "${FORCE_VT:-}" == "0" ]]; then
+  USE_VT=0
+elif check_videotoolbox; then
+  printf '\nWhich encoder should do the work?\n  1) Hardware (VideoToolbox) — fast, low CPU/power use; targets an average\n     bitrate only (no true per-bit quality control). Good for quick batch\n     jobs.  [default]\n  2) Software (libx264/libx265) — much slower and CPU-heavy, but uses\n     capped-CRF (true constant-quality encoding), generally better quality\n     per bit at the same ceiling — recommended for archival-quality work.\n' >&2
+  read -r -p "  Choice [1/2]: " _echoice </dev/tty 2>/dev/tty || _echoice=1
+  case "${_echoice:-1}" in
+    2) USE_VT=0 ;;
+    *) USE_VT=1 ;;
+  esac
+else
+  USE_VT=0
+fi
+export USE_VT
+
+printf '\nParallel encoding jobs? (H.265 is CPU-heavy)\n  1) 1 job  [default]\n  2) 2 jobs\n  3) 4 jobs\n' >&2
+read -r -p "  Choice [1/2/3]: " _jchoice </dev/tty 2>/dev/tty || _jchoice=1
+case "${_jchoice:-1}" in
+  2) JOBS=2 ;;
+  3) JOBS=4 ;;
+  *) JOBS=1 ;;
+esac
+export JOBS
+
+# ── 4. Destination ────────────────────────────────────────────────────────────
 
 printf '\nWhere should the new %s file be written?\n' "$( [[ "$OUT_CODEC" == "h264" ]] && echo H.264 || echo H.265 )" >&2
 printf '  1) Replace source in place  [default]\n  2) Write to a separate folder\n' >&2
@@ -135,44 +253,18 @@ else
 fi
 export SOURCE_ACTION ARCHIVE_DIR
 
-printf '\nParallel encoding jobs? (H.265 is CPU-heavy)\n  1) 1 job  [default]\n  2) 2 jobs\n  3) 4 jobs\n' >&2
-read -r -p "  Choice [1/2/3]: " _jchoice </dev/tty 2>/dev/tty || _jchoice=1
-case "${_jchoice:-1}" in
-  2) JOBS=2 ;;
-  3) JOBS=4 ;;
-  *) JOBS=1 ;;
-esac
-export JOBS
-
-# Sensible minimum saving depends on the codec: a healthy H.265 re-encode saves
-# 30-45%, so a small predicted saving means the source was already efficient and
-# re-encoding would only cost a generation of quality. H.264->H.264 can only trim
-# fat, so smaller savings are still worthwhile.
-if [[ "$OUT_CODEC" == "h265" ]]; then
-  printf '\nMinimum size saving required to keep the new file?\n  (H.265 typically saves 30-45%%; below ~25%% the source was already efficient)\n  1) 25%%  [default]\n  2) 15%%\n  3) 35%%\n  4) None — always keep if encode succeeds\n' >&2
-  read -r -p "  Choice [1/2/3/4]: " _mschoice </dev/tty 2>/dev/tty || _mschoice=1
-  case "${_mschoice:-1}" in
-    2) MIN_SAVING_RATIO="0.85" ;;
-    3) MIN_SAVING_RATIO="0.65" ;;
-    4) MIN_SAVING_RATIO="1.00" ;;
-    *) MIN_SAVING_RATIO="0.75" ;;
-  esac
-else
-  printf '\nMinimum size saving required to keep the new file?\n  1) 15%%  [default]\n  2) 10%%\n  3) 5%%\n  4) None — always keep if encode succeeds\n' >&2
-  read -r -p "  Choice [1/2/3/4]: " _mschoice </dev/tty 2>/dev/tty || _mschoice=1
-  case "${_mschoice:-1}" in
-    2) MIN_SAVING_RATIO="0.90" ;;
-    3) MIN_SAVING_RATIO="0.95" ;;
-    4) MIN_SAVING_RATIO="1.00" ;;
-    *) MIN_SAVING_RATIO="0.85" ;;
-  esac
-fi
-export MIN_SAVING_RATIO
-
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
-FFMPEG="${FFMPEG:-ffmpeg}"
-FFPROBE="${FFPROBE:-ffprobe}"
+# Extensions scanned recursively — covers common containers likely to hold
+# poorly-MP4-compatible codecs (webm/avi/wmv/flv/ts) alongside the originals.
+VIDEO_EXTS=(mkv mp4 mov avi webm m4v ts wmv flv)
+FIND_INAME_ARGS=()
+VIDEO_EXTS_LABEL=""
+for _ext in "${VIDEO_EXTS[@]}"; do
+  [[ "${#FIND_INAME_ARGS[@]}" -gt 0 ]] && FIND_INAME_ARGS+=(-o)
+  FIND_INAME_ARGS+=(-iname "*.${_ext}")
+  VIDEO_EXTS_LABEL="${VIDEO_EXTS_LABEL:+$VIDEO_EXTS_LABEL, }.${_ext}"
+done
 
 mkdir -p "$TMPROOT"
 
@@ -190,14 +282,18 @@ if [[ "${_others:-0}" -eq 0 ]]; then
 fi
 
 PROBLEM_LOG="$(mktemp /tmp/hevc_problems.XXXXXX)"
+# Each kept output appends "src_bytes<TAB>out_bytes" here (append is atomic for
+# short writes, so parallel xargs workers can share it); summed for the report.
+SAVINGS_LOG="$(mktemp /tmp/hevc_savings.XXXXXX)"
 STOP_FILE="/tmp/hevc_stop"
-export PROBLEM_LOG STOP_FILE
-trap 'rm -f "$PROBLEM_LOG"' EXIT
+export PROBLEM_LOG SAVINGS_LOG STOP_FILE
+trap 'rm -f "$PROBLEM_LOG" "$SAVINGS_LOG"' EXIT
 
 TTY=/dev/tty
 log(){ printf '%s\n' "$*" > "$TTY"; }
 ts(){ date +%H:%M:%S; }
 problem(){ printf '%s\t%s\n' "$2" "$1" >> "$PROBLEM_LOG"; }
+record_saving(){ printf '%s\t%s\n' "$1" "$2" >> "$SAVINGS_LOG"; }
 fsize(){ du -sh "$1" 2>/dev/null | awk '{print $1}'; }
 sname(){ local b; b="$(basename "$1")"; printf '%s' "${b%.*}"; }
 
@@ -300,8 +396,11 @@ ff_run() {
 
 probe_video() {
   local file="$1" field="$2"
+  # cut -d, -f1: ffprobe's csv writer appends a trailing empty field when a
+  # stream carries (even empty) side_data — e.g. "mpeg2video," instead of
+  # "mpeg2video" — which would otherwise break exact case-match comparisons.
   "$FFPROBE" -v error -select_streams v:0 \
-    -show_entries "stream=$field" -of csv=p=0 "$file" | head -1
+    -show_entries "stream=$field" -of csv=p=0 "$file" | head -1 | cut -d, -f1
 }
 
 probe_container_bitrate() {
@@ -310,16 +409,12 @@ probe_container_bitrate() {
     -of csv=p=0 "$1" | head -1
 }
 
-file_size() {
-  stat -f%z "$1" 2>/dev/null || stat -c%s "$1"
+probe_format() {
+  "$FFPROBE" -v error -show_entries format=format_name -of csv=p=0 "$1" | head -1
 }
 
-check_videotoolbox() {
-  if [[ "${FORCE_VT:-}" == "1" ]]; then return 0; fi
-  if [[ "${FORCE_VT:-}" == "0" ]]; then return 1; fi
-  local enc
-  enc="$( [[ "${OUT_CODEC:-h265}" == "h264" ]] && echo h264_videotoolbox || echo hevc_videotoolbox )"
-  "$FFMPEG" -hide_banner -encoders 2>/dev/null | grep -q "$enc"
+file_size() {
+  stat -f%z "$1" 2>/dev/null || stat -c%s "$1"
 }
 
 calc_bitrate() {
@@ -366,7 +461,7 @@ print(f'bpp={bpp:.4f} ratio={ratio:.0%} cap={int(cap)}k src={src_kbps:.0f}k -> t
 }
 
 prescan_worth_encoding() {
-  local file="$1"
+  local file="$1" quiet="${2:-}"
   local n; n="$(sname "$file")"
 
   local src_bps width height fps_raw fps
@@ -423,29 +518,30 @@ print(f'est_saving={saving:.1f}% bpp={bpp:.4f} src={src_kbps:.0f}k -> target={ta
   info="$(echo "$result" | sed -n '2p')"
 
   if [[ "$decision" == "skip-efficient" ]]; then
-    log "$(ts) SKIP  : already efficiently compressed ($info) — $n"
+    [[ "$quiet" != "quiet" ]] && log "$(ts) SKIP  : already efficiently compressed ($info) — $n"
     return 1
   fi
   if [[ "$decision" == "skip" ]]; then
-    log "$(ts) SKIP  : not worth encoding ($info) — $n"
+    [[ "$quiet" != "quiet" ]] && log "$(ts) SKIP  : not worth encoding ($info) — $n"
     return 1
   fi
   return 0
 }
 
-# Whether a file is worth encoding is judged by content, not size: any H.264
-# source passes here, then prescan_worth_encoding decides using bpp and the
-# predicted saving. Non-H.264 codecs (HEVC, VP9, AV1, ...) are never touched.
-should_encode() {
-  local file="$1"
-  local n; n="$(sname "$file")"
-
-  local codec
-  codec="$(probe_video "$file" codec_name)"
-
-  case "$codec" in
-    h264|avc) return 0 ;;
-    *) log "$(ts) SKIP  : codec=$codec (not H.264) — $n"; return 1 ;;
+# Sort the primary video codec into one of four handling categories:
+#   h264   — the tool's core target: shrink if fat, else remux/skip
+#   modern — efficient modern codec (HEVC/AV1/VP9): NEVER transcoded (that would
+#            only cost a generation of quality); remuxed into MP4 if it's in
+#            another container, otherwise left alone
+#   legacy — MP4-incompatible / legacy codec (MPEG-2/VC-1/Xvid/WMV/…):
+#            transcoded to the chosen codec at maximum fidelity (opt-in)
+#   other  — mezzanine/unknown (ProRes, DNxHD, FFV1, raw, …): left untouched
+classify_codec() {
+  case "$1" in
+    h264|avc)    echo h264 ;;
+    hevc|av1|vp9) echo modern ;;
+    mpeg2video|mpeg4|msmpeg4v1|msmpeg4v2|msmpeg4v3|msmpeg4|vc1|wmv1|wmv2|wmv3|flv1|rv30|rv40) echo legacy ;;
+    *)           echo other ;;
   esac
 }
 
@@ -477,8 +573,50 @@ process_one() {
     return 0
   fi
 
-  if ! should_encode "$file"; then return 0; fi
-  if ! prescan_worth_encoding "$file"; then return 0; fi
+  # ── Decide what to do with this file (MODE) ────────────────────────────────
+  #   shrink    — fat H.264, re-encode down to the chosen tier (the core job)
+  #   transcode — legacy/MP4-incompatible codec, re-encode into MP4 at max fidelity
+  #   remux     — MP4-friendly codec in a non-MP4 container, copied losslessly
+  #   (return)  — nothing worth doing
+  local codec category ext already_mp4 MODE
+  codec="$(probe_video "$file" codec_name)"
+  category="$(classify_codec "$codec")"
+  ext="$(printf '%s' "${file##*.}" | tr '[:upper:]' '[:lower:]')"
+  already_mp4=0
+  case "$ext" in mp4|m4v|mov) already_mp4=1 ;; esac
+
+  case "$category" in
+    h264)
+      if [[ "${REMUX_TO_MP4:-0}" == "1" && "$already_mp4" -eq 0 ]]; then
+        # Non-MP4 container: shrink if it's fat, otherwise remux losslessly into
+        # MP4 rather than leave it in the less-compatible container.
+        if prescan_worth_encoding "$file" quiet; then MODE=shrink; else MODE=remux; fi
+      else
+        # Already MP4 (or remux declined): only re-encode if it's worth it.
+        if prescan_worth_encoding "$file"; then MODE=shrink; else return 0; fi
+      fi
+      ;;
+    modern)
+      # HEVC/AV1/VP9 are never transcoded — only rehomed into MP4 losslessly.
+      if [[ "${REMUX_TO_MP4:-0}" == "1" && "$already_mp4" -eq 0 ]]; then
+        MODE=remux
+      else
+        return 0
+      fi
+      ;;
+    legacy)
+      if [[ "${COMPAT_TRANSCODE:-0}" == "1" ]]; then
+        MODE=transcode
+      else
+        log "$(ts) SKIP  : ${codec} (MP4-incompatible; transcode declined) — $n"
+        return 0
+      fi
+      ;;
+    *)
+      log "$(ts) SKIP  : codec=${codec} (left untouched) — $n"
+      return 0
+      ;;
+  esac
 
   # Probe source
   local src_bps width height fps fps_raw dur_secs
@@ -526,11 +664,15 @@ except: print(30.0)
     log "$(ts) SUBS  : found ${text_sub_count} text / ${image_sub_count} image subtitle track(s) — $n"
   fi
 
-  local bitrate
-  if [[ -n "$src_bps" && "$src_bps" =~ ^[0-9]+$ ]]; then
-    bitrate="$(calc_bitrate "$src_bps" "$width" "$height" "$fps")"
-  else
-    bitrate="$(python3 -c "
+  # Target bitrate depends on MODE. shrink: the tuned tier target. transcode:
+  # capped at the SOURCE's own bitrate (max fidelity — never inflate a legacy
+  # source). remux: not needed (video is stream-copied).
+  local bitrate=""
+  if [[ "$MODE" == "shrink" ]]; then
+    if [[ -n "$src_bps" && "$src_bps" =~ ^[0-9]+$ ]]; then
+      bitrate="$(calc_bitrate "$src_bps" "$width" "$height" "$fps")"
+    else
+      bitrate="$(python3 -c "
 w=$width; h=$height
 tier_px=$TIER_PIXELS
 eff_px=min(w*h, tier_px) if w*h > 0 else tier_px
@@ -543,8 +685,17 @@ else:
 cap=$TIER_MBPS*1000*(eff_px/tier_px)*cf
 print(f'{int(cap)}k')
 ")"
-    log "$(ts) WARN  : could not probe bitrate, using tier cap ($bitrate) — $n"
-    problem "$file" "WARN: could not probe source bitrate; used tier cap (${bitrate}) — verify output quality"
+      log "$(ts) WARN  : could not probe bitrate, using tier cap ($bitrate) — $n"
+      problem "$file" "WARN: could not probe source bitrate; used tier cap (${bitrate}) — verify output quality"
+    fi
+  elif [[ "$MODE" == "transcode" ]]; then
+    if [[ -n "$src_bps" && "$src_bps" =~ ^[0-9]+$ ]]; then
+      bitrate="$(( src_bps / 1000 ))k"
+    else
+      bitrate="$( [[ "${width:-0}" -ge 3840 ]] && echo "${XCODE_CAP_4K}k" || echo "${XCODE_CAP_HD}k" )"
+      log "$(ts) WARN  : could not probe bitrate, using max-fidelity cap ($bitrate) — $n"
+      problem "$file" "WARN: could not probe source bitrate; used max-fidelity cap (${bitrate})"
+    fi
   fi
 
   local pix_fmt profile
@@ -572,34 +723,45 @@ print(f'{int(cap)}k')
   log "$(ts) START : [$(fsize "$file")]  $n"
   log "$(ts) INFO  : ${width}x${height}  fps=$fps  pix=$pix_fmt — $n"
 
-  # Build the video-encoder args. Hardware (VideoToolbox) uses -b:v as the
-  # target; software (libx26x) uses constant-quality CRF but with -maxrate/
-  # -bufsize so it never exceeds the chosen tier cap ("capped CRF").
-  local use_vt=0
-  check_videotoolbox && use_vt=1
-
-  local br_k bufsize
-  br_k="${bitrate%k}"
-  bufsize=$(( br_k * 2 ))
+  # Build the video-encoder args.
+  #   remux     — stream-copy the video (lossless, instant).
+  #   shrink    — capped-CRF at the tuned tier ceiling.
+  #   transcode — higher-fidelity CRF + slow preset, capped at the source bitrate.
+  # Hardware (VideoToolbox) has no true CRF, so it targets -b:v instead.
+  local use_vt="${USE_VT:-0}"
 
   local -a vargs
-  if [[ "$OUT_CODEC" == "h264" ]]; then
-    if [[ "$use_vt" -eq 1 ]]; then
-      vargs=(-c:v h264_videotoolbox -b:v "$bitrate" -profile:v high -pix_fmt yuv420p)
-      log "$(ts) ENCODE: VideoToolbox H.264  target=$bitrate — $n"
-    else
-      vargs=(-c:v libx264 -crf 20 -preset medium -maxrate "$bitrate" -bufsize "${bufsize}k" \
-             -profile:v high -pix_fmt yuv420p)
-      log "$(ts) ENCODE: libx264 crf=20 medium  cap=$bitrate — $n"
-    fi
+  if [[ "$MODE" == "remux" ]]; then
+    vargs=(-c:v copy)
+    [[ "$codec" == "hevc" ]] && vargs+=(-tag:v hvc1)   # help Apple players recognise it
+    log "$(ts) REMUX : ${codec} copied into MP4, lossless — $n"
   else
-    if [[ "$use_vt" -eq 1 ]]; then
-      vargs=(-c:v hevc_videotoolbox -b:v "$bitrate" -profile:v "$profile" -tag:v hvc1 -bf 0 -fps_mode cfr)
-      log "$(ts) ENCODE: VideoToolbox H.265  target=$bitrate  profile=$profile — $n"
+    local br_k bufsize crf264 crf265 preset MODE_TAG
+    br_k="${bitrate%k}"
+    bufsize=$(( br_k * 2 ))
+    if [[ "$MODE" == "transcode" ]]; then
+      crf264=18; crf265=20; preset=slow;   MODE_TAG="XCODE "
     else
-      vargs=(-c:v libx265 -crf 21 -preset medium -maxrate "$bitrate" -bufsize "${bufsize}k" \
-             -profile:v "$profile" -tag:v hvc1)
-      log "$(ts) ENCODE: libx265 crf=21 medium  cap=$bitrate  profile=$profile — $n"
+      crf264=20; crf265=21; preset=medium; MODE_TAG="ENCODE"
+    fi
+    if [[ "$OUT_CODEC" == "h264" ]]; then
+      if [[ "$use_vt" -eq 1 ]]; then
+        vargs=(-c:v h264_videotoolbox -b:v "$bitrate" -profile:v high -pix_fmt yuv420p)
+        log "$(ts) ${MODE_TAG}: VideoToolbox H.264  target=$bitrate — $n"
+      else
+        vargs=(-c:v libx264 -crf "$crf264" -preset "$preset" -maxrate "$bitrate" -bufsize "${bufsize}k" \
+               -profile:v high -pix_fmt yuv420p)
+        log "$(ts) ${MODE_TAG}: libx264 crf=$crf264 $preset  cap=$bitrate — $n"
+      fi
+    else
+      if [[ "$use_vt" -eq 1 ]]; then
+        vargs=(-c:v hevc_videotoolbox -b:v "$bitrate" -profile:v "$profile" -tag:v hvc1 -bf 0 -fps_mode cfr)
+        log "$(ts) ${MODE_TAG}: VideoToolbox H.265  target=$bitrate  profile=$profile — $n"
+      else
+        vargs=(-c:v libx265 -crf "$crf265" -preset "$preset" -maxrate "$bitrate" -bufsize "${bufsize}k" \
+               -profile:v "$profile" -tag:v hvc1)
+        log "$(ts) ${MODE_TAG}: libx265 crf=$crf265 $preset  cap=$bitrate  profile=$profile — $n"
+      fi
     fi
   fi
 
@@ -657,12 +819,18 @@ print(f'{int(cap)}k')
   end="$(date +%s)"
   elapsed=$(( end - start ))
 
-  log "$(ts) SIZE  : $(( src_size / 1024 / 1024 ))MB → $(( out_size / 1024 / 1024 ))MB  (need < $(( threshold / 1024 / 1024 ))MB) — $n"
-
-  if [[ "$out_size" -ge "$threshold" ]]; then
-    rm -f "$tmp"
-    log "$(ts) SKIP  : saving too small, keeping original — $n  [${elapsed}s]"
-    return 0
+  # The minimum-saving gate only applies to a shrink re-encode. A transcode
+  # (compatibility + max fidelity) and a remux (lossless container change) are
+  # kept regardless of size — their purpose is compatibility, not shrinkage.
+  if [[ "$MODE" == "shrink" ]]; then
+    log "$(ts) SIZE  : $(( src_size / 1024 / 1024 ))MB → $(( out_size / 1024 / 1024 ))MB  (need < $(( threshold / 1024 / 1024 ))MB) — $n"
+    if [[ "$out_size" -ge "$threshold" ]]; then
+      rm -f "$tmp"
+      log "$(ts) SKIP  : saving too small, keeping original — $n  [${elapsed}s]"
+      return 0
+    fi
+  else
+    log "$(ts) SIZE  : $(( src_size / 1024 / 1024 ))MB → $(( out_size / 1024 / 1024 ))MB — $n"
   fi
 
   # Sidecar fallback: embedding failed but the encode succeeded — extract each
@@ -721,6 +889,7 @@ print(f'{int(cap)}k')
   mv -f "$tmp" "$out"
 
   if [[ -s "$out" ]]; then
+    record_saving "$src_size" "$out_size"
     case "${SOURCE_ACTION:-archive}" in
       delete)
         if [[ -n "$subs_dropped_reason" ]]; then
@@ -769,14 +938,15 @@ print(f'{int(cap)}k')
   fi
 }
 
-export -f process_one should_encode prescan_worth_encoding probe_video probe_container_bitrate \
-           file_size check_videotoolbox calc_bitrate log ts ff_run ff_run_progress problem fsize sname \
-           check_stop_requested
+export -f process_one classify_codec prescan_worth_encoding probe_video probe_container_bitrate \
+           probe_format file_size calc_bitrate log ts ff_run ff_run_progress problem record_saving \
+           fsize sname check_stop_requested
 export FFMPEG FFPROBE TMPROOT SOURCE_ACTION ARCHIVE_DIR \
-       OUTPUT_MODE OUTPUT_DIR OUTPUT_FLAT PROBLEM_LOG STOP_FILE TTY
+       OUTPUT_MODE OUTPUT_DIR OUTPUT_FLAT PROBLEM_LOG SAVINGS_LOG STOP_FILE TTY
 export BITRATE_FLOOR BPP_SKIP_FLOOR MIN_SAVING_RATIO BPP_HIGH BPP_LOW RATIO_HIGH RATIO_LOW
-export HEVC_EFF_HD HEVC_EFF_4K HEVC_EFF_8K
+export HEVC_EFF_HD HEVC_EFF_4K HEVC_EFF_8K XCODE_CAP_HD XCODE_CAP_4K
 export OUT_CODEC TIER_NAME TIER_MBPS TIER_PIXELS TIER_RES_LABEL
+export REMUX_TO_MP4 COMPAT_TRANSCODE
 
 # (plain case block — a case inside $() breaks macOS bash 3.2's parser)
 case "$SOURCE_ACTION" in
@@ -787,10 +957,14 @@ esac
 
 log ""
 log "SRC:         $SRC"
+log "SCAN:        ${VIDEO_EXTS_LABEL}"
+log "REMUX→MP4:   $( [[ "${REMUX_TO_MP4:-0}" -eq 1 ]] && echo "yes — H.264/H.265/AV1/VP9 in other containers copied losslessly into MP4" || echo "no" )"
+log "TRANSCODE:   $( [[ "${COMPAT_TRANSCODE:-0}" -eq 1 ]] && echo "yes — MP4-incompatible codecs (MPEG-2/VC-1/Xvid/WMV) re-encoded at max fidelity" || echo "no — incompatible codecs left untouched" )"
 log "OUTPUT:      $( [[ "$OUTPUT_MODE" == "separate" ]] && echo "$OUTPUT_DIR ($( [[ $OUTPUT_FLAT == 1 ]] && echo flat || echo mirrored ))" || echo "in place" )"
 log "ORIGINALS:   $_orig_desc"
 log "JOBS:        $JOBS"
 log "CODEC:       $( [[ "$OUT_CODEC" == "h264" ]] && echo "H.264 / AVC (universal playback, ~2x larger)" || echo "H.265 / HEVC (~50% smaller at the same quality)" )"
+log "ENCODER:     $( [[ "${USE_VT:-0}" -eq 1 ]] && echo "Hardware (VideoToolbox)" || echo "Software (libx264/libx265, capped-CRF)" )"
 log "TIER:        ${TIER_NAME} — imperceptible at ≤ ${TIER_RES_LABEL}; ceiling ${TIER_MBPS} Mbps H.264-equiv$( [[ "$OUT_CODEC" == "h265" ]] && python3 -c "
 px=$TIER_PIXELS
 cf=$HEVC_EFF_HD if px<=1920*1080 else ($HEVC_EFF_4K if px<=3840*2160 else $HEVC_EFF_8K)
@@ -807,10 +981,40 @@ log ""
 find "$SRC" \
   \( -name '.Trashes' -o -name '.Spotlight-V100' -o -name '.fseventsd' -o -name '.TemporaryItems' \
      -o -name 'originals' -o -name 'new versions' -o -name 'archived' -o -name 'Library' \) -prune \
-  -o \( -type f -not -name '._*' \( -iname "*.mkv" -o -iname "*.mp4" \) -print0 \) \
+  -o \( -type f -not -name '._*' \( "${FIND_INAME_ARGS[@]}" \) -print0 \) \
   | xargs -0 -n 1 -P "$JOBS" bash -c 'process_one "$@"' _ "$SRC" || true
 # `|| true`: a failed encode makes process_one (and so xargs) exit non-zero,
 # which under set -e would kill the script here — before the run report prints.
+
+# ── Total space savings ───────────────────────────────────────────────────────
+# Sum src/out bytes over every file we actually replaced (each appended a row to
+# SAVINGS_LOG). Remuxes contribute ~0; shrinks/transcodes carry the real savings.
+if [[ -s "$SAVINGS_LOG" ]]; then
+  log ""
+  python3 - "$SAVINGS_LOG" <<'PY' > "$TTY"
+import sys
+src=out=n=0
+with open(sys.argv[1]) as fh:
+    for line in fh:
+        line=line.strip()
+        if not line: continue
+        a,b=line.split('\t')
+        src+=int(a); out+=int(b); n+=1
+def h(x):
+    for unit in ('B','KB','MB','GB','TB'):
+        if x < 1024 or unit=='TB':
+            return f'{x:.1f} {unit}'
+        x/=1024
+saved=src-out
+pct=(saved/src*100) if src else 0
+print("══════════════════════════════════════════════════════════")
+print(f" SPACE SAVED — {n} file(s) replaced")
+print(f"   original:  {h(src)}")
+print(f"   new:       {h(out)}")
+print(f"   saved:     {h(saved)}  ({pct:.1f}%)")
+print("══════════════════════════════════════════════════════════")
+PY
+fi
 
 if [[ -s "$PROBLEM_LOG" ]]; then
   count="$(wc -l < "$PROBLEM_LOG" | tr -d ' ')"

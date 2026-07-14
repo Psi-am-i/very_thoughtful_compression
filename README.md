@@ -16,6 +16,48 @@ Selectively re-encodes fat H.264 video files from a folder down to a sane size w
 - **H.264 / AVC** — almost universally playable, but ~2× larger — and increasingly inefficient above 1080p (it was never designed for 4K+).
 - **H.265 / HEVC** — about 50% smaller at the same quality on average; plays on anything reasonably modern (Apple devices since ~2015, all recent TVs, Plex/VLC/Infuse).
 
+## What actually matters: codecs vs containers
+
+Everyone wants the same four things — **quality, small size, fast encoding, wide compatibility** — but you can't max all four at once. Understanding the two independent choices behind every video file makes the trade-offs obvious.
+
+- **The codec** (H.264, H.265, AV1, VP9, Xvid…) does the actual compression. It decides the **file size at a given quality** and **how long encoding takes**. Nearly all the size difference between two files comes from here.
+- **The container** (MP4, MKV, WebM, AVI) is just the wrapper holding the video bitstream plus its audio and subtitle tracks. It adds only rounding-error overhead to the size — what it really decides is **compatibility**, **streaming behaviour**, and **which subtitle/audio track types can ride along**.
+
+> **Myth: "MKV is smaller than MP4."** It isn't. The same H.264 video is the same size in either container. MKV files are often big because they're used for high-bitrate rips — not because of the container.
+
+### At the same visual quality
+
+Rough 1–10 scores (higher is better). **Space** = how small at equal quality · **Compat** = plays out-of-the-box across today's phones, TVs and browsers · **Stream** = progressive + adaptive (HLS/DASH) friendliness · **Speed** = encode speed, where ★ means it jumps to near-max *if your machine has a hardware encoder for that codec*.
+
+| Era | Container | Codec | Space | Compat | Stream | Speed |
+|-----|-----------|-------|:-:|:-:|:-:|:-:|
+| **Modern standard** | MP4 | H.264 | 5.5 | 10 | 9.5 | 8 ★ |
+| | MKV | H.264 | 5.5 | 7 | 4 | 8 ★ |
+| **Efficiency** | MP4 | H.265 | 7.5 | 8 | 8 | 5 ★ |
+| | MKV | H.265 | 7.5 | 6.5 | 4 | 5 ★ |
+| | WebM | VP9 | 7 | 5.5 | 7 | 3 ★ |
+| **Next-gen** | MP4 | AV1 | 9 | 5.5 | 7 | 2 ★ |
+| | MKV | AV1 | 9 | 5 | 4.5 | 2 ★ |
+| **Legacy** | AVI | Xvid / DivX | 3 | 6 | 2 | 8 |
+| | MPG | MPEG-2 | 2 | 6.5 | 3 | 9 |
+
+*(Scores are rough calibration for guidance, not precise benchmarks. Space efficiency is a property of the **codec** — it's identical across containers on the same row.)*
+
+Reading it: **H.264** is the "just works everywhere" baseline, but the least space-efficient modern codec. **H.265** roughly halves the size and still plays on most 2015-and-newer hardware. **AV1** is smaller again, but hardware *decode* is only on very recent devices. **Legacy** codecs (Xvid, MPEG-2) are both bigger *and* older — almost always worth replacing.
+
+### What do you actually want?
+
+Pick what matters for *this* library — the tool can't guess it:
+
+1. **Compatibility** — must it play on anything you own (→ MP4 + H.264), or is a modern-device-only library fine (→ H.265 / AV1)? Planning to **archive or re-edit** the footage? Consider working in **lossless** first (below) and only making a lossy copy for final delivery.
+2. **Space saving** — as small as possible · a modest trim · keep the quality and only shave obvious fat · size doesn't matter.
+3. **Encode speed** — as fast as possible (→ hardware encoder) · roughly real-time is fine · time is no object (→ software, best quality-per-bit).
+
+### Platform sweet-spots
+
+- **macOS** — MP4 with H.264 or H.265. Almost every Mac has a *hardware* encoder for one or both, so they're fast *and* high quality: choose H.264 for maximum compatibility, or H.265 when size matters more. Hardware AV1 encoding doesn't exist on Apple silicon yet.
+- **Windows / Linux** — depends on your GPU. Recent NVIDIA / Intel / AMD chips add hardware **H.265** and often **AV1** (sometimes VP9), shifting the sweet-spot toward those for much smaller files at similar speed. Without a supported GPU, hardware H.264 or software H.265 is the practical choice.
+
 ## Quality tiers
 
 Each tier is a **quality ceiling** anchored at a resolution, calibrated against streaming-service bitrates people already know. Sources **at or below** the tier's resolution come out imperceptibly different from the source; **bigger** sources are deliberately squeezed down to that grade — pick a higher tier if you want full 4K/8K fidelity preserved.
@@ -46,13 +88,28 @@ The script never applies one dumb rule (like "half the bitrate") to every file. 
 
 ## What gets encoded
 
-A file is queued only if **all** of these hold — judged by content, not file size:
+The scan covers `.mkv`, `.mp4`, `.mov`, `.avi`, `.webm`, `.m4v`, `.ts`, `.wmv`, `.flv`, recursively. Each file is sorted by its **video codec** into one of four actions:
 
-1. The video codec is H.264 (`h264`/`avc`). H.265, VP9, AV1 and everything else is never touched.
-2. Its bpp is above the already-efficient floor (`BPP_SKIP_FLOOR`, default 0.05).
-3. The pre-scan predicts the output will beat your minimum-saving threshold.
+| Source codec | Action |
+|---|---|
+| **H.264** (`h264`/`avc`) | **Shrink** if it's fat and worth it (see below). If it's already efficient but sits in a non-MP4 container, it's **remuxed** to MP4 instead. Already-efficient H.264 in MP4 is left alone. |
+| **H.265 / AV1 / VP9** (modern, efficient) | **Never transcoded** — re-encoding these only costs a generation of quality. If in a non-MP4 container they're **remuxed** losslessly into MP4; if already MP4, left alone. |
+| **Legacy / MP4-incompatible** (MPEG-2, VC-1, Xvid/DivX, WMV, MS-MPEG4, …) | **Transcoded** to your chosen codec at **maximum fidelity** (quality-targeted CRF capped at the *source's own* bitrate, so quality is preserved rather than squeezed to a tier) and written as MP4. |
+| **Mezzanine / other** (ProRes, DNxHD, FFV1, raw, …) | Left untouched. |
 
-The minimum-saving prompt is codec-aware: a healthy H.265 re-encode saves 30–45%, so its default is **25%** (a smaller prediction means the source was already efficient); H.264→H.264 only trims fat, so its default is **15%**.
+The last two behaviours are opt-in, asked once at startup:
+
+- *"If possible, convert files into MP4 for maximum compatibility with NO loss of quality?"* — the lossless **remux** (a fast `-c copy`, no re-encode; also fixes MP4 faststart). Default yes.
+- *"If a file uses a codec incompatible with MP4, transcode it with maximum fidelity and convert it to MP4?"* — the legacy **transcode**. Default yes.
+
+**When does a fat H.264 shrink?** All of these must hold — judged by content, not file size:
+
+1. Its bpp is above the already-efficient floor (`BPP_SKIP_FLOOR`, default 0.05).
+2. The pre-scan predicts the output will beat your minimum-saving threshold.
+
+The minimum-saving prompt is codec-aware: a healthy H.265 re-encode saves 30–45%, so its default is **25%** (a smaller prediction means the source was already efficient); H.264→H.264 only trims fat, so its default is **15%**. The minimum-saving gate applies only to a shrink — a remux (lossless) and a compatibility transcode (fidelity-first) are kept regardless of size.
+
+At the end of the run a **space-saved** summary reports the total original size, new size, and bytes/percent saved across every file replaced.
 
 ## Streams: video, audio, subtitles
 
@@ -79,14 +136,24 @@ The minimum-saving prompt is codec-aware: a healthy H.265 re-encode saves 30–4
 ./very_thoughtful_compression.sh [SRC]
 ```
 
-`SRC` is the directory to scan recursively (default: current directory). The script prompts interactively for all options on startup:
+`SRC` is the directory to scan recursively (default: current directory). The script prompts interactively for all options on startup, grouped so they flow *quality → compatibility → execution → destination*:
 
+**Quality**
 - **Output codec** — H.265/HEVC (default) or H.264/AVC
 - **Quality tier** — STANDARD / HIGH / EXCELLENT (default) / STELLAR / INSANE
+- **Minimum size saving** — how much a re-encode must shrink to be kept; codec-aware defaults (25% for H.265, 15% for H.264)
+
+**Compatibility**
+- **Remux to MP4** — losslessly rehome MP4-friendly codecs (H.264/H.265/AV1/VP9) that sit in other containers (default yes)
+- **Transcode incompatible codecs** — re-encode legacy/MP4-incompatible codecs (MPEG-2/VC-1/Xvid/WMV) at maximum fidelity (default yes)
+
+**Execution**
+- **Encoder** — Hardware (VideoToolbox, default) or Software (libx264/libx265) — only asked if a working hardware encoder is actually detected; see `FORCE_VT` below to skip this prompt
+- **Parallel encoding jobs** — 1 (default), 2, or 4
+
+**Destination**
 - **Output location** — in place, or a separate folder (flat or mirrored structure)
 - **Original handling** — archive to a folder, delete, or leave in place
-- **Parallel encoding jobs** — 1 (default), 2, or 4
-- **Minimum size saving** — codec-aware defaults (25% for H.265, 15% for H.264)
 
 ### Graceful stop
 
@@ -101,7 +168,7 @@ rm /tmp/hevc_stop      # clear the stop flag to resume/re-run
 |----------|-------------|
 | `FFMPEG` | Override the `ffmpeg` binary path |
 | `FFPROBE` | Override the `ffprobe` binary path |
-| `FORCE_VT` | `1` to force VideoToolbox, `0` to force software (`libx265` / `libx264`) |
+| `FORCE_VT` | `1` to force VideoToolbox, `0` to force software (`libx265` / `libx264`) — also skips the interactive encoder prompt entirely |
 | `BITRATE_FLOOR` | Minimum target bitrate in kbps (default: `1500`) |
 | `BPP_SKIP_FLOOR` | Sources at/below this bits-per-pixel-per-frame are already efficient and skipped (default: `0.050`) |
 | `HEVC_EFFICIENCY_HD` | H.265 bitrate as a fraction of equivalent H.264, ≤1080p (default: `0.55`) |
