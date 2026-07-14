@@ -1,6 +1,15 @@
-# thoughtful-shrink
+# very_thoughtful_compression
 
-Selectively re-encodes fat H.264 video files down to a sane size with FFmpeg — to **H.265/HEVC** or back to **H.264/AVC** — at a named quality tier you choose per run.
+Selectively re-encodes fat H.264 video files from a folder down to a sane size with FFmpeg — to **H.265/HEVC** or back to **H.264/AVC** — at a named quality tier you choose per run. The script is `thoughtful-shrink.sh`.
+
+"Thoughtful" because it:
+
+- gives you clear quality options based on real-world references
+- only makes a new version when it is the quality you want AND a percentage smaller that you choose
+- works out the target bitrate from the source's "bits-per-pixel-per-frame" — heavily compressed originals are not compressed harder, generously encoded originals get more headroom to shrink
+- pre-scans each file, models the expected output size, and skips files that definitely won't meet your space-saving threshold before spending time encoding them
+- preserves all subtitles — embedded when possible, sidecar `.srt` files otherwise
+- fully configurable
 
 **The two codecs in one line each:**
 
