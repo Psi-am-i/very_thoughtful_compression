@@ -1,4 +1,4 @@
-# thoughtful_h264_to_h265_conversion
+# thoughtful_shrink
 
 Selectively re-encodes H.264 MP4 files to H.265/HEVC using FFmpeg. "Thoughtful" because it:
 
