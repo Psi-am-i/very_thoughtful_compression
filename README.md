@@ -1,16 +1,21 @@
-# thoughtful_shrink
+# very_thoughtful_compression
 
-Selectively re-encodes H.264 MP4 files to H.265/HEVC using FFmpeg. "Thoughtful" because it:
+Creates H264 or H265 files from a folder or a single file.
 
-- only makes an H.265 version when it is the same perceptual quality AND substantially smaller
-- uses the source's bits-per-pixel-per-frame to derive the target bitrate — heavily compressed originals are not compressed harder, while generously encoded originals get more headroom to shrink
-- pre-scans each file, models the expected output size, and skips files that definitely won't meet your saving threshold before spending time encoding them
+"Thoughtful" because it:
+
+- gives you clear quality options based on real world references
+- only makes a new version when it is the the quality you want AND a certain percenatge smaller that you can choose.
+- Works out the target bitrate by looking at the source's "bits-per-pixel-per-frame"
+  — heavily compressed originals are not compressed harder
+  - generously encoded originals get more headroom to shrink
+- pre-scans each file, models the expected output size, and skips files that definitely won't meet your space saving threshold before spending time encoding them
 - fully configurable
 
 ## Features
 
-- **Selective queuing** — only processes 4K H.264 files or files over a configurable size threshold (default 4 GB); all other H.264 and non-H.264 files are left alone
 - **Pre-scan** — estimates expected output size before committing to a full encode; skips files unlikely to meet the saving threshold
+- **Preserves subtitles** Will preserve all subtitles and embed them if possible or create sidecar srt files.
 - **Adaptive bitrate model** — target bitrate is derived from the source's bits-per-pixel-per-frame, not a fixed number, so dense and lean sources are treated differently
 - **Apple VideoToolbox** — uses `hevc_videotoolbox` hardware encoder when available; falls back to software `libx265`
 - **10-bit preservation** — detects 10-bit pixel formats (`yuv420p10le` etc.) and selects the `main10` HEVC profile automatically
