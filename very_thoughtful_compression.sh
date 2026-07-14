@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════════════════════
-# thoughtful-shrink.sh — Batch re-encode fat H.264 video files to a sane size
+# very_thoughtful_compression.sh — Batch re-encode fat H.264 video files to a sane size
 #                        (H.265/HEVC or H.264/AVC, at a chosen quality tier)
 #
 # USAGE:
-#   ./thoughtful-shrink.sh [SRC]
+#   ./very_thoughtful_compression.sh [SRC]
 #
 #   SRC   Directory to scan (prompted for if not given; default: current dir)
 #
@@ -180,7 +180,7 @@ mkdir -p "$TMPROOT"
 # SIGKILL or power loss bypasses the per-file cleanup trap below). Safe because
 # this run hasn't created any temps yet — but skip if another instance of this
 # script is already running, so we don't delete its in-progress work.
-_others="$(pgrep -f 'thoughtful-shrink.sh' 2>/dev/null | grep -vw "$$" | wc -l | tr -d ' ')" || true
+_others="$(pgrep -f 'very_thoughtful_compression.sh' 2>/dev/null | grep -vw "$$" | wc -l | tr -d ' ')" || true
 if [[ "${_others:-0}" -eq 0 ]]; then
   _swept="$(find "$TMPROOT" -maxdepth 1 -type f -name '*.mp4' 2>/dev/null | wc -l | tr -d ' ')"
   if [[ "${_swept:-0}" -gt 0 ]]; then

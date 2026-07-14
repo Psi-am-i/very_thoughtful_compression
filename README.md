@@ -1,6 +1,6 @@
 # very_thoughtful_compression
 
-Selectively re-encodes fat H.264 video files from a folder down to a sane size with FFmpeg — to **H.265/HEVC** or back to **H.264/AVC** — at a named quality tier you choose per run. The script is `thoughtful-shrink.sh`.
+Selectively re-encodes fat H.264 video files from a folder down to a sane size with FFmpeg — to **H.265/HEVC** or back to **H.264/AVC** — at a named quality tier you choose per run. The script is `very_thoughtful_compression.sh`.
 
 "Thoughtful" because it:
 
@@ -76,7 +76,7 @@ The minimum-saving prompt is codec-aware: a healthy H.265 re-encode saves 30–4
 ## Usage
 
 ```bash
-./thoughtful-shrink.sh [SRC]
+./very_thoughtful_compression.sh [SRC]
 ```
 
 `SRC` is the directory to scan recursively (default: current directory). The script prompts interactively for all options on startup:
