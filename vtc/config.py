@@ -12,6 +12,9 @@ from enum import Enum
 from pathlib import Path
 
 from .model import (
+    AV1_FACTOR_4K,
+    AV1_FACTOR_8K,
+    AV1_FACTOR_HD,
     BITRATE_FLOOR_KBPS,
     HEVC_FACTOR_4K,
     HEVC_FACTOR_8K,
@@ -181,6 +184,9 @@ class RunConfig:
     hevc_factor_hd: float = HEVC_FACTOR_HD
     hevc_factor_4k: float = HEVC_FACTOR_4K
     hevc_factor_8k: float = HEVC_FACTOR_8K
+    av1_factor_hd: float = AV1_FACTOR_HD
+    av1_factor_4k: float = AV1_FACTOR_4K
+    av1_factor_8k: float = AV1_FACTOR_8K
 
     video_exts: tuple[str, ...] = VIDEO_EXTS
 
@@ -237,6 +243,10 @@ class RunConfig:
     def hevc_factors(self) -> tuple[float, float, float]:
         """The (HD, 4K, 8K+) H.265 efficiency factors this run should use."""
         return (self.hevc_factor_hd, self.hevc_factor_4k, self.hevc_factor_8k)
+
+    def av1_factors(self) -> tuple[float, float, float]:
+        """The (HD, 4K, 8K+) AV1 efficiency factors this run should use."""
+        return (self.av1_factor_hd, self.av1_factor_4k, self.av1_factor_8k)
 
     def ignore_reason(self, name: str, size: int | None = None) -> str | None:
         """Why this file is ignored, or None to process it.

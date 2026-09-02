@@ -35,10 +35,20 @@ HEVC_FACTOR_HD = 0.60              # <= 1080p  (40% saving)
 HEVC_FACTOR_4K = 0.50              # <= 4K     (50% saving)
 HEVC_FACTOR_8K = 0.45              # above 4K  (55% saving)
 
+# AV1 the same way — bitrate vs H.264 at equal quality, by OUTPUT resolution.
+# Set at 25% below the H.265 factors, which is the conservative end of the
+# published 20-40% BD-rate advantage of SVT-AV1 over x265, and is only honest at
+# a preset that earns it (see AV1_PRESET in encode.py — a fast preset gives that
+# advantage back, so the two numbers have to move together).
+AV1_FACTOR_HD = 0.45               # <= 1080p  (55% saving vs H.264)
+AV1_FACTOR_4K = 0.38               # <= 4K     (62% saving)
+AV1_FACTOR_8K = 0.34               # above 4K  (66% saving)
+
 
 class OutCodec(str, Enum):
     H264 = "h264"
     H265 = "h265"
+    AV1 = "av1"
 
 
 class CodecCategory(str, Enum):
@@ -149,10 +159,25 @@ def hevc_factor(pixels: int, factors: tuple[float, float, float] | None = None) 
     return uhd8k
 
 
+def av1_factor(pixels: int, factors: tuple[float, float, float] | None = None) -> float:
+    """AV1 efficiency factor for an output frame of `pixels` (w*h)."""
+    hd, uhd4k, uhd8k = factors or (AV1_FACTOR_HD, AV1_FACTOR_4K, AV1_FACTOR_8K)
+    if pixels <= _PIXELS_1080P:
+        return hd
+    if pixels <= _PIXELS_4K:
+        return uhd4k
+    return uhd8k
+
+
 def codec_factor(out_codec: OutCodec, pixels: int,
-                 hevc: tuple[float, float, float] | None = None) -> float:
+                 hevc: tuple[float, float, float] | None = None,
+                 av1: tuple[float, float, float] | None = None) -> float:
     """Multiplier applied to the H.264 target for the chosen output codec."""
-    return hevc_factor(pixels, hevc) if out_codec == OutCodec.H265 else 1.0
+    if out_codec == OutCodec.H265:
+        return hevc_factor(pixels, hevc)
+    if out_codec == OutCodec.AV1:
+        return av1_factor(pixels, av1)
+    return 1.0
 
 
 def source_bpp(src_bps: float, pixels: int, fps: float) -> float:
@@ -171,6 +196,7 @@ def target_kbps(
     floor_kbps: int = BITRATE_FLOOR_KBPS,
     bpp: float | None = None,
     hevc: tuple[float, float, float] | None = None,
+    av1: tuple[float, float, float] | None = None,
 ) -> int:
     """Absolute target bitrate (kbps) for a file at this resolution/fps/codec.
 
@@ -182,7 +208,7 @@ def target_kbps(
     """
     fps = fps if fps > 0 else float(_REF_FPS)
     density = tier.bpp if bpp is None else bpp
-    raw = density * pixels * fps * codec_factor(out_codec, pixels, hevc) / 1000.0
+    raw = density * pixels * fps * codec_factor(out_codec, pixels, hevc, av1) / 1000.0
     target = max(float(floor_kbps), raw)
     if src_kbps is not None and src_kbps > 0:
         target = min(target, src_kbps)

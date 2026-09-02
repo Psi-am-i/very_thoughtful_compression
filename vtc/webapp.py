@@ -274,7 +274,7 @@ _PREVIEW_PANELS = [
 
 
 # ── mockup answer-index -> engine value (mirrors the M model in the HTML) ─────
-_CODECS = [OutCodec.H264, OutCodec.H265, None, None]    # 0=H264, 1=H265, 2=AV1, 3=VVC (2/3 unsupported)
+_CODECS = [OutCodec.H264, OutCodec.H265, OutCodec.AV1, None]   # 3=VVC, still unsupported
 # Default codec for the PREVIEW samples (independent of the chosen OUTPUT codec):
 # the mac webview plays H.265, but Windows WebView2 has no HEVC decoder, so preview
 # in H.264 there or the tier panels are black. The output codec is unaffected.
@@ -340,7 +340,7 @@ def build_config(src: Path, a: dict) -> RunConfig:
     """Map the mockup's `answers` (question id -> chosen index) to a RunConfig."""
     codec = _CODECS[a["codec"]]
     if codec is None:
-        raise ValueError("AV1 output is not supported by the engine yet")
+        raise ValueError("that output codec is not supported by the engine yet")
     adv = a.get("adv") or {}
     remux, transcode, keep_container, leave = _FORMAT.get(adv.get("format"), _FORMAT["convert"])
     dest = a["dest"]  # 0 archive, 1 delete, 2 new folder
@@ -1362,7 +1362,8 @@ class Api:
                     tgt_pixels = (_dims[0] * _dims[1]) if _dims else sinfo.pixels
                     tgt = target_kbps(tier, tgt_pixels, sinfo.fps, codec,
                                       floor_kbps=cfg2.bitrate_floor_kbps,
-                                      bpp=cfg2.bpp_for(tier), hevc=cfg2.hevc_factors())
+                                      bpp=cfg2.bpp_for(tier), hevc=cfg2.hevc_factors(),
+                                      av1=cfg2.av1_factors())
                     # The tier's TARGET density for this file — compare against source
                     # BPP. Derived from the TUNED target above, so a retuned tier's
                     # panel reports the density it was actually encoded at.

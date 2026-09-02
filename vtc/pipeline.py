@@ -188,7 +188,7 @@ def decide(config: RunConfig, info: MediaInfo) -> tuple[Mode | None, Outcome | N
             src_kbps=src_kbps if clamp else None,
             floor_kbps=config.bitrate_floor_kbps,
             bpp=config.bpp_for(),
-            hevc=config.hevc_factors(),
+            hevc=config.hevc_factors(), av1=config.av1_factors(),
         )
 
     if category is CodecCategory.H264:
@@ -724,7 +724,7 @@ def process_file(config: RunConfig, ledger: Ledger, hw_encoder: str | None,
 
 
 # ffprobe codec name for the chosen output codec, so the record reads codec→codec.
-_OUT_VCODEC = {OutCodec.H264: "h264", OutCodec.H265: "hevc"}
+_OUT_VCODEC = {OutCodec.H264: "h264", OutCodec.H265: "hevc", OutCodec.AV1: "av1"}
 
 
 def _build_detail(config: RunConfig, info: MediaInfo, mode: Mode, target: int,

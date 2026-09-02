@@ -20,7 +20,7 @@ from dataclasses import replace
 
 from . import __version__, pipeline, report
 from .config import AudioPolicy, Container, Encoder, OutputMode, RunConfig, SourceAction
-from .model import OutCodec, Tier, hevc_factor
+from .model import OutCodec, Tier, av1_factor, hevc_factor
 from .pipeline import PlanRow
 from .report import human_bytes
 from .result import FileResult, Outcome
@@ -55,7 +55,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-i", "--interactive", action="store_true", help="ask for settings with prompts")
     p.add_argument("--dry-run", action="store_true", help="show what would happen; encode nothing")
     q = p.add_argument_group("quality")
-    q.add_argument("--codec", choices=["h265", "h264"], default="h265", help="output codec (default: h265)")
+    q.add_argument("--codec", choices=["h265", "h264", "av1"], default="h265",
+                   help="output codec (default: h265). av1 is the most efficient but the "
+                        "least widely playable — check your players before converting a library")
     q.add_argument("--tier", choices=["ok", "good", "excellent", "stellar", "insane"], default="excellent",
                    help="quality tier (default: excellent)")
     q.add_argument("--min-saving", type=float, default=0.25, metavar="FRACTION",
@@ -280,6 +282,8 @@ def _print_header(cfg: RunConfig, dry: bool = False) -> None:
     h265 = ""
     if cfg.out_codec is OutCodec.H265:
         h265 = f"  (~{ref_mbps * hevc_factor(1920 * 1080, cfg.hevc_factors()):.1f} Mbps H.265 @1080p)"
+    elif cfg.out_codec is OutCodec.AV1:
+        h265 = f"  (~{ref_mbps * av1_factor(1920 * 1080, cfg.av1_factors()):.1f} Mbps AV1 @1080p)"
     out = str(cfg.output_dir) if cfg.output_mode is OutputMode.SEPARATE else "in place"
     banner = "DRY RUN — nothing will be encoded" if dry else None
     lines = [

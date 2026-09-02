@@ -204,6 +204,53 @@ re-evaluated instead of appearing to ignore the setting.
 The tool can never eat its own output this way: our own files are HEVC, but they
 carry our tags and are caught by the second-generation guard before any of this runs.
 
+## AV1
+
+AV1 is the third output codec, and the one with the sharpest trade-offs: the most
+efficient of the three and the least widely playable. It is offered, never assumed —
+H.265 remains the suggested default.
+
+**Efficiency factors** sit 25% below the H.265 ones (`AV1_FACTOR_HD` 0.45 vs 0.60, and
+so on), the conservative end of SVT-AV1's published 20–40% advantage over x265. That
+number is only honest at a preset that earns it, so `AV1_PRESET` and those factors move
+together — encoding faster would quietly under-deliver the quality the tier promises.
+Preset 6 was chosen because it measured at 2.72× realtime against libx265 medium's
+2.89×: near enough the same cost as the software H.265 already on offer.
+
+**Rate control is VBR (`-b:v`), not the capped-CRF the H.26x paths use** — measured,
+not preferred. Against a 2400 kbps target on a 15s 1080p clip:
+
+| Mode | Result |
+|---|---|
+| `-crf 32` alone | 6644 kbps — 2.77× over |
+| `-crf 32 -maxrate -bufsize` | 2983 kbps — 1.24× over |
+| `-b:v 2400k` | 2491 kbps — **1.04× ✓** |
+| `-b:v` with `-maxrate`/`-bufsize` | rejected by SVT-AV1 outright |
+
+1.24× is past the 1.10 convergence gate, so capped-CRF here would leave every file
+looking over-target forever and re-encode it on every run — the exact bug the x265
+ceiling was tightened to fix.
+
+⚠️ **SVT-AV1 overshoots on very short clips**, and it is a fixed start-up cost that
+amortises: measured at a 2100 kbps target, 6s lands 1.19× over, 15s 1.06×, 30s 1.04×,
+60s 1.01×. Real files are minutes long so this never bites a run — but the tier
+**previews are five-second samples**, so an AV1 preview will look larger than the codec
+really is. Do not read the preview panel as a fair size comparison for AV1.
+
+**Hardware AV1 encoding is PC-only.** `_HW_CANDIDATES[AV1]` lists `av1_nvenc`
+(NVIDIA RTX 40-series), `av1_qsv` (Intel Arc) and `av1_amf` (AMD RDNA3). There is
+deliberately no `av1_videotoolbox`: Apple silicon *decodes* AV1 from the M3 but nothing
+Apple makes encodes it, so listing one would make every Mac pay for a probe that can
+only fail. Macs take the software path. None of the three could be tested on the
+machine this was written on — which is what the functional one-frame probe in
+`_encoder_works` is for: an absent or broken encoder fails it and the run falls through
+to software rather than failing every file.
+
+**Playability is the real cost.** AV1 decode needs an M3+ Mac, an RTX 30-series or
+newer, Intel 11th-gen or newer, RDNA2 or newer, or a 2023-and-later TV. Anything older
+either transcodes on the server or will not play at all — which for a Plex library is
+the opposite of the tool's usual promise that nothing downstream notices.
+
 ## How long it will take
 
 The app quotes a time in three places — the "about N hours" before you commit, the

@@ -90,6 +90,15 @@ def _encoder_works(ffmpeg: str, enc: str) -> bool:
 _HW_CANDIDATES = {
     OutCodec.H265: ["hevc_videotoolbox", "hevc_nvenc", "hevc_qsv", "hevc_amf"],
     OutCodec.H264: ["h264_videotoolbox", "h264_nvenc", "h264_qsv", "h264_amf"],
+    # AV1 hardware ENCODING exists only on recent PC silicon — NVIDIA RTX 40-series,
+    # Intel Arc, AMD RDNA3. Apple has AV1 *decode* from the M3 but no encoder, so
+    # there is deliberately no av1_videotoolbox here: listing one would make every
+    # Mac pay for a probe that can only ever fail. Macs take the software path.
+    #
+    # None of these three could be tested here (no such card on this machine), which
+    # is exactly what _encoder_works is for: an absent or broken one fails its
+    # one-frame probe and the run falls through to software rather than failing.
+    OutCodec.AV1: ["av1_nvenc", "av1_qsv", "av1_amf"],
 }
 
 
@@ -117,7 +126,8 @@ def hardware_report(ffmpeg: str) -> dict:
     """
     listed = _encoders_list(ffmpeg)
     out: dict = {}
-    for codec, key in ((OutCodec.H264, "h264"), (OutCodec.H265, "h265")):
+    for codec, key in ((OutCodec.H264, "h264"), (OutCodec.H265, "h265"),
+                       (OutCodec.AV1, "av1")):
         found = None
         for enc in _HW_CANDIDATES[codec]:
             if f" {enc} " in listed and _encoder_works(ffmpeg, enc):
@@ -125,6 +135,11 @@ def hardware_report(ffmpeg: str) -> dict:
                 break
         out[key] = found
     out["available"] = bool(out["h264"] or out["h265"])
+    # AV1 is reported separately and NOT folded into `available`: that flag gates the
+    # UI's hardware/software choice for the ordinary codecs, and no Mac will ever have
+    # AV1 hardware. Rolling it in would make the question appear or vanish for reasons
+    # that have nothing to do with the codec the user actually picked.
+    out["av1_software"] = f" {AV1_SOFTWARE} " in listed and _encoder_works(ffmpeg, AV1_SOFTWARE)
     return out
 
 
@@ -135,18 +150,33 @@ def use_hardware(config: RunConfig) -> bool:
 
 # ── Video-arg builder ─────────────────────────────────────────────────────────
 
+def _is_10bit(info: MediaInfo) -> bool:
+    pix = (info.pix_fmt or "")
+    return bool(re.search(r"10(le|be)?$", pix) or "10" in pix)
+
+
 def _hevc_profile(info: MediaInfo) -> str:
     """main10 for a 10-bit source, else main (mirrors the pix_fmt case in bash)."""
-    pix = (info.pix_fmt or "")
-    if re.search(r"10(le|be)?$", pix) or "10" in pix:
-        return "main10"
-    return "main"
+    return "main10" if _is_10bit(info) else "main"
 
 
 # Consecutive B-frames for the VideoToolbox encoders. 2 is the usual sweet spot:
 # the gain from 0 -> 2 is the large one, and past that returns fall off while
 # encoder latency grows. See the note in _hw_video_args for the measurement.
 VT_B_FRAMES = 2
+
+# ── AV1 ───────────────────────────────────────────────────────────────────────
+# SVT-AV1 is the software AV1 encoder worth having: libaom is far slower for no
+# practical gain at these presets, and rav1e is rarely built in.
+AV1_SOFTWARE = "libsvtav1"
+# Preset 6 (0 slowest … 13 fastest). MEASURED on an M4: preset 6 runs at 2.72x
+# realtime against libx265 medium's 2.89x — near enough the same cost as the
+# software H.265 the app already offers — while preset 8 is 5.5x but gives back
+# much of AV1's efficiency advantage. The tier targets assume the advantage is
+# real (see AV1_FACTOR_* in model.py), so the preset and those factors must move
+# together: encoding faster than this would quietly under-deliver the quality the
+# tier promises.
+AV1_PRESET, AV1_PRESET_HQ = 6, 4
 
 
 def _hw_video_args(info: MediaInfo, enc: str, target_kbps: int) -> list[str]:
@@ -157,6 +187,15 @@ def _hw_video_args(info: MediaInfo, enc: str, target_kbps: int) -> list[str]:
       *_videotoolbox (Apple) · *_nvenc (NVIDIA) · *_qsv (Intel) · *_amf (AMD).
     """
     b = f"{target_kbps}k"
+    if enc.startswith("av1_"):
+        # AV1 hardware (NVIDIA Ada / Intel Arc / AMD RDNA3). Deliberately plain
+        # ABR with no -profile:v: AV1's profiles are not H.26x's, "high" means
+        # something else entirely there, and Main is the only one these encoders
+        # and any real player use. 10-bit is carried through — AV1 Main covers
+        # both depths, so a 10-bit source need not be flattened to 8.
+        pix = ["-pix_fmt", "yuv420p10le" if _is_10bit(info) else "yuv420p"]
+        preset = ["-preset", "p5"] if enc.endswith("nvenc") else []
+        return ["-c:v", enc, "-b:v", b, "-maxrate", b, *preset, *pix]
     is265 = "hevc" in enc
     prof = _hevc_profile(info) if is265 else "high"           # main / main10 / high
     tag = ["-tag:v", "hvc1"] if is265 else ["-pix_fmt", "yuv420p"]
@@ -259,6 +298,23 @@ def build_video_args(
     maxrate = f"{target_kbps}k"
     bufsize = f"{target_kbps}k"
 
+    if config.out_codec == OutCodec.AV1:
+        # SVT-AV1 takes VBR (-b:v), NOT the capped-CRF the H.26x paths use, and this
+        # is MEASURED rather than a preference. On a 15s 1080p clip against a 2400
+        # kbps target:
+        #     -crf 32 alone                     6644 kbps   2.77x over
+        #     -crf 32 -maxrate -bufsize         2983 kbps   1.24x over
+        #     -b:v 2400k                        2491 kbps   1.04x  ✓
+        #     -b:v with -maxrate/-bufsize       REJECTED by SVT-AV1 outright
+        # 1.24x is past the 1.10 convergence gate, so capped-CRF here would leave
+        # every file looking over-target forever and re-encode it on every run —
+        # the exact bug the x265 ceiling was tightened to fix. VBR lands inside the
+        # gate, so a second run correctly leaves the file alone.
+        pix = ["-pix_fmt", "yuv420p10le" if _is_10bit(info) else "yuv420p"]
+        av1_preset = AV1_PRESET_HQ if mode == Mode.TRANSCODE else AV1_PRESET
+        return [*scale, "-c:v", AV1_SOFTWARE, "-b:v", f"{target_kbps}k",
+                "-preset", str(av1_preset), *pix]
+
     if config.out_codec == OutCodec.H264:
         return [*scale, "-c:v", "libx264", "-crf", str(crf264), "-preset", preset,
                 "-maxrate", maxrate, "-bufsize", bufsize,
@@ -283,7 +339,7 @@ VTC_TAG_PREFIX = "VTC_"
 
 
 def _codec_label(c: OutCodec) -> str:
-    return {"h265": "H.265", "h264": "H.264"}.get(c.value, c.value.upper())
+    return {"h265": "H.265", "h264": "H.264", "av1": "AV1"}.get(c.value, c.value.upper())
 
 
 def vtc_metadata(config: RunConfig, mode: Mode, target_kbps: int,
