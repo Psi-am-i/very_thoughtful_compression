@@ -29,6 +29,12 @@ class Outcome(str, Enum):
     SKIP_UNDER_TIER = "skip-under-tier"     # source is BELOW the chosen tier — lower quality
                                             # than asked for; left alone (can't be improved)
     SKIP_MODERN = "skip-modern"             # already HEVC/AV1/VP9 in MP4
+    # A bloated modern file that QUALIFIED for a re-encode but fell outside this
+    # run's budget. Deliberately its own outcome and NOT a skip: it is deferred,
+    # not settled, so the ledger must not record it as done or the next run would
+    # never come back for it — which would turn the per-run budget from a drip
+    # into a hard ceiling on the whole library.
+    DEFER_MODERN = "defer-modern"
     SKIP_EXISTING = "skip-existing"         # output already existed
     SKIP_MIN_SAVING = "skip-min-saving"     # encoded, but saving too small -> kept original
     SKIP_INCOMPATIBLE = "skip-incompatible" # MP4-incompatible codec, transcode declined

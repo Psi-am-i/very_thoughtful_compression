@@ -18,6 +18,7 @@ The engine (pipeline/model/config) is untouched and UI-agnostic.
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 import json
 import re
 import threading
@@ -454,6 +455,25 @@ def _apply_advanced(cfg: RunConfig, adv: dict) -> None:
         cfg.keep_mkv_for_audio = bool(adv["keepMkvAudio"])
     if "ledger" in adv:
         cfg.ledger_enabled = bool(adv["ledger"])
+
+    # Bloated modern sources. An expert setting, and off unless explicitly turned
+    # on: it spends a second lossy generation and hours per file, so it belongs in
+    # Settings rather than in the guided flow where it could be armed by accident.
+    if "reencodeModern" in adv:
+        cfg.reencode_modern = bool(adv["reencodeModern"])
+    if (v := _num("modernOver", float, 1.0, 20.0)) is not None:
+        cfg.modern_over_tolerance = v
+    if (v := _num("modernMax", int, 0, 10000)) is not None:
+        cfg.modern_max_files = v
+    if isinstance(adv.get("modernCodecs"), list):
+        valid = {"hevc", "vp9", "av1"}
+        picked = tuple(c for c in (str(x).strip().lower() for x in adv["modernCodecs"])
+                       if c in valid)
+        # An empty list means "none eligible", which is the same as off — say so
+        # plainly rather than silently falling back to the default pair.
+        cfg.modern_codecs = picked
+        if not picked:
+            cfg.reencode_modern = False
     # The frame-size cap mirrored from the walkthrough (see _frame_cap). build_config
     # overrides this from the answer itself; it is read here so the paths that only
     # have the settings dict — the tier previews above all — match the real run.
@@ -1338,6 +1358,22 @@ class Api:
             if self.window:
                 self.window.evaluate_js("window.__vtcProbesReady && window.__vtcProbesReady()")
 
+    def _with_modern_shortlist(self, config: RunConfig) -> RunConfig:
+        """Apply the run's modern-re-encode budget to `config`, if one is in force.
+
+        Modern re-encodes are budgeted per run and chosen worst-first, so anything
+        that PROJECTS the run — the estimate, the re-encode candidate list — has to
+        decide against the same shortlist the run will use. Without this the
+        estimate would promise savings from files the run is never going to reach,
+        which is exactly the over-promising the shrink/min-saving gate was added to
+        stop. A no-op when the option is off or unbudgeted.
+        """
+        if not (config.reencode_modern and config.modern_max_files > 0):
+            return config
+        rows = [pipeline.PlanRow(info.path, info, *pipeline.decide(config, info))
+                for info, _size in self._probes]
+        return replace(config, modern_files=pipeline.pick_modern_shortlist(config, rows))
+
     # -- projected estimate (real plan arithmetic on probed files) --------------
     def estimate(self, answers: dict):
         if self._src is None:
@@ -1362,6 +1398,7 @@ class Api:
                 "reencoded": 0, "skipped": 0, "out_tb": 0.0, "saved_pct": 0,
             }
         from .result import Mode
+        config = self._with_modern_shortlist(config)
         src_bytes = out_bytes = 0
         reencoded = skipped = 0
         # The cohort that actually gets worked on. Reporting the saving against the
@@ -1422,6 +1459,7 @@ class Api:
             config = build_config(self._src, answers)
         except ValueError as e:
             return {"error": str(e)}
+        config = self._with_modern_shortlist(config)
         rows = []
         for info, size in self._probes:
             mode, _outcome, target = pipeline.decide(config, info)
@@ -1976,6 +2014,10 @@ class Api:
         if self._probes and self._probed_for is not None and self._probed_for == config.src:
             probed = {info.path: info for info, _size in self._probes}
             log.info("run: reusing %d measured file(s) from the estimate", len(probed))
+        # Same shortlist the estimate projected, so what was promised is what runs
+        # (pipeline.run would otherwise work it out again, and a file added to the
+        # folder in between could quietly change which files made the cut).
+        config = self._with_modern_shortlist(config)
         results = pipeline.run(config, progress=prog, on_result=emit, files=files,
                                notify=notify, probed=probed)
         summary = _summary(results)
@@ -2002,6 +2044,9 @@ _SKIP_LABEL = {
     Outcome.SKIP_AT_TIER: "already efficient",
     Outcome.SKIP_UNDER_TIER: "below your quality tier",
     Outcome.SKIP_MODERN: "already modern",
+    # Not "left alone" — queued. Worded so nobody reads it as a refusal and goes
+    # looking for a setting to change.
+    Outcome.DEFER_MODERN: "queued for a later run",
     Outcome.SKIP_EXISTING: "already converted",
     Outcome.SKIP_MIN_SAVING: "saving too small",
     Outcome.SKIP_INCOMPATIBLE: "codec kept",
@@ -2016,7 +2061,8 @@ _SKIP_LABEL = {
 }
 _SKIP = {Outcome.SKIP_AT_TIER, Outcome.SKIP_UNDER_TIER, Outcome.SKIP_MODERN,
          Outcome.SKIP_EXISTING, Outcome.SKIP_MIN_SAVING, Outcome.SKIP_INCOMPATIBLE,
-         Outcome.SKIP_CODEC, Outcome.SKIP_SECOND_GEN, Outcome.RESUME}
+         Outcome.SKIP_CODEC, Outcome.SKIP_SECOND_GEN, Outcome.RESUME,
+         Outcome.DEFER_MODERN}
 
 
 def _human_gb(n: int) -> float:

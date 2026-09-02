@@ -106,6 +106,34 @@ class RunConfig:
     # that is a stream copy.)
     allow_second_generation: bool = False
 
+    # ── Bloated modern sources (H.265 / VP9 / AV1) ───────────────────────────
+    # Normally these are never re-encoded: they are already efficient, so the
+    # usual result is a second lossy generation for very little space. But a bad
+    # hardware encoder at a silly bitrate is a real thing (drone and action-cam
+    # footage especially), and those files ARE worth reclaiming. This opens the
+    # door deliberately, and narrowly.
+    reencode_modern: bool = False
+    # Far stricter than tier_over_tolerance, and for a reason: at 2x over target
+    # the win is ~50% and clearly worth the hours; at 1.2x you would spend a night
+    # to save 15% and a generation of quality.
+    modern_over_tolerance: float = 2.0
+    # Which modern codecs are eligible. AV1 is deliberately absent: it is the most
+    # efficient of the three (so a genuinely bloated AV1 file is rare), AV1 -> H.265
+    # is usually an efficiency DOWNGRADE, and AV1 -> AV1 in software is punishing
+    # with no VideoToolbox AV1 encoder on most machines. Add it on purpose or not
+    # at all.
+    modern_codecs: tuple[str, ...] = ("hevc", "vp9")
+    # Per-run budget, because a strict gate can still match hundreds of files and
+    # each one is slow. The shortlist is taken WORST-FIRST by predicted saving, so
+    # a night's encoding goes on the fattest files rather than an arbitrary few;
+    # the ledger then means the next run picks up where this one stopped, turning
+    # an impossible single run into a sustainable drip. 0 = no limit.
+    modern_max_files: int = 25
+    # The shortlist this run actually picked (resolved paths, like software_files).
+    # Empty means "no shortlist in force" — the gate alone decides. pipeline.run()
+    # fills it in when a budget applies.
+    modern_files: frozenset[str] = frozenset()
+
     # Execution
     encoder: Encoder = Encoder.AUTO
     jobs: int = 1
@@ -178,6 +206,30 @@ class RunConfig:
             return str(path.resolve()) in self.software_files
         except OSError:
             return str(path) in self.software_files
+
+    def modern_eligible(self, vcodec: str | None) -> bool:
+        """True if a bloated source in this codec may be re-encoded at all.
+
+        Both the master switch and the per-codec list must agree — turning the
+        feature on must not silently pull in AV1, which is on nobody's list of
+        codecs worth spending a night re-encoding.
+        """
+        if not self.reencode_modern:
+            return False
+        return (vcodec or "").strip().lower() in {c.lower() for c in self.modern_codecs}
+
+    def picked_for_modern(self, path: Path) -> bool:
+        """True if this file is on the run's modern shortlist (or there isn't one).
+
+        An EMPTY shortlist means no budget was applied, not "nothing allowed" —
+        the gate in decide() is then the only thing standing in the way.
+        """
+        if not self.modern_files:
+            return True
+        try:
+            return str(path.resolve()) in self.modern_files
+        except OSError:
+            return str(path) in self.modern_files
 
     def hevc_factors(self) -> tuple[float, float, float]:
         """The (HD, 4K, 8K+) H.265 efficiency factors this run should use."""
@@ -262,6 +314,13 @@ class RunConfig:
         # written before frame size existed.
         if self.max_short_edge > 0:
             parts.append(f"maxh{self.max_short_edge}")
+        # Turning modern re-encoding on (or loosening its bar) makes candidates of
+        # files every previous run recorded as "modern, left alone". They have to be
+        # re-evaluated or the option would appear to do nothing on a library that
+        # has been scanned before. Appended only when it is on.
+        if self.reencode_modern:
+            parts.append(f"mod{self.modern_over_tolerance:.2f}"
+                         f"+{'.'.join(sorted(c.lower() for c in self.modern_codecs))}")
         return "|".join(parts)
 
     def validate(self) -> list[str]:

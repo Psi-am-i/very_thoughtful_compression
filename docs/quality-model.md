@@ -164,6 +164,38 @@ there is no separate "bpp skip floor" any more — the tier target *is* the floo
 H.265/AV1/VP9 sources are classified `modern` and never transcoded (that would only
 add a generation of loss); they are only remuxed losslessly into MP4 if asked.
 
+### The exception: genuinely bloated modern files
+
+That rule holds for almost everything, but not for a file a bad hardware encoder
+wrote at a silly bitrate — common in drone and action-cam footage. `reencode_modern`
+(CLI `--reencode-modern`) opens that door **narrowly**, and it is off by default:
+
+- **A far stricter gate.** The same two tests as H.264 — over target, and able to
+  clear the minimum saving — but at `modern_over_tolerance`, **2.0×** target rather
+  than 1.10×. At 2× over, the win is ~50% and clearly worth the hours; at 1.2× you
+  would spend a night to save a sliver and a generation of quality.
+- **AV1 excluded by default** (`modern_codecs` defaults to `hevc, vp9`). AV1 is the
+  most efficient of the three, so a bloated AV1 file is rare; AV1 → H.265 is usually
+  an efficiency *downgrade*; and AV1 → AV1 in software is punishing with no
+  VideoToolbox AV1 encoder on most machines. Add it deliberately or not at all.
+- **A per-run budget, spent worst-first.** `modern_max_files` (default 25) caps how
+  many run at once, and `pick_modern_shortlist()` ranks candidates by predicted bytes
+  **saved** — not by percentage, and not by file size — so a night's encoding goes on
+  the fattest files.
+
+The budget is a **drip, not a ceiling**. A file that qualifies but falls outside it
+gets its own outcome, `DEFER_MODERN`, which the ledger deliberately does **not**
+record: it is deferred, not settled, so the next run comes back for it. Without that
+distinction a per-run budget of 25 would have meant 25 files ever. The report says
+"queued for a later run" rather than "left alone", for the same reason.
+
+Enabling the option (or loosening its bar, or changing the codec list) is part of the
+ledger signature, so a library that previous runs recorded as "modern, left alone" is
+re-evaluated instead of appearing to ignore the setting.
+
+The tool can never eat its own output this way: our own files are HEVC, but they
+carry our tags and are caught by the second-generation guard before any of this runs.
+
 ## Encoders and what actually controls quality
 
 - **Software (libx264/libx265)** — capped-CRF: `-crf 20/21 -maxrate <target> -bufsize`.

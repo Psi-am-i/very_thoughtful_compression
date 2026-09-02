@@ -25,6 +25,7 @@ _SUMMARY_ROWS: list[tuple[str, Outcome]] = [
     ("left as-is: already at tier", Outcome.SKIP_AT_TIER),
     ("left as-is: below your quality tier", Outcome.SKIP_UNDER_TIER),
     ("left as-is: already H.265/AV1/VP9", Outcome.SKIP_MODERN),
+    ("queued: bloated, outside this run's budget", Outcome.DEFER_MODERN),
     ("left as-is: output already existed", Outcome.SKIP_EXISTING),
     ("left as-is: saving too small", Outcome.SKIP_MIN_SAVING),
     ("left as-is: incompatible codec", Outcome.SKIP_INCOMPATIBLE),

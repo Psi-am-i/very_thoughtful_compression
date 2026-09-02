@@ -30,6 +30,7 @@ _OUTCOME_LINE = {
     Outcome.SKIP_AT_TIER: "SKIP   already at tier",
     Outcome.SKIP_UNDER_TIER: "SKIP   below your quality tier",
     Outcome.SKIP_MODERN: "SKIP   already H.265/AV1/VP9",
+    Outcome.DEFER_MODERN: "QUEUE  bloated — waiting for a later run's budget",
     Outcome.SKIP_EXISTING: "SKIP   output already exists",
     Outcome.SKIP_MIN_SAVING: "SKIP   saving too small, kept original",
     Outcome.SKIP_INCOMPATIBLE: "SKIP   incompatible codec (transcode off)",
@@ -65,6 +66,23 @@ def build_parser() -> argparse.ArgumentParser:
                         "SHORT edge the way 1080p always is — the height for landscape video, "
                         "the width for a portrait clip. The aspect ratio is kept and nothing "
                         "is upscaled (default: 0 = no cap)")
+    m = p.add_argument_group(
+        "bloated modern sources (H.265 / VP9 / AV1 — normally never re-encoded)")
+    m.add_argument("--reencode-modern", action="store_true",
+                   help="allow re-encoding modern sources that are FAR over tier target "
+                        "(a bad hardware encoder at a silly bitrate). Off by default: it "
+                        "costs a second lossy generation and hours per file")
+    m.add_argument("--modern-over", type=float, default=2.0, metavar="X",
+                   help="how many times its tier target a modern source must be before it "
+                        "qualifies (default: 2.0 — at 2x the win is ~50%% and worth the time)")
+    m.add_argument("--modern-codec", action="append", default=[], metavar="CODEC",
+                   help="eligible source codec, repeatable (default: hevc, vp9). AV1 is "
+                        "excluded on purpose — it is already the most efficient, and "
+                        "re-encoding it is usually a downgrade for a lot of hours")
+    m.add_argument("--modern-max", type=int, default=25, metavar="N",
+                   help="how many modern files to re-encode per run, worst first by "
+                        "predicted saving (default: 25; 0 = no limit). The ledger means "
+                        "the next run continues where this one stopped")
     g_ign = p.add_argument_group("ignore rules (files the scan pretends it never saw)")
     g_ign.add_argument("--ignore-under", type=float, default=None, metavar="MB",
                        help="ignore files smaller than this many MB")
@@ -120,6 +138,11 @@ def config_from_args(a: argparse.Namespace) -> RunConfig:
         ignore_name_contains=tuple(n for n in a.ignore_name if n.strip()),
         min_saving_ratio=1.0 - a.min_saving,
         max_short_edge=max(0, a.max_height or 0),
+        reencode_modern=a.reencode_modern,
+        modern_over_tolerance=max(1.0, a.modern_over),
+        modern_codecs=(tuple(c.strip().lower() for c in a.modern_codec if c.strip())
+                       or ("hevc", "vp9")),
+        modern_max_files=max(0, a.modern_max),
         remux_to_mp4=not a.no_remux,
         compat_transcode=not a.no_transcode,
         container=Container(a.container),
@@ -267,6 +290,13 @@ def _print_header(cfg: RunConfig, dry: bool = False) -> None:
         *([f"FRAME:     capped at {cfg.max_short_edge}p on the short edge — aspect kept, "
            f"smaller sources untouched"]
           if cfg.max_short_edge > 0 else []),
+        # An opt-in that re-encodes already-efficient files is not something to
+        # discover from the results, so it is stated before the run starts.
+        *([f"MODERN:    re-encoding {'/'.join(cfg.modern_codecs)} sources over "
+           f"{cfg.modern_over_tolerance:g}x tier target"
+           + (f", {cfg.modern_max_files} file(s) this run (worst first)"
+              if cfg.modern_max_files else ", no per-run limit")]
+          if cfg.reencode_modern else []),
         *_ignore_line(cfg),
         *([f"SOFTWARE:  {len(cfg.software_files)} file(s) picked out for the software encoder"]
           if cfg.software_files else []),

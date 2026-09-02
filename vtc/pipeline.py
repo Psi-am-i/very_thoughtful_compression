@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from . import encode, netmove
 from .config import AudioPolicy, Container, OutputMode, RunConfig, SourceAction
@@ -219,6 +219,28 @@ def decide(config: RunConfig, info: MediaInfo) -> tuple[Mode | None, Outcome | N
         return (None, Outcome.SKIP_AT_TIER, 0)
 
     if category is CodecCategory.MODERN:
+        # Normally we stop here: a modern codec is already efficient, so re-encoding
+        # it usually buys a second lossy generation and very little space. Opened
+        # deliberately (config.reencode_modern) for the files where that is simply
+        # not true — a bad hardware encoder at a silly bitrate — and gated far more
+        # strictly than H.264, because the cost per file is hours rather than
+        # minutes. Both the same two gates as H.264 apply, at modern_over_tolerance
+        # (2x target by default) instead of 1.10, plus the run's shortlist if a
+        # per-run budget put one in force.
+        #
+        # Our OWN output is HEVC, so this could in principle eat the tool's own
+        # work — it cannot: vtc_lossy_generation is checked above and returns
+        # SKIP_SECOND_GEN before we ever get here.
+        if config.modern_eligible(info.vcodec):
+            decision_target = tgt(clamp=False)
+            worth = (over_target(src_kbps, decision_target, config.modern_over_tolerance)
+                     and decision_target <= src_kbps * config.min_saving_ratio)
+            if worth and config.picked_for_modern(info.path):
+                return (Mode.SHRINK, None, tgt(clamp=True))
+            if worth:
+                # Qualified, but this run's budget is spent. Say so distinctly: the
+                # ledger skips DEFER_MODERN, so the next run picks it up.
+                return (None, Outcome.DEFER_MODERN, 0)
         if config.remux_to_mp4 and not already_mp4:
             return (Mode.REMUX, None, 0)
         return (None, Outcome.SKIP_MODERN, 0)
@@ -406,6 +428,39 @@ class PlanRow:
         return None
 
 
+def pick_modern_shortlist(config: RunConfig, rows: list["PlanRow"]) -> frozenset[str]:
+    """The modern-source files this run should spend its budget on, worst-first.
+
+    Ranked by predicted bytes SAVED, not by percentage and not by size: the point
+    of a budget is to buy back the most disk for the hours available, and the
+    biggest percentage is often a small file. Everything past the budget is left
+    for a later run — the ledger records what was done, so a library gets chipped
+    away a batch at a time instead of demanding one impossible overnight run.
+
+    Returns an EMPTY set when no budget applies, which `picked_for_modern` reads
+    as "no shortlist in force" rather than "nothing allowed".
+    """
+    if not config.reencode_modern or config.modern_max_files <= 0:
+        return frozenset()
+    scored: list[tuple[int, str]] = []
+    for row in rows:
+        if row.mode is not Mode.SHRINK:
+            continue
+        if classify_codec(row.info.vcodec) is not CodecCategory.MODERN:
+            continue
+        try:
+            size = row.path.stat().st_size
+            resolved = str(row.path.resolve())
+        except OSError:
+            continue
+        saved = size - predict_output_bytes(config, row.info, size, row.mode, row.target_kbps)
+        if saved > 0:
+            scored.append((saved, resolved))
+    # Saving descending, then path — so a tie orders the same way on every run.
+    scored.sort(key=lambda t: (-t[0], t[1]))
+    return frozenset(p for _saved, p in scored[:config.modern_max_files])
+
+
 # ffprobe is almost pure WAITING — spawn a process, read a header, come back. On a
 # network volume it is latency all the way down, so probing one file at a time
 # left the machine idle: 1,155 films took ~20 minutes serially. These run
@@ -475,7 +530,10 @@ def process_file(config: RunConfig, ledger: Ledger, hw_encoder: str | None,
     mode, skip_outcome, target = decide(config, info)
     if skip_outcome is not None:
         r = FileResult(src_file, skip_outcome)
-        if ledger.enabled:
+        # DEFER_MODERN is the one outcome that is NOT a settled answer — the file
+        # qualified and simply did not fit this run's budget. Recording it would
+        # tell every later run it was already dealt with.
+        if ledger.enabled and skip_outcome is not Outcome.DEFER_MODERN:
             ledger.add(lkey)
         return r
 
@@ -645,6 +703,23 @@ def run(config: RunConfig, progress: ProgressCB | None = None,
     hw_encoder = encode.select_hw_encoder(config)
     files = list(iter_video_files(config)) if files is None else list(files)
     results: list[FileResult] = []
+
+    # Modern re-encodes are slow enough that they get a per-run budget, and a
+    # budget is only worth having if it is spent WELL — so the shortlist is chosen
+    # here, up front, across the whole library, rather than first-come as the run
+    # walks the tree. It needs a measurement of every file to rank them; the GUI
+    # hands us the estimate's probes, and only when it hasn't do we pay for a
+    # probe pass (parallel, and it is work process_file would have done anyway).
+    # Skipped entirely unless the option is on WITH a budget, so the normal run
+    # is untouched.
+    if config.reencode_modern and config.modern_max_files > 0 and not config.modern_files:
+        # Prefer the estimate's measurements; probe only what they don't cover.
+        cache = probed or {}
+        measured = [cache[f] for f in files if f in cache]
+        if len(measured) < len(files):
+            measured = [i for i in probe_many(config, files) if i.ok and i.vcodec]
+        rows = [PlanRow(i.path, i, *decide(config, i)) for i in measured]
+        config = replace(config, modern_files=pick_modern_shortlist(config, rows))
 
     # Volumes this run leans on. The source library is READ from here, the resume
     # LEDGER lives on it (<src>/.vtc_processed.log), and an in-place output is written
