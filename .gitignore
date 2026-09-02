@@ -32,3 +32,6 @@ VTC-UI-text.md
 
 # frontend-verifier screenshot scratch
 vtc/verification/
+
+# local recovery scaffolding (large transcripts) — do not commit
+_recovery/
