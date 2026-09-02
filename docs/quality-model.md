@@ -214,8 +214,11 @@ H.265 remains the suggested default.
 so on), the conservative end of SVT-AV1's published 20–40% advantage over x265. That
 number is only honest at a preset that earns it, so `AV1_PRESET` and those factors move
 together — encoding faster would quietly under-deliver the quality the tier promises.
-Preset 6 was chosen because it measured at 2.72× realtime against libx265 medium's
-2.89×: near enough the same cost as the software H.265 already on offer.
+Preset 6 is the balance point. ⚠️ An earlier note here claimed it cost about the same
+as software H.265; that came from a synthetic clip and was wrong. On real 1080p
+television SVT-AV1 preset 6 runs at **1.6× realtime against libx265's 2.6×** — it is
+the slowest path the app offers, and on a Mac (no hardware AV1) it is roughly six times
+slower than the hardware H.265 most runs use today.
 
 **Rate control is VBR (`-b:v`), not the capped-CRF the H.26x paths use** — measured,
 not preferred. Against a 2400 kbps target on a 15s 1080p clip:
@@ -250,6 +253,33 @@ to software rather than failing every file.
 newer, Intel 11th-gen or newer, RDNA2 or newer, or a 2023-and-later TV. Anything older
 either transcodes on the server or will not play at all — which for a Plex library is
 the opposite of the tool's usual promise that nothing downstream notices.
+
+### Measured encoder speeds
+
+Real television, five-minute samples, the app's own arguments, × realtime:
+
+| | H.264 hw | H.264 sw | H.265 hw | H.265 sw | AV1 sw |
+|---|---|---|---|---|---|
+| The Crown 1080p24 | 9.53 | 3.69 | 9.22 | 2.55 | 1.70 |
+| Stath Lets Flats 1080p25 | 9.08 | 2.52 | 8.96 | — | 1.44 |
+| Clarkson's Farm 720p25 | 17.73 | 10.60 | 14.83 | 3.53 | — |
+
+**Do not re-derive these from `lavfi`.** Synthetic sources gave 7.27 vs 6.32 for H.264
+— a gap a third the real size — and made SVT-AV1 look faster than libx265 when it is
+in fact the slowest path here.
+
+Quality per bit runs the other way, and it is worth knowing before choosing hardware
+for speed. At the same tier, software's capped CRF is frequently satisfied far below
+the tier target, while the hardware ABR path spends the whole allowance:
+
+| | bitrate | SSIM |
+|---|---|---|
+| The Crown, H.265 hardware | 5019 kbps | 0.99503 |
+| The Crown, H.265 software | **1088 kbps** | 0.99232 |
+
+Near-identical SSIM at roughly a fifth of the size. Hardware is about three times
+faster; software often produces a far smaller file at the same tier. Neither is simply
+"better", and the app offers both for that reason.
 
 ## How long it will take
 

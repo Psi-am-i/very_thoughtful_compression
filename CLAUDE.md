@@ -59,6 +59,19 @@ jsdom harness in `tests/ui/` drives the actual HTML); only a real encode proves 
 ffmpeg arguments do what the argument list says. For anything touching encoding, run
 one. Chrome proves it *looks* right — see [[ui-test-harness]] in the palace.
 
+**Benchmark on REAL video, never on `lavfi`.** Synthetic sources — `testsrc2`,
+`mandelbrot`, noise — are pathological: enormous entropy, little temporal
+redundancy, and motion a search resolves far too easily. They flatter and punish
+the two encoder paths differently, so a conclusion drawn from them can be simply
+backwards. Measured the same comparison both ways: on `testsrc2`, hardware H.264
+looked only 1.15× faster than `libx264`, which would have justified recommending
+software; on real episodes it is **3×**. Synthetic content also made SVT-AV1 look
+*faster* than libx265 (3.06× vs 2.86×) when on real footage it is the slowest path
+of the lot (1.6× vs 2.6×). Use `/Volumes/RAID/TV` (154 shows,
+every resolution and bitrate) and take a few five-minute samples with `-c copy`.
+Synthetic clips are fine for *plumbing* tests — does the filter apply, does the
+argument reach ffmpeg — and for nothing that produces a number a user will see.
+
 **Estimates must be measured or absent.** Encode time is predicted in output
 pixel-frames from a rate this machine actually achieved; where nothing has been
 measured, the app says it cannot estimate rather than inventing a number. Keep it

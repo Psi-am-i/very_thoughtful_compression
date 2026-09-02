@@ -3530,24 +3530,32 @@ const hwName = e => String(e||'').replace(/_/g,' ');
 // recent-PC-GPU only, every Mac encodes it in software, and a build with neither
 // cannot make an AV1 file at all — which is a genuine "not available here",
 // stated the way the encoder question states missing hardware.
-// SPEED, per codec, on THIS machine. Every codec that has both a hardware and a
+// SPEED, per codec, on THIS machine. Every codec with both a hardware and a
 // software path moves when the machine does — not just AV1 — and by how much it
-// really moves, which differs enormously between them. MEASURED on an M4 with
-// the app's own encoder arguments, 20s of 1080p30, as × realtime:
+// really moves, which differs enormously between them.
 //
-//        hardware   software
-//   H.264   7.27       6.32     libx264 is nearly as quick as the chip
-//   H.265   7.09       2.86     the big one: software costs you 2.5×
-//   AV1     (none)     3.06     SVT-AV1 preset 6 — actually a shade FASTER
-//                               than libx265, which is not the folklore
+// MEASURED ON REAL TELEVISION, five-minute samples from three shows, using the
+// app's own encoder arguments. An earlier version of this table came from
+// `lavfi testsrc2` and was WRONG in a way that mattered: synthetic patterns let
+// libx264 nearly keep pace with the chip (7.27 vs 6.32), which would have
+// justified recommending software on speed grounds. On real 1080p footage the
+// gap is three times that. Never re-derive these from lavfi.
 //
-// The scale is × realtime, rounded, capped at 10 — so the numbers stay honest
-// against each other rather than being hand-balanced. Hardware AV1 is the one
-// figure not measured here (no such card on this machine); it is set to match
-// the other hardware paths, which is what NVENC/QSV AV1 is reported to do.
-const CODEC_SPEED = [ {hw:7, sw:6},      // 0 H.264
-                      {hw:7, sw:3},      // 1 H.265
-                      {hw:7, sw:3} ];    // 2 AV1 (hw estimated, see above)
+//   1080p, × realtime      hardware   software
+//     H.264                  9.3        3.1
+//     H.265                  9.1        2.6
+//     AV1                   (none)      1.6     SVT-AV1 preset 6 — the slowest
+//                                               path here, not the "faster than
+//                                               x265" that synthetic clips claimed
+//
+// 720p runs roughly twice as fast throughout; 1080p is the sensible middle for a
+// meter. The scale IS × realtime, capped at 10, so the numbers stay honest
+// against each other instead of being hand-balanced. Hardware AV1 is the only
+// figure not measured (no such card here) — set level with the other hardware
+// paths, which is what NVENC/QSV AV1 is reported to do.
+const CODEC_SPEED = [ {hw:9.3, sw:3.1},    // 0 H.264
+                      {hw:9.1, sw:2.6},    // 1 H.265
+                      {hw:9,   sw:1.6} ];  // 2 AV1 (hw estimated, see above)
 
 // Which path a codec will actually take here — hardware if the machine has it
 // AND the user hasn't insisted on software.
@@ -3596,10 +3604,9 @@ function syncEncoderQuestion(){
   const hw = hwFor(ci), HW = q.opts[0], SW = q.opts[1];
   if(HW._t===undefined){ HW._t=HW.t; HW._name=HW.name; SW._t=SW.t; SW._tag=SW.tag; SW._name=SW.name; }
   // This question IS the hardware-vs-software comparison, so its Speed meters
-  // have to be the ones for the codec in hand. A flat 10-vs-3 was badly wrong for
-  // H.264, where libx264 nearly keeps up with the chip (6.32× vs 7.27× measured)
-  // — it advertised a penalty that isn't there. For H.265 the gap really is that
-  // wide (2.86× vs 7.09×), and only the real numbers tell those two apart.
+  // have to be the ones for the codec in hand — the gap is not one number. On
+  // real 1080p television: H.264 9.3× vs 3.1×, H.265 9.1× vs 2.6×, AV1 software
+  // only at 1.6×. A flat 10-vs-3 flattered H.264 and understated AV1.
   if(CODEC_SPEED[ci]){ HW.m[3] = CODEC_SPEED[ci].hw; SW.m[3] = CODEC_SPEED[ci].sw; }
   if(hw.enc){
     HW.disabled = false;
