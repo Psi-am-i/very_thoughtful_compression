@@ -453,15 +453,18 @@ body{
    ignore rules (from ADV.ign*), not a control. Off the ink tokens so both themes
    stay legible: intro is clear secondary (--ink-2), rule VALUES are bright (--ink,
    weight 600) — the legibility fix that replaced the old faint --ink-3 readout. */
-.ig-intro{font-size:12.5px;color:var(--ink-2);line-height:1.55}
-.ig-list{display:flex;flex-direction:column;gap:7px;margin-top:2px}
-.ig-row{display:flex;align-items:baseline;gap:12px}
-.ig-lab{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.13em;
-  text-transform:uppercase;color:var(--ink-2);min-width:150px;flex:0 0 auto}
-.ig-val{font-size:13px;color:var(--ink);font-weight:600;flex:1;min-width:0;
+/* Plain readout — no boxed panel, no accent indent: just the rule list at a normal
+   reading size and the jump to Settings. The intro copy lives in the step's sub. */
+.ignore-readout{display:flex;flex-direction:column;gap:12px;margin:8px 0 10px}
+.ig-list{display:flex;flex-direction:column;gap:10px}
+.ig-row{display:flex;align-items:baseline;gap:14px}
+.ig-lab{font-family:'IBM Plex Mono',monospace;font-size:12.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-2);min-width:184px;flex:0 0 auto}
+.ig-val{font-size:15px;color:var(--ink);font-weight:600;flex:1;min-width:0;
   overflow:hidden;text-overflow:ellipsis}
-.ig-empty{font-size:13px;color:var(--ink);font-weight:600;margin-top:2px}
-.ig-act{margin-top:2px}
+.ig-empty{font-size:15px;color:var(--ink);font-weight:600}
+.ig-act{margin-top:4px}
+.ig-act .de-btn{font-size:13px;padding:9px 16px;letter-spacing:.06em}
 .commit{display:flex;align-items:center;gap:13px;padding-top:16px;flex:0 0 auto}
 .btn-commit{font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600;letter-spacing:.17em;
   text-transform:uppercase;padding:11px 24px;background:var(--accent);color:#fff;border:0;
@@ -1720,7 +1723,7 @@ body{
              destination extras: RESIZE's Custom reveals a px box here; IGNORE's
              Custom reveals the full filter fields (mirrored from Advanced). -->
         <div class="dest-extra" id="resize-extra" hidden=""></div>
-        <div class="dest-extra" id="ignore-extra" hidden=""></div>
+        <div class="ignore-readout" id="ignore-extra" hidden=""></div>
         <div class="meters" id="meters"><div class="meter"><div class="ml"><span>Space</span><b data-m="Space">9.5</b></div>
      <div class="track"><div class="fill hot" data-f="Space" style="width: 95%;"></div></div></div><div class="meter"><div class="ml"><span>Compat</span><b data-m="Compat">4</b></div>
      <div class="track"><div class="fill" data-f="Compat" style="width: 40%;"></div></div></div><div class="meter"><div class="ml"><span>Stream</span><b data-m="Stream">5</b></div>
@@ -3269,7 +3272,7 @@ const M = [
   // The meter row is a poor fit for a readout, so it is neutral/flat.
   { id:'ignore', short:'IGNORE', readout:true,
     title:'Files being ignored',
-    sub:'Before anything runs, this is the set of files the scan will pretend it never saw — filtered out up front, not measured, not encoded, not counted. This is a readout only: the rules are set in Settings → Ignore files and this step just shows you what they currently are so nothing skips silently.',
+    sub:'The following files will be ignored as per "Settings → Ignore files" and are applied to every run.',
     opts:[
       {k:'These will be skipped', recap:'Ignore rules acknowledged', tag:'Read live from Settings → Ignore files', name:'What the scan will skip',
        t:'This is a readout, not a control — it shows the ignore rules exactly as they are configured in Settings → Ignore files, so the walkthrough never hides what it is quietly leaving out. The estimate on the right already reflects these skips. Use “Change ignore settings” to edit the rules.', m:[6,10,9,6], hot:0},
@@ -3561,7 +3564,9 @@ function drawRegions(justSeated){
 
 // ═══ flight ══════════════════════════════════════════════
 function fly(keyEl, qid, oi, done){
-  if(matchMedia('(prefers-reduced-motion: reduce)').matches){ done(); return; }
+  // No key tile to fly (the IGNORE readout step has no options) or reduced motion:
+  // skip the animation and advance immediately, or the commit callback never fires.
+  if(!keyEl || matchMedia('(prefers-reduced-motion: reduce)').matches){ done(); return; }
   const a=keyEl.getBoundingClientRect();
   // the answer flies UP into its block on the progress bar — which is where it
   // now lives, and where the block is about to fill in behind it
@@ -3791,15 +3796,16 @@ function renderIgnoreExtra(){
   if(!q || q.id!=='ignore' || choice===undefined){ el.hidden=true; el.innerHTML=''; return; }
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
   el.hidden=false;
-  const intro = `<div class="ig-intro">The following files will be ignored. These rules are set in "Settings → Ignore files" and are applied to every run. Changes must be made in Settings.</div>`;
+  // The intro copy lives in the step's sub now (q.sub), so the readout is just the
+  // live rule list + the jump to Settings — no duplicated paragraph, no boxed panel.
   let body;
   if(anyIgnoreRuleSet()){
-    body = intro + `<div class="ig-list">`
+    body = `<div class="ig-list">`
       + ignoreRuleRows().map(([lab,val])=>`<div class="ig-row"><span class="ig-lab">${esc(lab)}</span>`
           +`<span class="ig-val">${esc(val)}</span></div>`).join('')
       + `</div>`;
   } else {
-    body = intro + `<div class="ig-empty">Nothing is being ignored — every file in the folder is considered.</div>`;
+    body = `<div class="ig-empty">Nothing is being ignored — every file in the folder is considered.</div>`;
   }
   el.innerHTML = body
     + `<div class="ig-act"><button class="de-btn" id="ig-goto">Change ignore settings</button></div>`;
