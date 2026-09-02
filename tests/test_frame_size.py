@@ -227,3 +227,60 @@ def test_build_config_threads_the_cap_and_the_preview_mirror_agrees():
         mirror = RunConfig(src=src)
         webapp._apply_advanced(mirror, {"resizeHeight": 720})
         assert mirror.max_height == 720
+
+
+# ── rotated (portrait) sources ───────────────────────────────────────────────
+# A phone shoots landscape and stamps a display matrix rather than rewriting the
+# pixels, so a portrait clip is STORED 3840x2160 and WATCHED 2160x3840. ffmpeg
+# autorotates before any -vf we add, so sizing the scale filter from the stored
+# frame forces a portrait picture into a landscape one and squashes it. Caught
+# only because someone asked what happens to vertical video.
+def test_rotation_is_read_and_the_display_frame_derived():
+    info = _info(w=3840, h=2160)
+    assert (info.display_width, info.display_height) == (3840, 2160)   # unrotated
+    assert not info.transposed
+    for deg in (90, -90, 270, -270):
+        info.rotation = deg
+        assert info.transposed, deg
+        assert (info.display_width, info.display_height) == (2160, 3840), deg
+    for deg in (0, 180, -180, 360):
+        info.rotation = deg
+        assert not info.transposed, deg
+        assert (info.display_width, info.display_height) == (3840, 2160), deg
+
+
+def test_a_portrait_source_is_capped_on_what_you_watch():
+    with tempfile.TemporaryDirectory() as d:
+        cfg = RunConfig(src=Path(d), max_height=1080)
+        info = _info(w=3840, h=2160)                     # stored landscape…
+        info.rotation = 90                               # …watched portrait
+        # 2160x3840 capped at 1080 rows keeps the aspect: 608x1080, NOT 1920x1080.
+        args = encode.build_video_args(cfg, info, Mode.SHRINK, 2400, None)
+        assert args[:2] == ["-vf", "scale=608:1080:flags=lanczos"], args[:2]
+        w, h = 608, 1080
+        assert abs(w / h - 2160 / 3840) < 0.01, "aspect ratio not preserved"
+
+
+def test_a_short_landscape_file_is_not_capped_just_because_it_is_wide():
+    """The mirror image: 3840 wide but only 2160 tall is untouched by a 2160 cap,
+    and a stored-portrait file must not be judged on its stored long axis."""
+    with tempfile.TemporaryDirectory() as d:
+        cfg = RunConfig(src=Path(d), max_height=2160)
+        info = _info(w=3840, h=2160)
+        assert "-vf" not in encode.build_video_args(cfg, info, Mode.SHRINK, 2400, None)
+        info.rotation = 90                               # watched 2160x3840
+        assert encode.build_video_args(cfg, info, Mode.SHRINK, 2400, None)[:2] == [
+            "-vf", "scale=1216:2160:flags=lanczos"]   # 1215 rounded to an even width
+
+
+def test_the_report_describes_the_picture_not_the_storage():
+    with tempfile.TemporaryDirectory() as d:
+        info = _info(w=3840, h=2160)
+        info.rotation = 90
+        detail = pipeline._build_detail(
+            RunConfig(src=Path(d), max_height=1080), info, Mode.SHRINK, 2400,
+            Container.MP4, ".mp4", info.path,
+            encode.EncodeResult(ok=True, out_path=info.path, out_bytes=1_000_000))
+        assert (detail.width, detail.height) == (2160, 3840)      # as watched
+        assert (detail.out_width, detail.out_height) == (608, 1080)
+        assert "3840p→1080p" in detail.caption()

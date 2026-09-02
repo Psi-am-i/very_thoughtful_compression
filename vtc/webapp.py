@@ -1274,7 +1274,8 @@ class Api:
                     # too (build_video_args adds the scale filter from the same cfg).
                     # A preview that showed a 4K encode of a run that will write 1080p
                     # would misreport both the size and the density on the panel.
-                    _dims = capped_dims(sinfo.width, sinfo.height, cfg2.max_height)
+                    _dims = capped_dims(sinfo.display_width, sinfo.display_height,
+                                        cfg2.max_height)
                     tgt_pixels = (_dims[0] * _dims[1]) if _dims else sinfo.pixels
                     tgt = target_kbps(tier, tgt_pixels, sinfo.fps, codec,
                                       floor_kbps=cfg2.bitrate_floor_kbps,

@@ -197,7 +197,12 @@ def _scale_args(config: RunConfig, info: MediaInfo) -> list[str]:
     visibly softens — and softening the picture before handing it to a
     bitrate-limited encoder gives away the very quality the cap was meant to buy.
     """
-    dims = capped_dims(info.width, info.height, config.max_height)
+    # DISPLAY dimensions, not stored ones. A phone shoots landscape and stamps a
+    # rotation instead of rewriting the pixels, and ffmpeg autorotates before this
+    # filter runs — so a portrait 4K clip arrives here as 2160x3840 however the
+    # file is stored. Sizing the filter from the stored 3840x2160 would force a
+    # portrait frame into a landscape one and squash the picture.
+    dims = capped_dims(info.display_width, info.display_height, config.max_height)
     if not dims:
         return []
     return ["-vf", f"scale={dims[0]}:{dims[1]}:flags=lanczos"]

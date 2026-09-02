@@ -175,7 +175,11 @@ def decide(config: RunConfig, info: MediaInfo) -> tuple[Mode | None, Outcome | N
     #
     # `hevc_factor` is likewise documented in terms of the OUTPUT frame, so a
     # downscaled 4K file correctly earns the HD factor rather than the 4K one.
-    scaled = capped_dims(info.width, info.height, config.max_height)
+    # Measured on the DISPLAY frame (see MediaInfo.display_height): a rotated
+    # portrait clip is capped by what a viewer sees as its height, not by whichever
+    # axis the file happens to be stored along. The pixel COUNT is the same either
+    # way round, so the target arithmetic below is unaffected by rotation itself.
+    scaled = capped_dims(info.display_width, info.display_height, config.max_height)
     out_pixels = (scaled[0] * scaled[1]) if scaled else info.pixels
 
     def tgt(clamp: bool) -> int:
@@ -588,8 +592,11 @@ def _build_detail(config: RunConfig, info: MediaInfo, mode: Mode, target: int,
     vid_kbps = float(target) if mode in (Mode.SHRINK, Mode.TRANSCODE) else info.effective_bps / 1000.0
     # The frame we actually wrote. A REMUX is a stream copy, so a frame-size cap
     # cannot apply to it however it is set — only a re-encode can rescale.
-    scaled = None if mode is Mode.REMUX else capped_dims(info.width, info.height, config.max_height)
-    out_w, out_h = scaled if scaled else (info.width, info.height)
+    # Reported in DISPLAY orientation throughout, so "2160p→1080p" describes the
+    # picture a person watches rather than the axis the file is stored along.
+    src_w, src_h = info.display_width, info.display_height
+    scaled = None if mode is Mode.REMUX else capped_dims(src_w, src_h, config.max_height)
+    out_w, out_h = scaled if scaled else (src_w, src_h)
     # bpp against the OUTPUT frame, or a downscale would report a density the file
     # does not have: the same bitrate over a quarter of the pixels is four times
     # the density, and that is exactly what the reader is being asked to judge.
@@ -618,7 +625,7 @@ def _build_detail(config: RunConfig, info: MediaInfo, mode: Mode, target: int,
         src_ext=src_file.suffix.lower(),
         out_ext=ext,
         container_reason=encode.container_reason(config, info),
-        width=info.width, height=info.height,
+        width=src_w, height=src_h,
         out_width=out_w, out_height=out_h, fps=info.fps,
         src_kbps=info.effective_bps / 1000.0, vid_kbps=vid_kbps, out_kbps=out_kbps, bpp=bpp,
         audio_action=res.audio_action,

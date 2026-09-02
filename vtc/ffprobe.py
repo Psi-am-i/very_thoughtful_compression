@@ -56,10 +56,29 @@ class MediaInfo:
     vtc: dict = field(default_factory=dict)
     comment: str = ""            # the file's own comment, whoever wrote it
     audio_bps: int = 0           # summed across audio streams, where known
+    # Display matrix, in degrees. A phone shoots landscape and stamps a rotation
+    # rather than rewriting the pixels, so `width`/`height` above are how the file
+    # is STORED and can be the other way round from how it is watched.
+    rotation: int = 0
 
     @property
     def pixels(self) -> int:
         return self.width * self.height
+
+    @property
+    def transposed(self) -> bool:
+        """True when the display matrix turns the frame on its side (90 / 270)."""
+        return abs(int(self.rotation)) % 180 == 90
+
+    @property
+    def display_width(self) -> int:
+        """Frame width AS WATCHED — and as ffmpeg's filter graph sees it, because
+        ffmpeg autorotates before any -vf we add (we never pass -noautorotate)."""
+        return self.height if self.transposed else self.width
+
+    @property
+    def display_height(self) -> int:
+        return self.width if self.transposed else self.height
 
     @property
     def max_audio_channels(self) -> int:
@@ -137,6 +156,26 @@ def _parse_fps(rate: str | None) -> float:
 # purpose: it shows up in VLC, MediaInfo and Plex, so the provenance is visible
 # without any tooling.
 VTC_SIGNATURE = "Very Thoughtful Compression"
+
+
+def _rotation(s: dict) -> int:
+    """Display rotation in degrees for a video stream, or 0.
+
+    Read from the modern `side_data_list` display matrix first, falling back to
+    the legacy `TAG:rotate` that older files (and older muxers) carry instead.
+    Only the ORIENTATION matters to us, never the sign convention — a caller asks
+    `transposed`, which is true for any odd multiple of 90 either way round.
+    """
+    for sd in s.get("side_data_list") or []:
+        if "rotation" in sd:
+            try:
+                return int(float(sd["rotation"]))
+            except (TypeError, ValueError):
+                pass
+    try:
+        return int(float((s.get("tags") or {}).get("rotate", 0) or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _stream_bps(s: dict, duration: float) -> int:
@@ -246,6 +285,7 @@ def probe(path: Path, ffprobe: str = "ffprobe") -> MediaInfo:
             info.fps = _parse_fps(s.get("avg_frame_rate")) or _parse_fps(s.get("r_frame_rate"))
             info.bit_rate = _stream_bps(s, info.duration)   # sanity-checked below
             info.pix_fmt = s.get("pix_fmt")
+            info.rotation = _rotation(s)
         elif kind == "subtitle":
             codec = (s.get("codec_name") or "").lower()
             lang = (s.get("tags", {}) or {}).get("language", "und")
