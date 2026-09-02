@@ -725,3 +725,67 @@ it sets a synchronous stand-in `SRC`/`answers` since the mock scan is async) and
 ### Tests
 `python -m pytest -q` → **132 passed.** jsdom `tests/ui/drive.js` → **51 checks,
 0 fails** (nav/flight/dup drivers also pass). No test text changed.
+
+## Review-pass 5 — three directed changes (2026-09-02)
+
+Applied non-destructively; LIGHT theme's other screens unchanged; self-contained
+(inline only). Every edit was a surgical, verified string replacement — the shipped
+HTML was never rewritten wholesale (no Write on `vtc/vtc_app_v3.html`; the Edit path
+was unavailable this session, so replacements were done via a Python helper that
+asserts a single exact match before writing). Rendered in headless Chrome (both
+themes) via the inert `#__shot=…` harness. Tests: **132 pytest pass** (unchanged;
+no test text touched).
+
+### 1 · Destination "New folder · keep original" — de-boxed + copy/rename
+The inline panel was an orange-left-border boxed block in cramped micro-type (the
+same problem the Ignore step had). It is now a plain, un-boxed layout at normal
+reading size:
+- A new **`.dest-plain`** modifier is added to `#dest-extra` only for the
+  new-folder case (`renderDestExtra`, `choice===2`); it drops the panel box
+  (`background:none; border-left:0; border-radius:0`), indents the rows a touch
+  (`padding-left:4px`) and bumps the label/path/hint to a legible size (14px hint
+  at `--ink-2`, 12.5px labels at `--ink-2`, path 14px). The RESIZE and ARCHIVE
+  extras keep their boxed `.dest-extra` treatment — the class is stripped again on
+  the archive, delete and off-step branches so revisiting "Replace" never inherits
+  the plain look.
+- **Folder row copy:** the unset text now reads **"No folder chosen yet"** (the
+  "— originals stay put" tail is gone). The **CHOOSE…/CHANGE…** button sits
+  immediately next to the path (`.de-path{flex:0 1 auto}`) so the row reads
+  folder → path → button rather than pushing the button to the far right.
+- **Structure toggle:** the mirror option is renamed **"Mirror Original Folders"**
+  (Flat unchanged).
+- **Descriptions:** Mirror keeps its meaning ("The source's subfolder tree is
+  recreated inside that folder, so nothing can collide."); **Flat** is rewritten to
+  "Every new file goes into the chosen folder. Files from different source
+  subfolders that share a name get a numbered suffix — filename_1.mp4,
+  filename_2.mp4, and so on."
+- Harness: added an inert `__shot=dest` (arms the Destination step with "New
+  folder"; `flat=1` flips the Structure toggle, `dir=1` fills a sample chosen
+  folder). Renders: `design-review/dest-newfolder-mirror-{dark,light}.png`,
+  `dest-newfolder-flat-{dark,light}.png`, `dest-newfolder-chosen-dark.png`.
+
+### 2 · Ignore step — readout polish (indent + spacing)
+The plain readout got tightened without adding any box:
+- The rule list is **indented** (`.ig-list{padding-left:14px}`, the `.ig-empty`
+  line too) so the rows read as one grouped, scannable block.
+- **Breathing room** added between the step's `sub` copy and the first rule row
+  (`.ignore-readout{margin-top:18px}`, was 8px), plus a slightly roomier row
+  rhythm (`gap:11px`) and a touch more space above the "Change ignore settings"
+  button (`.ig-act{margin-top:6px}`). Label/value alignment and the normal-size
+  button are unchanged. The `sub` copy is verbatim.
+  Renders: `design-review/ignore-rules-{dark,light}.png`,
+  `ignore-none-{dark,light}.png`.
+
+### 3 · Ignore step — real right-rail preview (was a placeholder)
+`readoutWell()` no longer shows a neutral `.well-empty` note; it now populates the
+**same `.well-tag / .well-name / .well-text` structure every other step uses** and
+adds `.lit` so the accent left border matches. It reads the live ignore state:
+- Rules set → tag **"Skipping"**, name **"N rules active"** (singular "1 rule
+  active"), text: "These files are filtered out before the run even starts, so they
+  are never opened, never re-encoded and never replaced. The space-saved estimate on
+  the right already leaves them out."
+- Nothing set → tag **"Nothing skipped"**, name **"Nothing skipped"**, text: "No
+  ignore rules are set, so every file in the folder is a candidate. The space-saved
+  estimate on the right counts them all."
+The Ignore Continue still advances (the `fly()` no-key-tile early-return is
+untouched). Renders show the rail in both states/themes (same files as item 2).

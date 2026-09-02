@@ -442,6 +442,20 @@ body{
 .de-seg button.on{background:var(--accent);color:#fff}
 .de-hint{font-size:11.5px;color:var(--ink-3);line-height:1.5}
 .de-hint b{color:var(--ink-2);font-weight:600}
+/* The DESTINATION "new folder" panel is a plain, un-boxed layout at normal reading
+   size — no accent-left box, no cramped micro-type. Mirrors the Ignore readout's
+   plainness. Only this variant loses the box; the RESIZE/ARCHIVE extras keep theirs.
+   The CHOOSE... button sits next to the path (not pushed to the far right): the row
+   reads folder -> path -> button; a small left indent groups the rows as a list. */
+.dest-extra.dest-plain{background:none;border-left:0;padding:0 0 0 4px;border-radius:0;gap:16px;margin:6px 0 12px}
+.dest-plain .de-row{gap:14px}
+.dest-plain .de-lab{font-size:12.5px;letter-spacing:.1em;color:var(--ink-2);min-width:96px;flex:0 0 auto}
+.dest-plain .de-path{font-size:14px;flex:0 1 auto;white-space:normal}
+.dest-plain .de-path.unset{font-size:14px}
+.dest-plain .de-btn{font-size:12px;padding:6px 13px}
+.dest-plain .de-seg button{font-size:12.5px;padding:6px 14px}
+.dest-plain .de-hint{font-size:14px;color:var(--ink-2);line-height:1.6;max-width:60ch}
+.dest-plain .de-hint b{color:var(--ink);font-weight:600}
 /* inline number / text boxes for the RESIZE + IGNORE extras (same panel as dest) */
 .de-num,.de-txt{font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:6px 8px;
   border:1px solid var(--rule);border-radius:var(--r);background:var(--panel);color:var(--ink)}
@@ -455,15 +469,20 @@ body{
    weight 600) — the legibility fix that replaced the old faint --ink-3 readout. */
 /* Plain readout — no boxed panel, no accent indent: just the rule list at a normal
    reading size and the jump to Settings. The intro copy lives in the step's sub. */
-.ignore-readout{display:flex;flex-direction:column;gap:12px;margin:8px 0 10px}
-.ig-list{display:flex;flex-direction:column;gap:10px}
+/* Extra top margin puts real air between the step's sub copy and the first rule
+   row; the list itself is indented a little so the rows read as one grouped, scannable
+   block (a clean indent — never the old heavy orange box). */
+.ignore-readout{display:flex;flex-direction:column;gap:14px;margin:18px 0 10px}
+.ig-list{display:flex;flex-direction:column;gap:11px;padding-left:14px}
 .ig-row{display:flex;align-items:baseline;gap:14px}
 .ig-lab{font-family:'IBM Plex Mono',monospace;font-size:12.5px;letter-spacing:.1em;
   text-transform:uppercase;color:var(--ink-2);min-width:184px;flex:0 0 auto}
 .ig-val{font-size:15px;color:var(--ink);font-weight:600;flex:1;min-width:0;
   overflow:hidden;text-overflow:ellipsis}
-.ig-empty{font-size:15px;color:var(--ink);font-weight:600}
-.ig-act{margin-top:4px}
+.ig-empty{font-size:15px;color:var(--ink);font-weight:600;padding-left:14px}
+/* rules on the left, the jump-to-Settings button to their right (not stacked above Continue) */
+.ig-body{display:flex;align-items:flex-start;justify-content:space-between;gap:28px}
+.ig-act{flex:0 0 auto}
 .ig-act .de-btn{font-size:13px;padding:9px 16px;letter-spacing:.06em}
 .commit{display:flex;align-items:center;gap:13px;padding-top:16px;flex:0 0 auto}
 .btn-commit{font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600;letter-spacing:.17em;
@@ -3687,21 +3706,22 @@ function renderDestExtra(){
   const el=$('#dest-extra'); if(!el) return;
   const q=M[step];
   const choice = (armed!==null ? armed : (q ? answers[q.id] : undefined));
-  if(!q || q.id!=='dest' || choice===undefined){ el.hidden=true; el.innerHTML=''; return; }
+  if(!q || q.id!=='dest' || choice===undefined){ el.hidden=true; el.innerHTML=''; el.classList.remove('dest-plain'); return; }
   const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
   if(choice===2){                                   // New folder
     const dir = window.__outputDir||'';
     const flat = !!(window.ADV && ADV.outFlat);
     el.hidden=false;
+    el.classList.add('dest-plain');   // de-boxed, normal-size layout for this case
     el.innerHTML =
       `<div class="de-row"><span class="de-lab">Folder</span>`
-      + `<span class="de-path ${dir?'':'unset'}" title="${esc(dir)}">${dir?esc(dir):'No folder chosen yet — originals stay put'}</span>`
+      + `<span class="de-path ${dir?'':'unset'}" title="${esc(dir)}">${dir?esc(dir):'No folder chosen yet'}</span>`
       + `<button class="de-btn" id="de-pick">${dir?'Change…':'Choose…'}</button></div>`
       + `<div class="de-row"><span class="de-lab">Structure</span>`
-      + `<span class="de-seg"><button data-flat="0" class="${flat?'':'on'}">Mirror folders</button>`
+      + `<span class="de-seg"><button data-flat="0" class="${flat?'':'on'}">Mirror Original Folders</button>`
       + `<button data-flat="1" class="${flat?'on':''}">Flat</button></span></div>`
       + `<div class="de-hint">${flat
-          ? 'Every new file goes straight into that one folder (same-named files in different source subfolders would clash).'
+          ? 'Every new file goes into the chosen folder. Files from different source subfolders that share a name get a numbered suffix — filename_1.mp4, filename_2.mp4, and so on.'
           : 'The source’s subfolder tree is recreated inside that folder, so nothing can collide.'}</div>`;
     const pk=$('#de-pick');
     if(pk) pk.onclick=async()=>{
@@ -3717,10 +3737,11 @@ function renderDestExtra(){
   } else if(choice===0){                            // Replace · archive original
     const custom = window.ADV && ADV.archiveDir;
     el.hidden=false;
+    el.classList.remove('dest-plain');   // archive keeps the boxed hint panel
     el.innerHTML = `<div class="de-hint">Replaced originals move to `
       + (custom ? `<b>${esc(ADV.archiveDir)}</b>` : `an <b>“originals”</b> folder at the source root`)
       + `. Nothing is deleted — change the archive location under <b>Settings → Destination</b>.</div>`;
-  } else { el.hidden=true; el.innerHTML=''; }        // Replace · delete — no extras
+  } else { el.hidden=true; el.innerHTML=''; el.classList.remove('dest-plain'); }  // Replace · delete — no extras
 }
 // ── FRAME SIZE inline extra ──────────────────────────────────────────────────
 // The Custom option ("preset:'custom'") reveals a single box for the max HEIGHT —
@@ -3807,8 +3828,8 @@ function renderIgnoreExtra(){
   } else {
     body = `<div class="ig-empty">Nothing is being ignored — every file in the folder is considered.</div>`;
   }
-  el.innerHTML = body
-    + `<div class="ig-act"><button class="de-btn" id="ig-goto">Change ignore settings</button></div>`;
+  el.innerHTML = `<div class="ig-body">` + body
+    + `<div class="ig-act"><button class="de-btn" id="ig-goto">Change ignore settings</button></div></div>`;
   const go=$('#ig-goto');
   if(go) go.onclick=()=>{ if(typeof openAdvSection==='function') openAdvSection('ignore'); };
 }
@@ -3863,12 +3884,22 @@ function clearWell(){
   document.querySelectorAll('.fill').forEach(f=>f.style.width='0');
   document.querySelectorAll('[data-m]').forEach(b=>b.textContent='–');
 }
-// A readout step has no armed choice to explain, so the well carries a neutral note
-// rather than an option description — the panel itself (renderIgnoreExtra) is the
-// content, and the estimate on the right already reflects the ignored files.
+// A readout step has no armed option to explain, so the rail describes what the
+// readout DOES — same .well-tag / .well-name / .well-text layout as every other step,
+// not a bare placeholder. Tag + count + a plain line saying these files are filtered
+// out before the run and the estimate already excludes them.
 function readoutWell(){
-  $('#well').classList.remove('lit');
-  $('#well').innerHTML=`<div class="well-empty mono">Nothing to preview here — the space saved shown on the right already leaves out anything being ignored.</div>`;
+  const w=$('#well');
+  const any = (typeof anyIgnoreRuleSet==='function') && anyIgnoreRuleSet();
+  const n = (typeof ignoreActiveCount==='function') ? ignoreActiveCount() : 0;
+  const tag = any ? 'Skipping' : 'Nothing skipped';
+  const name = any ? (n===1 ? '1 rule active' : n+' rules active') : 'Nothing skipped';
+  const text = any
+    ? 'These files are filtered out before the run even starts, so they are never opened, never re-encoded and never replaced. The space-saved estimate on the right already leaves them out.'
+    : 'No ignore rules are set, so every file in the folder is a candidate. The space-saved estimate on the right counts them all.';
+  w.classList.add('lit');
+  w.innerHTML=`<div class="fade"><div class="well-tag">${tag}</div>
+    <div class="well-name">${name}</div><div class="well-text">${text}</div></div>`;
   document.querySelectorAll('.fill').forEach(f=>f.style.width='0');
   document.querySelectorAll('[data-m]').forEach(b=>b.textContent='–');
 }
@@ -6792,6 +6823,19 @@ window.setMode=setMode; window.U=U; window.W=W;
         M.forEach(x=>{ if(x.id!=='ignore') answers[x.id]=answers[x.id]??0; });
         step = idx; armed = null;
         if(typeof render==='function') render();
+        if(typeof drawComb==='function') drawComb();
+      } else if(shot==='dest'){
+        // Destination step with "New folder" armed, for reviewing the de-boxed panel.
+        // flat=1 flips the Structure toggle so the Flat description can be captured;
+        // dir=1 fills a sample chosen folder (default: unset "No folder chosen yet").
+        if(!window.ADV) window.ADV={};
+        ADV.outFlat = p.get('flat')==='1';
+        if(p.get('dir')==='1') window.__outputDir='/Volumes/NAS/Compressed';
+        const di = M.findIndex(x=>x.id==='dest');
+        M.forEach(x=>{ if(x.id!=='dest') answers[x.id]=answers[x.id]??0; });
+        step = di; armed = 2;
+        if(typeof render==='function') render();
+        if(typeof renderDestExtra==='function') renderDestExtra();
         if(typeof drawComb==='function') drawComb();
       } else if(shot==='settings'){
         if(typeof openAdvSection==='function') openAdvSection('ignore');
