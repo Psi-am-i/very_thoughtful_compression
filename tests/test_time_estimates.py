@@ -161,3 +161,49 @@ def test_the_rate_is_kept_per_concurrency():
         four = RunConfig(src=Path(d), jobs=4)
         assert webapp._rate_key(one, hw=True) != webapp._rate_key(four, hw=True)
         assert webapp._rate_key(one, hw=True) != webapp._rate_key(one, hw=False)
+
+
+def test_the_machine_learns_its_own_speed_across_runs(monkeypatch, tmp_path):
+    """The loop that makes every estimate the user's own rather than a developer's.
+
+    Ships with constants measured on one Mac; from the first real run on THIS
+    machine those are never consulted again. Pinned end to end — record → persist
+    → read back → attribute — because each half of it has already been silently
+    broken once (elapsed_s was never assigned, so nothing was ever measured).
+    """
+    from vtc import webapp
+    from vtc.config import Encoder
+
+    settings = tmp_path / "settings.json"
+    monkeypatch.setattr(webapp, "_settings_path", lambda: settings)
+    api = webapp.Api.__new__(webapp.Api)
+    api._adv = {}
+    cfg = RunConfig(src=tmp_path, out_codec=__import__("vtc.model", fromlist=["x"]).OutCodec.H265,
+                    encoder=Encoder.HARDWARE)
+    monkeypatch.setattr(webapp.encode, "select_hw_encoder", lambda c: "hevc_videotoolbox")
+    key = webapp._rate_key(cfg, hw=True)
+
+    # A machine that has never run VTC has nothing to offer, and says so.
+    assert api._encode_rate(cfg) == (None, "")
+
+    def run_of(elapsed, w=1920, h=1080, fps=30.0, dur=600.0):
+        from vtc.result import FileDetail, FileResult, Outcome
+        return [FileResult(tmp_path / "f.mp4", Outcome.SHRINK, elapsed_s=elapsed,
+                           detail=FileDetail(mode="shrink", out_width=w, out_height=h,
+                                             fps=fps, duration=dur))]
+
+    api._record_rate(cfg, run_of(100.0))
+    first = api._adv[webapp._RATES_KEY][key]
+    assert first == pipeline.encode_work(1920, 1080, 30.0, 600.0) / 100.0
+    assert api._encode_rate(cfg) == (first, "your last run")
+    assert settings.is_file(), "the rate has to survive the app closing"
+
+    # A second, slower run moves the figure without replacing it outright.
+    api._record_rate(cfg, run_of(200.0))
+    second = api._adv[webapp._RATES_KEY][key]
+    assert second < first, "a slower run must pull the estimate down"
+    assert second > first / 2, "…but one run is evidence, not the whole truth"
+
+    # An all-skip run measured nothing and must not be allowed to say anything.
+    api._record_rate(cfg, [])
+    assert api._adv[webapp._RATES_KEY][key] == second

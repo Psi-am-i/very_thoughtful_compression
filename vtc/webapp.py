@@ -1484,6 +1484,27 @@ class Api:
         review.pop("work", None)
         return review
 
+    def _record_rate(self, config: RunConfig, results: list) -> None:
+        """Learn this machine's encoding speed from the run that just finished.
+
+        This is the loop that makes every future estimate the user's own rather
+        than mine: the app ships with constants measured on one developer's Mac,
+        and from the first real run on this machine those are never consulted
+        again. It runs after a STOPPED run too — a run cut short still encoded
+        real files, and that measurement is just as good.
+        """
+        rate = _observed_rate(results)
+        if not rate:
+            return                       # nothing encoded (an all-skip run measures nothing)
+        key = _rate_key(config, bool(encode.select_hw_encoder(config)))
+        rates = dict(self._adv.get(_RATES_KEY) or {})
+        before = rates.get(key)
+        rates[key] = _blend_rate(before, rate)
+        self._adv[_RATES_KEY] = rates
+        _save_settings(self._adv)
+        log.info("encode rate for %s: %.3g pixel-frames/s (this run %.3g%s)",
+                 key, rates[key], rate, "" if before is None else f", was {float(before):.3g}")
+
     def _note_sample_rate(self, config: RunConfig, info, hw, seconds: float,
                           elapsed: float, returncode: int) -> None:
         """Record what a preview clip managed, as a first-guess encoding rate.
@@ -2202,16 +2223,7 @@ class Api:
         config = self._with_modern_shortlist(config)
         results = pipeline.run(config, progress=prog, on_result=emit, files=files,
                                notify=notify, probed=probed)
-        # What this machine actually managed, folded into the stored rate so the
-        # next "about N hours" is grounded in this machine rather than a guess.
-        rate = _observed_rate(results)
-        if rate:
-            key = _rate_key(config, bool(encode.select_hw_encoder(config)))
-            rates = dict(self._adv.get(_RATES_KEY) or {})
-            rates[key] = _blend_rate(rates.get(key), rate)
-            self._adv[_RATES_KEY] = rates
-            _save_settings(self._adv)
-            log.info("encode rate for %s: %.3g pixel-frames/s", key, rates[key])
+        self._record_rate(config, results)
         summary = _summary(results)
         summary["mins"] = int((_time.monotonic() - run_t0) / 60)   # real elapsed (was hardcoded 0)
         summary["stopped"] = pipeline.stop_requested()              # user hit either Stop
