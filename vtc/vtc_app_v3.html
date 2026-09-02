@@ -2386,7 +2386,7 @@ body{
     <div class="sheet-b">
       <p class="mr-lead" id="modern-lead"></p>
       <p class="mr-note" id="modern-time"></p>
-      <p class="sheet-w" style="border-left-color:var(--rule)">These are files a bad encoder wrote at a silly bitrate. VTC never re-encodes a modern codec unless you ask, because doing it spends a second generation of quality to buy the space back. Nothing else in your run is changed by this choice.</p>
+      <p class="sheet-w" style="border-left-color:var(--rule)">These files were written at a silly bitrate. VTC never re-encodes a modern codec without asking, because doing it spends a second generation of quality and a lot of time to buy the space back. Your choice.</p>
       <div class="mr-h">The worst offenders <span class="mr-hn" id="modern-rank-note"></span></div>
       <div class="mr-list" id="modern-list"></div>
       <button class="adv-mini mr-more" id="modern-more" hidden="">Show more</button>
@@ -5026,9 +5026,12 @@ function mrSync(){
   if(re){
     const n=mrCount(), left=Math.max(0, all-n);
     re.innerHTML = left
-      ? 'The other <b>'+left.toLocaleString()+'</b> are not lost. A file we don\'t get to '
-        + 'isn\'t written down as done, so the next run picks up exactly where this one '
-        + 'stops — worst first. You can re-run VTC whenever you like and deal with the balance.'
+      // A custom count can be 1, and "the 1 worst offenders" reads as a bug.
+      ? 'The other <b>'+left.toLocaleString()+'</b> are not lost. '
+        + (n===1 ? 'The worst offender will process now'
+                 : 'The <b>'+n.toLocaleString()+'</b> worst offenders will process now')
+        + ' and the rest you can process later. You can re-run VTC whenever you like '
+        + 'and deal with the balance.'
       : 'You\'ve picked all of them. If the run is interrupted nothing is lost either — only '
         + 'files that finished are written down as done, so the next run resumes from there.';
   }
