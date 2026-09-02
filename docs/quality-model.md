@@ -246,6 +246,69 @@ silently re-rated when this changed.
 
 Where no estimate is possible at all, the app says so rather than inventing a number.
 
+### The countdown during a run
+
+The pre-run quote is one number for the whole library. The clock during a run has a
+harder job, because a library is *ordered*: it can spend an hour on instant skips (a
+lean show, alphabetically early) and then walk into a block of real encodes. So the
+countdown is never "seconds per file so far × files left" — that average is mix-blind,
+and at 3,308 of 3,680 files it once promised four minutes for 372 files that were
+mostly encodes.
+
+Instead every file is predicted individually (above), and what remains is **predicted
+work still to do**, calibrated against the real clock:
+
+```
+eta = heavy_left × corr  +  light_left × measured_cost_per_skip
+```
+
+Two pools, calibrated separately, because they are five thousand times apart — an
+encode averages ~230s, every kind of skip 0.02–0.25s — and their errors are unrelated.
+One shared correction would let thousands of skips drag the handful of encodes around.
+
+- **Heavy** (encodes and remuxes): predicted seconds, multiplied by `corr` — how much a
+  predicted second has really cost so far this run (`heavy_real / heavy_pred`). Clamped
+  to 0.2–5.0 so one freak file cannot produce a fantasy, and held at 1.0 until enough
+  encoding is behind us to mean anything.
+- **Light** (skips and resumes): a *measured* flat cost per file. Predicting them
+  individually is pointless; measuring them is trivial.
+
+`corr` is also what absorbs parallelism: at `jobs=4` each file's wall time between
+boundaries is roughly a quarter of its solo cost, so `corr` settles near 0.25 on its own.
+
+It re-estimates at every file boundary — the honest moment, when something actually
+finished — then every 30s for the first 5 minutes of a file, then leaves the clock to
+count down. Re-emitting more often only made the number twitch and flashed
+"re-estimating…" for no new information.
+
+### What it cannot know: how hard the content is
+
+One rate per machine is an average over whatever that machine last encoded, and
+**content difficulty varies more than anything else in this model**. A grainy film
+scan, confetti, water, foliage or a hand-held concert has far more entropy per frame
+than flat cel animation or a static interview, and the encoder spends real time on the
+difference — the same pixel count can differ by a factor of two or more, in either
+direction, on the same machine and settings.
+
+Consequences worth knowing:
+
+- A library that is **half grain-heavy live action and half animation** will see the
+  estimate wander, because a single blended rate sits between two populations rather
+  than describing either.
+- A run of unusually easy content will finish early and *raise* the stored rate, so the
+  next estimate on hard content reads optimistic — and the reverse. The one-third blend
+  is what stops this oscillating; it damps rather than chases.
+- Within a run, `corr` above corrects for it directly, so the countdown converges even
+  when the opening quote was wrong. **The pre-run number is the one that suffers**,
+  because it has nothing to correct against yet.
+
+This is deliberately not modelled. Guessing difficulty from a bitrate or a genre would
+be a confident number with nothing behind it, and the honest fallback — measure, damp,
+correct in flight, and say when we do not know — is already right most of the time.
+If it ever needs improving, the principled fix is to key the rate on something
+measurable about the source (its own bits per pixel is the obvious candidate: a lean
+source is usually easy content, a fat one usually hard), not on a genre label.
+
 ## Encoders and what actually controls quality
 
 - **Software (libx264/libx265)** — capped-CRF: `-crf 20/21 -maxrate <target> -bufsize`.
