@@ -61,9 +61,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="override the chosen tier's quality density (bits per pixel per frame), "
                         "e.g. 0.12; default is the tier's own anchored value")
     q.add_argument("--max-height", type=int, default=0, metavar="ROWS",
-                   help="cap the output frame height in vertical pixels — the \"p\" in 1080p — "
-                        "e.g. 1080. The aspect ratio is kept and nothing is upscaled, so a "
-                        "shorter source is left at its own size (default: 0 = no cap)")
+                   help="cap the output frame at this \"p\" size, e.g. 1080. Measured on the "
+                        "SHORT edge the way 1080p always is — the height for landscape video, "
+                        "the width for a portrait clip. The aspect ratio is kept and nothing "
+                        "is upscaled (default: 0 = no cap)")
     g_ign = p.add_argument_group("ignore rules (files the scan pretends it never saw)")
     g_ign.add_argument("--ignore-under", type=float, default=None, metavar="MB",
                        help="ignore files smaller than this many MB")
@@ -118,7 +119,7 @@ def config_from_args(a: argparse.Namespace) -> RunConfig:
         ignore_exts=tuple(e.strip().lstrip(".").lower() for e in a.ignore_ext if e.strip()),
         ignore_name_contains=tuple(n for n in a.ignore_name if n.strip()),
         min_saving_ratio=1.0 - a.min_saving,
-        max_height=max(0, a.max_height or 0),
+        max_short_edge=max(0, a.max_height or 0),
         remux_to_mp4=not a.no_remux,
         compat_transcode=not a.no_transcode,
         container=Container(a.container),
@@ -263,8 +264,9 @@ def _print_header(cfg: RunConfig, dry: bool = False) -> None:
         f"scales with resolution & fps{tuned}",
         # A frame-size cap silently rewrites what every target means, so it is
         # stated up front rather than left to be inferred from the results.
-        *([f"FRAME:     capped at {cfg.max_height}p — aspect kept, shorter sources untouched"]
-          if cfg.max_height > 0 else []),
+        *([f"FRAME:     capped at {cfg.max_short_edge}p on the short edge — aspect kept, "
+           f"smaller sources untouched"]
+          if cfg.max_short_edge > 0 else []),
         *_ignore_line(cfg),
         *([f"SOFTWARE:  {len(cfg.software_files)} file(s) picked out for the software encoder"]
           if cfg.software_files else []),

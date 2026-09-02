@@ -3230,7 +3230,7 @@ const M = [
   // alone" leans harder on Space, and Leave-alone is the neutral default.
   { id:'resize', short:'FRAME SIZE',
     title:'What display size should the library be?',
-    sub:'Would you like to standardise your library to a specific display size? Most libraries should leave alone — the codec + quality already do the work — but if the output is for a phone or small screen, the extra pixels are just weight and you\'ll save a lot of space at identical quality. Any source smaller than your cap is left untouched. The cap is measured in vertical resolution — the rows of pixels, the "p" in 1080p — and the aspect ratio is always kept.',
+    sub:'Would you like to standardise your library to a specific display size? Most libraries should leave alone — the codec + quality already do the work — but if the output is for a phone or small screen, the extra pixels are just weight and you\'ll save a lot of space at identical quality. Any source smaller than your cap is left untouched. The cap is measured the way "1080p" always is — the shorter side of the frame — and the aspect ratio is always kept. For anything landscape, which is every film and episode, that is simply the rows of pixels; a portrait clip shot on a phone is capped across its width instead, so 1080p means the same thing whichever way up the video is.',
     opts:[
       {k:'Leave alone', recap:'Keep each file\'s own resolution', tag:'Default · no rescale', name:'Leave the frame alone',
        t:'Every file keeps its native resolution. The frame is left to the codec and quality tier — which is the right call for almost every library, because bits-per-pixel already sizes the bitrate to the resolution. Choose a cap below only when you specifically want fewer pixels.', m:[0,10,9,7], hot:0},
@@ -3783,7 +3783,7 @@ function renderResizeExtra(){
   el.innerHTML =
     `<div class="de-row"><span class="de-lab">Max height</span>`
     + `<input type="number" class="de-num" id="rz-custom" min="120" max="8192" step="10" value="${v}" placeholder="e.g. 900"><span class="de-unit mono">p</span></div>`
-    + `<div class="de-hint">The vertical resolution — the rows of the frame, the “p” in 1080p. The height is scaled to this and the aspect ratio is kept; a file already this short or shorter is left as it is — never upscaled.</div>`;
+    + `<div class="de-hint">The “p” number, the way 1080p means 1080 — the shorter side of the frame. For landscape video that is its height; a portrait clip is capped across its width instead. The aspect ratio is kept, and a file already this size or smaller is left as it is — never upscaled.</div>`;
   const inp=$('#rz-custom');
   if(inp) inp.oninput=()=>{
     const n=parseInt(inp.value,10);

@@ -98,30 +98,41 @@ def classify_codec(codec_name: str | None) -> CodecCategory:
     return CodecCategory.OTHER
 
 
-def capped_dims(width: int, height: int, max_height: int) -> tuple[int, int] | None:
+def capped_dims(width: int, height: int, max_short_edge: int) -> tuple[int, int] | None:
     """Output (width, height) when a frame-size cap actually bites, else None.
 
-    The cap is on HEIGHT — the rows of the frame, the "p" in 1080p — and the
-    aspect ratio is always preserved. None means "encode the frame exactly as it
-    is": the cap is off, the geometry is unknown, or the source is already at or
-    below it. Nothing is ever upscaled, so a cap can only ever remove pixels.
+    The cap is on the frame's SHORT EDGE, which is what "1080p" names. For any
+    landscape source — every film and TV episode — the short edge IS the height,
+    so this is exactly "cap the rows of the frame". For a portrait source it is
+    the width instead, because a phone video 1080 across is what everyone calls
+    1080p; measuring its 1920 rows against a 1080 cap would squeeze it to 608
+    wide, which is not what the setting promises. The aspect ratio is always
+    preserved, and `width`/`height` are DISPLAY dimensions (see
+    MediaInfo.display_width) — a rotated file is judged on the picture, not on
+    the axis it happens to be stored along.
+
+    None means "encode the frame exactly as it is": the cap is off, the geometry
+    is unknown, or the source is already at or below it. Nothing is ever
+    upscaled, so a cap can only ever remove pixels.
 
     Both returned dimensions are EVEN. H.264/H.265 in yuv420p subsample chroma
     2x2, so an odd dimension is either rejected outright or quietly padded — and
     an odd *cap* (a hand-typed 1081) would take the encoder with it, which is why
     the cap itself is rounded down before anything is scaled to it.
 
-    Pure arithmetic on the stored pixel dimensions: both axes scale by the same
-    factor and the sample aspect ratio is passed through untouched, so an
-    anamorphic source keeps its display shape.
+    Both axes scale by the same factor and the sample aspect ratio is passed
+    through untouched, so an anamorphic source keeps its display shape.
     """
-    if max_height <= 0 or width <= 0 or height <= 0:
+    if max_short_edge <= 0 or width <= 0 or height <= 0:
         return None
-    cap = max_height - (max_height % 2)
-    if cap < 2 or height <= cap:
+    cap = max_short_edge - (max_short_edge % 2)
+    if cap < 2 or min(width, height) <= cap:
         return None
-    w = int(round(width * cap / height / 2)) * 2      # nearest even width
-    return (max(2, w), cap)
+    def _even(n: float) -> int:
+        return max(2, int(round(n / 2)) * 2)
+    if height <= width:                               # landscape (and square)
+        return (_even(width * cap / height), cap)
+    return (cap, _even(height * cap / width))         # portrait: the width is capped
 
 
 def hevc_factor(pixels: int, factors: tuple[float, float, float] | None = None) -> float:

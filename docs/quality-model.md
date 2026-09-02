@@ -121,7 +121,8 @@ The target is struck against the frame that is about to be **written**, not the 
 being read:
 
 ```
-capped_dims(3840, 2160, max_height=1080) -> (1920, 1080)      # aspect kept, both even
+capped_dims(3840, 2160, 1080) -> (1920, 1080)    # landscape: the height is capped
+capped_dims(2160, 3840, 1080) -> (1080, 1920)    # portrait:  the width is capped
 target = bpp × (1920 × 1080) × fps × codec_factor(1920×1080)
 ```
 

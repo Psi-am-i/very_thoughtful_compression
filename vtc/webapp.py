@@ -311,7 +311,7 @@ _RESIZE_CUSTOM = 5
 _RESIZE_MIN, _RESIZE_MAX = 120, 8192
 
 
-def _max_height(a: dict, adv: dict) -> int:
+def _frame_cap(a: dict, adv: dict) -> int:
     """The frame-size cap for this run, or 0 for "leave the frame alone".
 
     A MISSING `resize` answer is 0, not a default cap: a session saved before the
@@ -393,7 +393,7 @@ def build_config(src: Path, a: dict) -> RunConfig:
     # encode at the frame size the run will produce — the preview worker only ever
     # sees the settings dict, never the walkthrough's answers.
     if "resize" in a:
-        cfg.max_height = _max_height(a, adv)
+        cfg.max_short_edge = _frame_cap(a, adv)
     return cfg
 
 
@@ -454,11 +454,11 @@ def _apply_advanced(cfg: RunConfig, adv: dict) -> None:
         cfg.keep_mkv_for_audio = bool(adv["keepMkvAudio"])
     if "ledger" in adv:
         cfg.ledger_enabled = bool(adv["ledger"])
-    # The frame-size cap mirrored from the walkthrough (see _max_height). build_config
+    # The frame-size cap mirrored from the walkthrough (see _frame_cap). build_config
     # overrides this from the answer itself; it is read here so the paths that only
     # have the settings dict — the tier previews above all — match the real run.
     if (v := _num("resizeHeight", int, 0, _RESIZE_MAX)) is not None:
-        cfg.max_height = v if v >= _RESIZE_MIN else 0
+        cfg.max_short_edge = v if v >= _RESIZE_MIN else 0
 
     # Per-tier quality density. Only tiers the user actually retuned are carried
     # across, so an untouched tier keeps its anchored default rather than being
@@ -1275,7 +1275,7 @@ class Api:
                     # A preview that showed a 4K encode of a run that will write 1080p
                     # would misreport both the size and the density on the panel.
                     _dims = capped_dims(sinfo.display_width, sinfo.display_height,
-                                        cfg2.max_height)
+                                        cfg2.max_short_edge)
                     tgt_pixels = (_dims[0] * _dims[1]) if _dims else sinfo.pixels
                     tgt = target_kbps(tier, tgt_pixels, sinfo.fps, codec,
                                       floor_kbps=cfg2.bitrate_floor_kbps,

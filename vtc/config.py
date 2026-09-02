@@ -72,7 +72,7 @@ class RunConfig:
     # or below the cap is encoded at its own size. It is a QUALITY setting, not a
     # cosmetic one: a tier is a bits-per-pixel density, so a smaller frame earns a
     # proportionally smaller target and the same quality costs far fewer bytes.
-    max_height: int = 0
+    max_short_edge: int = 0
 
     # Compatibility / non-MP4 policy
     remux_to_mp4: bool = True               # rehome MP4-friendly codecs into MP4 losslessly
@@ -260,8 +260,8 @@ class RunConfig:
         # a file left alone at 4K becomes a candidate the moment a cap appears.
         # Appended only when a cap is set, so an uncapped run still matches ledgers
         # written before frame size existed.
-        if self.max_height > 0:
-            parts.append(f"maxh{self.max_height}")
+        if self.max_short_edge > 0:
+            parts.append(f"maxh{self.max_short_edge}")
         return "|".join(parts)
 
     def validate(self) -> list[str]:

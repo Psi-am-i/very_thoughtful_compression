@@ -202,7 +202,7 @@ def _scale_args(config: RunConfig, info: MediaInfo) -> list[str]:
     # filter runs — so a portrait 4K clip arrives here as 2160x3840 however the
     # file is stored. Sizing the filter from the stored 3840x2160 would force a
     # portrait frame into a landscape one and squash the picture.
-    dims = capped_dims(info.display_width, info.display_height, config.max_height)
+    dims = capped_dims(info.display_width, info.display_height, config.max_short_edge)
     if not dims:
         return []
     return ["-vf", f"scale={dims[0]}:{dims[1]}:flags=lanczos"]

@@ -69,7 +69,7 @@ def test_target_scales_down_with_the_frame():
     with tempfile.TemporaryDirectory() as d:
         info = _info(kbps=40000)          # fat enough to be worth encoding either way
         uncapped = RunConfig(src=Path(d))
-        capped = RunConfig(src=Path(d), max_height=1080)
+        capped = RunConfig(src=Path(d), max_short_edge=1080)
         _, _, t_full = pipeline.decide(uncapped, info)
         _, _, t_capped = pipeline.decide(capped, info)
         assert t_full > 0 and t_capped > 0
@@ -86,7 +86,7 @@ def test_cap_makes_an_at_tier_4k_file_worth_shrinking():
         mode, outcome, _ = pipeline.decide(RunConfig(src=Path(d)), info)
         assert mode is None and outcome is Outcome.SKIP_AT_TIER
         mode, outcome, target = pipeline.decide(
-            RunConfig(src=Path(d), max_height=1080), info)
+            RunConfig(src=Path(d), max_short_edge=1080), info)
         assert mode is Mode.SHRINK and outcome is None and 0 < target < 17000
 
 
@@ -95,7 +95,7 @@ def test_a_lean_source_is_still_left_alone_under_a_cap():
     4K file already below the 1080p target would only lose a generation."""
     with tempfile.TemporaryDirectory() as d:
         info = _info(kbps=900)
-        mode, outcome, _ = pipeline.decide(RunConfig(src=Path(d), max_height=1080), info)
+        mode, outcome, _ = pipeline.decide(RunConfig(src=Path(d), max_short_edge=1080), info)
         assert mode is None and outcome is not None
 
 
@@ -105,7 +105,7 @@ def test_a_remux_is_never_rescaled():
     with tempfile.TemporaryDirectory() as d:
         info = _info(w=3840, h=2160, kbps=2000, vcodec="hevc")
         info.path = Path("/x/film.mkv")
-        cfg = RunConfig(src=Path(d), max_height=720)
+        cfg = RunConfig(src=Path(d), max_short_edge=720)
         mode, _, _ = pipeline.decide(cfg, info)
         assert mode is Mode.REMUX
         assert encode.build_video_args(cfg, info, Mode.REMUX, 0, None)[:2] == ["-c:v", "copy"]
@@ -117,19 +117,19 @@ def test_legacy_rescue_target_shrinks_with_the_frame():
     with tempfile.TemporaryDirectory() as d:
         info = _info(vcodec="mpeg2video", kbps=20000)
         _, _, full = pipeline.decide(RunConfig(src=Path(d)), info)
-        _, _, capped = pipeline.decide(RunConfig(src=Path(d), max_height=1080), info)
+        _, _, capped = pipeline.decide(RunConfig(src=Path(d), max_short_edge=1080), info)
         assert full == 17000                                   # 85% of 20 Mbps
         assert abs(capped - full / 4) <= 1                     # a quarter of the frame
         # A small legacy file must not be inflated by the bitrate floor.
         small = _info(vcodec="mpeg2video", kbps=800)
-        _, _, t = pipeline.decide(RunConfig(src=Path(d), max_height=1080), small)
+        _, _, t = pipeline.decide(RunConfig(src=Path(d), max_short_edge=1080), small)
         assert 0 < t < 800
 
 
 # ── the ffmpeg side ──────────────────────────────────────────────────────────
 def test_scale_filter_is_added_for_re_encodes_only():
     with tempfile.TemporaryDirectory() as d:
-        info, cfg = _info(), RunConfig(src=Path(d), max_height=1080)
+        info, cfg = _info(), RunConfig(src=Path(d), max_short_edge=1080)
         args = encode.build_video_args(cfg, info, Mode.SHRINK, 2400, None)
         assert args[0] == "-vf" and args[1] == "scale=1920:1080:flags=lanczos"
         assert "libx265" in args
@@ -138,7 +138,7 @@ def test_scale_filter_is_added_for_re_encodes_only():
         assert hw[:2] == ["-vf", "scale=1920:1080:flags=lanczos"]
         assert "hevc_videotoolbox" in hw
         # H.264 output likewise.
-        c264 = RunConfig(src=Path(d), max_height=720, out_codec=OutCodec.H264)
+        c264 = RunConfig(src=Path(d), max_short_edge=720, out_codec=OutCodec.H264)
         assert encode.build_video_args(c264, info, Mode.SHRINK, 2400, None)[:2] == [
             "-vf", "scale=1280:720:flags=lanczos"]
 
@@ -146,7 +146,7 @@ def test_scale_filter_is_added_for_re_encodes_only():
 def test_no_filter_when_the_cap_does_not_bite():
     with tempfile.TemporaryDirectory() as d:
         info = _info(w=1280, h=720)
-        for cfg in (RunConfig(src=Path(d)), RunConfig(src=Path(d), max_height=1080)):
+        for cfg in (RunConfig(src=Path(d)), RunConfig(src=Path(d), max_short_edge=1080)):
             assert "-vf" not in encode.build_video_args(cfg, info, Mode.SHRINK, 2400, None)
 
 
@@ -154,8 +154,8 @@ def test_no_filter_when_the_cap_does_not_bite():
 def test_cap_is_part_of_the_ledger_signature():
     with tempfile.TemporaryDirectory() as d:
         plain = RunConfig(src=Path(d))
-        at1080 = RunConfig(src=Path(d), max_height=1080)
-        at720 = RunConfig(src=Path(d), max_height=720)
+        at1080 = RunConfig(src=Path(d), max_short_edge=1080)
+        at720 = RunConfig(src=Path(d), max_short_edge=720)
         # An uncapped run still matches ledgers written before frame size existed.
         assert "maxh" not in plain.settings_signature()
         assert at1080.settings_signature() != plain.settings_signature()
@@ -166,7 +166,7 @@ def test_cap_is_part_of_the_ledger_signature():
 def test_detail_reports_the_output_frame_and_its_real_density():
     with tempfile.TemporaryDirectory() as d:
         info = _info()
-        cfg = RunConfig(src=Path(d), max_height=1080)
+        cfg = RunConfig(src=Path(d), max_short_edge=1080)
         detail = pipeline._build_detail(
             cfg, info, Mode.SHRINK, 2400, Container.MP4, ".mp4", info.path,
             encode.EncodeResult(ok=True, out_path=info.path, out_bytes=1_000_000))
@@ -181,7 +181,7 @@ def test_caption_stays_silent_when_the_frame_is_unchanged():
     with tempfile.TemporaryDirectory() as d:
         info = _info(w=1920, h=1080)
         detail = pipeline._build_detail(
-            RunConfig(src=Path(d), max_height=1080), info, Mode.SHRINK, 2400,
+            RunConfig(src=Path(d), max_short_edge=1080), info, Mode.SHRINK, 2400,
             Container.MP4, ".mp4", info.path,
             encode.EncodeResult(ok=True, out_path=info.path, out_bytes=1_000_000))
         assert (detail.out_width, detail.out_height) == (1920, 1080)
@@ -190,43 +190,43 @@ def test_caption_stays_silent_when_the_frame_is_unchanged():
 
 # ── the GUI answer -> RunConfig mapping ──────────────────────────────────────
 def test_walkthrough_answer_maps_to_a_height_cap():
-    assert webapp._max_height({"resize": 0}, {}) == 0        # Leave alone
-    assert webapp._max_height({"resize": 1}, {}) == 2160
-    assert webapp._max_height({"resize": 2}, {}) == 1440
-    assert webapp._max_height({"resize": 3}, {}) == 1080
-    assert webapp._max_height({"resize": 4}, {}) == 720
-    assert webapp._max_height({"resize": 5}, {"resizeCustom": 900}) == 900
-    assert webapp._max_height({"resize": 5}, {"resizeCustom": "900"}) == 900
+    assert webapp._frame_cap({"resize": 0}, {}) == 0        # Leave alone
+    assert webapp._frame_cap({"resize": 1}, {}) == 2160
+    assert webapp._frame_cap({"resize": 2}, {}) == 1440
+    assert webapp._frame_cap({"resize": 3}, {}) == 1080
+    assert webapp._frame_cap({"resize": 4}, {}) == 720
+    assert webapp._frame_cap({"resize": 5}, {"resizeCustom": 900}) == 900
+    assert webapp._frame_cap({"resize": 5}, {"resizeCustom": "900"}) == 900
 
 
 def test_missing_or_junk_answers_leave_the_frame_alone():
     """A session saved before the question existed must resume unchanged, not
     quietly start rescaling the library it is halfway through."""
-    assert webapp._max_height({}, {}) == 0
-    assert webapp._max_height({"resize": None}, {}) == 0
-    assert webapp._max_height({"resize": "nonsense"}, {}) == 0
-    assert webapp._max_height({"resize": 5}, {}) == 0              # custom, nothing typed
-    assert webapp._max_height({"resize": 5}, {"resizeCustom": ""}) == 0
-    assert webapp._max_height({"resize": 5}, {"resizeCustom": "abc"}) == 0
-    assert webapp._max_height({"resize": 5}, {"resizeCustom": 12}) == 120     # clamped up
-    assert webapp._max_height({"resize": 5}, {"resizeCustom": 99999}) == 8192  # clamped down
-    assert webapp._max_height({"resize": 99}, {}) == 0              # unknown index
+    assert webapp._frame_cap({}, {}) == 0
+    assert webapp._frame_cap({"resize": None}, {}) == 0
+    assert webapp._frame_cap({"resize": "nonsense"}, {}) == 0
+    assert webapp._frame_cap({"resize": 5}, {}) == 0              # custom, nothing typed
+    assert webapp._frame_cap({"resize": 5}, {"resizeCustom": ""}) == 0
+    assert webapp._frame_cap({"resize": 5}, {"resizeCustom": "abc"}) == 0
+    assert webapp._frame_cap({"resize": 5}, {"resizeCustom": 12}) == 120     # clamped up
+    assert webapp._frame_cap({"resize": 5}, {"resizeCustom": 99999}) == 8192  # clamped down
+    assert webapp._frame_cap({"resize": 99}, {}) == 0              # unknown index
 
 
 def test_build_config_threads_the_cap_and_the_preview_mirror_agrees():
     with tempfile.TemporaryDirectory() as d:
         src = Path(d)
         base = {"codec": 1, "quality": 2, "saving": 1, "encoder": 0, "dest": 0}
-        assert webapp.build_config(src, {**base, "resize": 3}).max_height == 1080
-        assert webapp.build_config(src, {**base}).max_height == 0
+        assert webapp.build_config(src, {**base, "resize": 3}).max_short_edge == 1080
+        assert webapp.build_config(src, {**base}).max_short_edge == 0
         # The answer beats the mirrored settings value, which exists only so the
         # tier previews encode at the frame size the run will produce.
         cfg = webapp.build_config(src, {**base, "resize": 4, "adv": {"resizeHeight": 2160}})
-        assert cfg.max_height == 720
+        assert cfg.max_short_edge == 720
         # …and a path that only has the settings dict still gets the same cap.
         mirror = RunConfig(src=src)
         webapp._apply_advanced(mirror, {"resizeHeight": 720})
-        assert mirror.max_height == 720
+        assert mirror.max_short_edge == 720
 
 
 # ── rotated (portrait) sources ───────────────────────────────────────────────
@@ -249,28 +249,38 @@ def test_rotation_is_read_and_the_display_frame_derived():
         assert (info.display_width, info.display_height) == (3840, 2160), deg
 
 
-def test_a_portrait_source_is_capped_on_what_you_watch():
+def test_a_portrait_source_is_capped_on_its_short_edge():
+    """"1080p" names the short edge. A portrait 4K clip capped at 1080 must come
+    out 1080x1920 — a proper 1080p portrait video — not 608x1080, which is what
+    measuring its 3840 rows against the cap would have done to it."""
     with tempfile.TemporaryDirectory() as d:
-        cfg = RunConfig(src=Path(d), max_height=1080)
+        cfg = RunConfig(src=Path(d), max_short_edge=1080)
         info = _info(w=3840, h=2160)                     # stored landscape…
-        info.rotation = 90                               # …watched portrait
-        # 2160x3840 capped at 1080 rows keeps the aspect: 608x1080, NOT 1920x1080.
+        info.rotation = 90                               # …watched portrait 2160x3840
         args = encode.build_video_args(cfg, info, Mode.SHRINK, 2400, None)
-        assert args[:2] == ["-vf", "scale=608:1080:flags=lanczos"], args[:2]
-        w, h = 608, 1080
-        assert abs(w / h - 2160 / 3840) < 0.01, "aspect ratio not preserved"
+        assert args[:2] == ["-vf", "scale=1080:1920:flags=lanczos"], args[:2]
+        assert abs(1080 / 1920 - 2160 / 3840) < 0.01, "aspect ratio not preserved"
 
 
-def test_a_short_landscape_file_is_not_capped_just_because_it_is_wide():
-    """The mirror image: 3840 wide but only 2160 tall is untouched by a 2160 cap,
-    and a stored-portrait file must not be judged on its stored long axis."""
+def test_a_file_already_at_the_cap_is_untouched_either_way_round():
+    """The cap must not bite on a file that is already at it — in either
+    orientation. A 1080x1920 phone video IS 1080p and has nothing to give."""
     with tempfile.TemporaryDirectory() as d:
-        cfg = RunConfig(src=Path(d), max_height=2160)
-        info = _info(w=3840, h=2160)
-        assert "-vf" not in encode.build_video_args(cfg, info, Mode.SHRINK, 2400, None)
-        info.rotation = 90                               # watched 2160x3840
-        assert encode.build_video_args(cfg, info, Mode.SHRINK, 2400, None)[:2] == [
-            "-vf", "scale=1216:2160:flags=lanczos"]   # 1215 rounded to an even width
+        cfg = RunConfig(src=Path(d), max_short_edge=1080)
+        landscape = _info(w=1920, h=1080)
+        assert "-vf" not in encode.build_video_args(cfg, landscape, Mode.SHRINK, 2400, None)
+        portrait = _info(w=1920, h=1080)
+        portrait.rotation = 270                          # watched 1080x1920
+        assert "-vf" not in encode.build_video_args(cfg, portrait, Mode.SHRINK, 2400, None)
+
+
+def test_landscape_behaviour_is_unchanged_by_the_short_edge_rule():
+    """For landscape the short edge IS the height, so every film and TV episode
+    behaves exactly as "cap the rows" always did."""
+    assert capped_dims(3840, 2160, 1080) == (1920, 1080)
+    assert capped_dims(1920, 1080, 1080) is None
+    assert capped_dims(3840, 1600, 720) == (1728, 720)   # 2.40:1 scope
+    assert capped_dims(2000, 2000, 1080) == (1080, 1080)  # square: both edges
 
 
 def test_the_report_describes_the_picture_not_the_storage():
@@ -278,9 +288,11 @@ def test_the_report_describes_the_picture_not_the_storage():
         info = _info(w=3840, h=2160)
         info.rotation = 90
         detail = pipeline._build_detail(
-            RunConfig(src=Path(d), max_height=1080), info, Mode.SHRINK, 2400,
+            RunConfig(src=Path(d), max_short_edge=1080), info, Mode.SHRINK, 2400,
             Container.MP4, ".mp4", info.path,
             encode.EncodeResult(ok=True, out_path=info.path, out_bytes=1_000_000))
         assert (detail.width, detail.height) == (2160, 3840)      # as watched
-        assert (detail.out_width, detail.out_height) == (608, 1080)
-        assert "3840p→1080p" in detail.caption()
+        assert (detail.out_width, detail.out_height) == (1080, 1920)
+        # Reported in the "p" of the picture: a portrait clip goes 2160p -> 1080p
+        # on its short edge, which is the number the user actually chose.
+        assert "2160p→1080p" in detail.caption()

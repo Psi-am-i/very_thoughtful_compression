@@ -179,7 +179,7 @@ def decide(config: RunConfig, info: MediaInfo) -> tuple[Mode | None, Outcome | N
     # portrait clip is capped by what a viewer sees as its height, not by whichever
     # axis the file happens to be stored along. The pixel COUNT is the same either
     # way round, so the target arithmetic below is unaffected by rotation itself.
-    scaled = capped_dims(info.display_width, info.display_height, config.max_height)
+    scaled = capped_dims(info.display_width, info.display_height, config.max_short_edge)
     out_pixels = (scaled[0] * scaled[1]) if scaled else info.pixels
 
     def tgt(clamp: bool) -> int:
@@ -595,7 +595,7 @@ def _build_detail(config: RunConfig, info: MediaInfo, mode: Mode, target: int,
     # Reported in DISPLAY orientation throughout, so "2160p→1080p" describes the
     # picture a person watches rather than the axis the file is stored along.
     src_w, src_h = info.display_width, info.display_height
-    scaled = None if mode is Mode.REMUX else capped_dims(src_w, src_h, config.max_height)
+    scaled = None if mode is Mode.REMUX else capped_dims(src_w, src_h, config.max_short_edge)
     out_w, out_h = scaled if scaled else (src_w, src_h)
     # bpp against the OUTPUT frame, or a downscale would report a density the file
     # does not have: the same bitrate over a quarter of the pixels is four times

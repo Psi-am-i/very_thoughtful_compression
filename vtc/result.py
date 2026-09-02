@@ -107,8 +107,12 @@ class FileDetail:
         # 3 · the frame, but only when a size cap actually changed it. Said in the
         # same "p" the user chose the cap in, so the line answers the question they
         # asked ("make my library 1080p") rather than restating pixel dimensions.
-        if self.out_height and self.height and self.out_height != self.height:
-            bits.append(f"{self.height}p→{self.out_height}p")
+        # The "p" is the SHORT edge in both orientations — a 1080x1920 portrait
+        # clip is 1080p — so the number here is the one that was actually set.
+        src_p = min(self.width, self.height) if self.width and self.height else 0
+        out_p = min(self.out_width, self.out_height) if self.out_width and self.out_height else 0
+        if src_p and out_p and src_p != out_p:
+            bits.append(f"{src_p}p→{out_p}p")
         if self.bpp:
             bits.append(f"{self.bpp:.3f} bpp")
         if self.audio_action:
