@@ -955,6 +955,13 @@ body{
 /* a scanning shimmer that matches the brow's busy readout */
 .u-scanning{display:inline-block;font-family:'IBM Plex Mono',monospace;color:var(--ink-3);
   animation:pgsqueeze 2.4s cubic-bezier(.4,0,.3,1) infinite;transform-origin:left center}
+/* AV1's informed-choice sheet borrows the compat sheet's shapes; its one
+   difference is the left rule on the playability paragraph — amber (the report's
+   "needs a look" cue) rather than the accent, because that paragraph is the one
+   thing in the sheet a person must not skim. No dotted borders, no red: this is
+   a choice, not an error. */
+.av1-w{border-left-color:var(--warn-line)}
+.av1-w b{color:var(--ink)}
 /* up-front non-MP4 policy sheet: selectable option cards over ADV.format */
 .compat-lead{font-size:15px;color:var(--ink);font-weight:600;margin:0}
 .compat-opts{display:flex;flex-direction:column;gap:10px;margin-top:16px}
@@ -1549,6 +1556,14 @@ body{
 .pv-srcinfo{display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;
   color:var(--ink-3);letter-spacing:.02em;line-height:1.3;margin-top:4px}
 .big-srcinfo{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8b857a;letter-spacing:.03em}
+/* The AV1 caveat under the preview codec control. The panels are the one place
+   in the app that can actively mislead about AV1 — they are H.265 samples, and
+   five seconds is exactly where SVT-AV1 overshoots — so the note sits with them
+   rather than in a sheet nobody has open by then. Amber rule, no scare styling. */
+.pv-av1{font-size:11.5px;line-height:1.5;color:var(--ink-3);margin:0;
+  padding:1px 0 1px 9px;border-left:2px solid var(--warn-line)}
+.pv-av1[hidden]{display:none}
+.pv-av1 b{color:var(--ink-2);font-weight:600}
 /* the Position field, when moved into the fullscreen tool bar, lies horizontal */
 #big-tools .pv-f{flex-direction:row;align-items:center;gap:8px;margin:0}
 #big-tools .pv-f-l{margin:0}
@@ -1804,7 +1819,7 @@ body{
       <section class="stage">
         <h1 class="q-title" id="title">What video codec should I use?</h1>
         <p class="q-sub" id="sub">The only choice that meaningfully changes file size. Every codec trades off size, quality and speed — older ones are worse at all three. For a given quality the codec doesn't change how it looks, only how big the file is and how long it takes to make. If your machine has a hardware encoder for a codec, it will be considerably faster than choosing a codec without hardware encoding.</p>
-        <div class="keys" id="keys"><button class="key  " data-i="0">H.264 / AVC</button><button class="key  " data-i="1">H.265 / HEVC</button><button class="key  disabled" data-i="2">AV1</button><button class="key  disabled" data-i="3">H.266 / VVC</button></div>
+        <div class="keys" id="keys"><button class="key  " data-i="0">H.264 / AVC</button><button class="key  " data-i="1">H.265 / HEVC</button><button class="key  " data-i="2">AV1</button><button class="key  disabled" data-i="3">H.266 / VVC</button></div>
         <div class="dest-extra" id="dest-extra" hidden=""></div>
         <!-- Inline extras for the two new steps, same panel idiom as the
              destination extras: RESIZE's Custom reveals a px box here; IGNORE's
@@ -1996,6 +2011,8 @@ body{
                 </div>
               </span>
             </div>
+            <!-- Only present when the RUN's codec is AV1 (renderPreviewCodecNote). -->
+            <p class="pv-av1" id="pv-av1" hidden="">These panels are <b>H.265</b> five-second samples whatever the run is set to — AV1 is not sampled. An AV1 run lands roughly <b>25% under</b> the sizes shown; and on a clip this short SVT-AV1 overshoots its own target (1.19× at 6s, 1.01× by a minute), so a sampled AV1 panel would read <b>bigger</b> than the codec really is. Judge the tiers here on how they look.</p>
             <!-- The two pulldowns and the button that acts on them are one group:
                  pick two encodes, then compare them full screen. "All tiers" and
                  "Refresh" are separate — they don't depend on the chosen pair. -->
@@ -2108,11 +2125,11 @@ body{
             <p>Whatever the source, VTC delivers your <b>preferred container</b> (MP4 by default): a lossless remux where the codec allows, a transcode where it doesn't (old wrappers like AVI and WMV). On <b>Auto</b> it uses MP4 and falls back to MKV only when MP4 would lose something.</p>
 
             <div class="a-h">Video codecs</div>
-            <p>VTC outputs H.264 or H.265; what it does with a source depends on how modern that codec already is.</p>
+            <p>VTC outputs H.264, H.265 or AV1; what it does with a source depends on how modern that codec already is.</p>
             <ul class="a-list">
               <li><b>H.264 / AVC</b> (2003) — the universal baseline, plays on virtually anything, but ~2× the size of H.265.</li>
               <li><b>H.265 / HEVC</b> (2013) — H.264 quality in 40–55% of the space (~60% smaller at 4K); plays on most things since ~2015, bar some smart TVs and Firefox browser. This is VTC's default output but worth considering H.264 if you are streaming to a wide variety of devices.</li>
-              <li><b>AV1</b> (2018) — likely the future (saves ~30% more space than H.265), royalty-free, but slow to encode and still growing in support. Already modern, so VTC leaves it alone; not currently an output option.</li>
+              <li><b>AV1</b> (2018) — royalty-free and the most efficient of the three: VTC targets it about 25% under H.265 at the same quality. The cost is playback — decoding needs an M3 or newer Mac, an RTX 30-series or newer, Intel 11th-gen or newer, an AMD RDNA2 card or newer, or a TV from 2023 on — and there is no hardware AV1 encoder on any Mac, so it is made in software at roughly software-H.265 speed. An output option; as a <i>source</i> it is already modern, so it is left alone.</li>
               <li><b>VP9</b> (2013) — Google's codec, roughly H.265-efficient, common on YouTube and WebM. Modern: left alone, not currently an output option.</li>
               <li><b>Legacy — MPEG-2, VC-1, Xvid/DivX, WMV</b> — old and inefficient (2–4× H.264). VTC rescues these: transcoded to your chosen modern codec near their original bitrate, so quality holds while the file shrinks, usually dramatically.</li>
             </ul>
@@ -2150,7 +2167,7 @@ body{
                   <tr><td>H.264</td><td class="num">5.5</td><td class="num">10</td><td>output &amp; shrink</td></tr>
                   <tr class="hl"><td>H.265</td><td class="num">7.5</td><td class="num">8</td><td>output &amp; shrink</td></tr>
                   <tr><td>VP9</td><td class="num">7</td><td class="num">5.5</td><td>left alone</td></tr>
-                  <tr><td>AV1</td><td class="num">9</td><td class="num">5.5</td><td>left alone</td></tr>
+                  <tr><td>AV1</td><td class="num">9</td><td class="num">3</td><td>output; sources left alone</td></tr>
                   <tr><td>VC-1</td><td class="num">4</td><td class="num">5</td><td>transcoded</td></tr>
                   <tr><td>Xvid</td><td class="num">3</td><td class="num">6</td><td>transcoded</td></tr>
                   <tr><td>MPEG-2</td><td class="num">2</td><td class="num">6.5</td><td>transcoded</td></tr>
@@ -2367,6 +2384,32 @@ body{
     </div>
     <div class="sheet-f">
       <button class="btn-run" id="compat-go" style="width:auto;margin:0;padding:11px 26px">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- AV1 is the one output codec whose cost lands on the PLAYER rather than the
+     file, so choosing it is confirmed before the run instead of discovered after
+     it. Modelled on #compat-sheet directly above: state the facts, ask one
+     question, offer a real way out. Deliberately NOT styled as an error —
+     nothing has gone wrong and both answers are legitimate; the single amber
+     rule is the same "worth knowing" cue the report uses for "needs a look". -->
+<div class="sheet" id="av1-sheet">
+  <div class="sheet-c">
+    <div class="sheet-h">
+      <div class="sheet-e mono">Before we start · your call</div>
+      <h2 class="sheet-t">AV1 makes the smallest files — and the fussiest ones</h2>
+    </div>
+    <div class="sheet-b">
+      <p class="compat-lead mono">You have chosen AV1. It is the most efficient codec here, and the only one whose cost lands on your players rather than your files.</p>
+      <p class="mr-note"><b>What you gain</b> — the smallest files of the three. At the same quality tier AV1 aims about 25% under H.265, and the targets already account for that, so it arrives as space rather than a softer picture.</p>
+      <p class="sheet-w av1-w"><b>What you risk</b> — playback, not the file. Decoding AV1 needs an M3 or newer Mac, an RTX 30-series or newer, Intel 11th-gen or newer, an AMD RDNA2 card or newer, or a TV made from 2023 on. Older TVs, phones and streaming boxes either make your Plex or Jellyfin server transcode every play, or will not play the file at all. For a media library that is the opposite of this tool's usual promise, which is that nothing downstream notices.</p>
+      <p class="mr-note" id="av1-speed"></p>
+      <p class="mr-note">Nothing is written until you press Start, and the codec is not locked in: go back to the CODEC step any time before then and the run follows it.</p>
+    </div>
+    <div class="sheet-f">
+      <button class="btn-ghost" id="av1-back">Use H.265 instead</button>
+      <button class="btn-run" id="av1-go" style="width:auto;margin:0;padding:11px 26px">Continue with AV1</button>
     </div>
   </div>
 </div>
@@ -3320,6 +3363,20 @@ const FOLDERS = [
 ];
 let SRC = null;
 
+// ── AV1's blurb in three sentences, because the LAST one depends on the machine
+// and is swapped by syncCodecQuestion() (below the model). Declared above M: the
+// model literal is evaluated as the script runs, so a const declared after it
+// would be read inside its own temporal dead zone.
+// Hardware AV1 encoders are recent-PC-GPU only. There is deliberately no
+// av1_videotoolbox — Apple silicon DECODES AV1 from the M3, but nothing Apple
+// makes ENCODES it — so every Mac takes the software path, and that is the
+// expected case rather than a fault. The numbers are docs/quality-model.md's
+// ("AV1"): the AV1 tier factors sit 25% under the H.265 ones, which is what
+// "around 25% smaller" means here, and the playback list is that section's.
+const AV1_GAIN = 'The most efficient of the three — about 25% smaller than H.265 at the same quality, and the tier targets already reflect that.';
+const AV1_PLAY = 'The cost is playback, not the file: decoding needs an M3 Mac, RTX 30-series, Intel 11th-gen, AMD RDNA2 or a 2023 TV — or newer. Older kit transcodes on the server or refuses it.';
+const AV1_SOFT = 'And no Mac encodes AV1 in hardware: it runs in software, far slower than hardware H.265.';
+
 // ═══ model ═══════════════════════════════════════════════
 const M = [
   { id:'codec', short:'CODEC',
@@ -3332,9 +3389,14 @@ const M = [
       {k:'H.265 / HEVC', recap:'H.265 / HEVC', tag:'Efficiency · suggested', name:'H.265 / HEVC',
        t:'A modern codec with wide — not universal — support. Can usually get the same quality as H.264 using only 40–55% of the space — and this advantage grows with resolution: you\'ll save ~60% at 4K and above. Plays on most devices since 2015 — Apple, recent TVs, Plex, VLC, Infuse. The big exceptions are some SmartTVs and Firefox Browser. Unless you need the widest compatibility, choose this.',
        m:[7.5,8,8,5], hot:0},
-      {k:'AV1', recap:'AV1', tag:'Next-gen · coming later', name:'AV1', disabled:true,
-       t:'Likely the future — files 30–50% smaller than H.265 at equal quality, royalty-free and backed by the Alliance for Open Media (Apple, Google, Microsoft, Netflix). BUT software encoding is glacial and hardware decoders are only starting to roll out (Apple plays it from the M3 on), and a five-year-old TV probably won\'t play it at all. Genuinely good; genuinely early.',
-       m:[9,5.5,7,2], hot:0},
+      // A real output codec now. Best of the three on Space, worst on Compat —
+      // that is the whole trade. The tag, the third sentence and (where AV1
+      // genuinely cannot be produced) `disabled` are rewritten per machine by
+      // syncCodecQuestion; what is written here is the machine-independent truth
+      // and what the standalone mock shows. Meters match the About table's row.
+      {k:'AV1', recap:'AV1', tag:'Most efficient · least compatible', name:'AV1',
+       t:AV1_GAIN+' '+AV1_PLAY+' '+AV1_SOFT,
+       m:[9,3,6,3], hot:0},
       {k:'H.266 / VVC', recap:'H.266 / VVC', tag:'Bleeding-edge · coming later', name:'H.266 / VVC', disabled:true,
        t:'In objective tests VVC is slightly more efficient than AV1 at high resolutions (4K/UHD), but AV1 has a big head start on support and tooling — and almost no consumer devices decode VVC yet.',
        m:[9.5,4,5,1], hot:0},
@@ -3435,6 +3497,119 @@ const METERS = ['Space','Compat','Stream','Speed'];
 let step = 0, armed = null;
 const answers = {};
 const $ = s => document.querySelector(s);
+
+// ═══ what THIS machine can actually encode ═══════════════
+// The bridge in webapp.py probes ffmpeg once on load and writes the answer to
+// window.__vtcHW: { h264, h265, av1, av1_software, available, … }. `available`
+// deliberately means "H.264 or H.265 hardware" and nothing else, so it cannot
+// answer the question a person is really asking now that AV1 is an output codec:
+// "is there hardware for the codec I just chose?" Gating the ENCODER question on
+// `available` alone let Hardware look selectable for AV1 on a Mac while the
+// engine fell through to software — the interface saying something untrue. So
+// everything codec-dependent is worked out here, from the codec ANSWER, and
+// re-run every time the stage is painted. It lives in the HTML because the
+// bridge's Python is fixed.
+const CODEC_HW_KEY = ['h264','h265','av1',null];        // by codec option index (3 = VVC)
+const CODEC_SHORT  = ['H.264','H.265','AV1','H.266'];
+// Standalone (no pywebview) this file runs on mock data, and the honest mock is
+// the machine it is designed on: VideoToolbox for H.264/H.265, NO hardware AV1
+// (no Mac has one), software AV1 available. The same stands in for the few
+// milliseconds before the real probe returns — the setter below re-syncs the
+// instant it does, so nothing is left resting on the assumption.
+const MOCK_HW = {h264:'h264_videotoolbox', h265:'hevc_videotoolbox', av1:null};
+function hwFor(ci){
+  const key = CODEC_HW_KEY[ci];
+  if(!key) return {enc:null, soft:false};               // VVC: no encoder at all
+  const cap = window.__vtcHW;
+  if(!cap) return {enc: MOCK_HW[key] || null, soft:true};
+  return {enc: cap[key] || null, soft: key==='av1' ? cap.av1_software!==false : true};
+}
+const hwName = e => String(e||'').replace(/_/g,' ');
+
+// AV1 is the only codec whose blurb depends on the machine: hardware AV1 is
+// recent-PC-GPU only, every Mac encodes it in software, and a build with neither
+// cannot make an AV1 file at all — which is a genuine "not available here",
+// stated the way the encoder question states missing hardware.
+function syncCodecQuestion(){
+  const q = M.find(x=>x.id==='codec'); if(!q) return;
+  const o = q.opts[2], hw = hwFor(2);
+  if(!hw.enc && !hw.soft){
+    o.disabled = true;
+    o.tag = 'not available on this machine';
+    o.t = AV1_GAIN+' '+AV1_PLAY+' Not here, though: no hardware AV1 encoder and no libsvtav1, so no AV1 file can be made here.';
+  } else if(hw.enc){
+    o.disabled = false;
+    o.tag = 'Most efficient · hardware AV1 found';
+    o.m[3] = 9;                                          // on the chip, not in software
+    o.t = AV1_GAIN+' '+AV1_PLAY+' And this machine has a hardware AV1 encoder ('+hwName(hw.enc)+'), so it encodes on the chip — fast, and unusual.';
+  } else {
+    o.disabled = false;
+    o.tag = 'Most efficient · least compatible';
+    o.m[3] = 3;                                          // software only: the slow path
+    o.t = AV1_GAIN+' '+AV1_PLAY+' '+AV1_SOFT;
+  }
+  // A codec that has just been found impossible cannot stay the answer — the
+  // real probe can land after a click in the mock's assumed state.
+  if(o.disabled && answers.codec===2){
+    answers.codec = 1;                                   // H.265
+    if(M[step] && M[step].id==='codec' && armed===2) armed = 1;
+  }
+}
+
+// The ENCODER question is about the codec you chose, not the machine in general.
+function syncEncoderQuestion(){
+  const q = M.find(x=>x.id==='encoder'); if(!q) return;
+  // Before CODEC is answered, describe the suggested default (H.265): this
+  // question sits after CODEC in the flow, so it is never reached before then.
+  const ci = answers.codec===undefined ? 1 : answers.codec;
+  const name = CODEC_SHORT[ci] || 'this codec';
+  const hw = hwFor(ci), HW = q.opts[0], SW = q.opts[1];
+  if(HW._t===undefined){ HW._t=HW.t; HW._name=HW.name; SW._t=SW.t; SW._tag=SW.tag; SW._name=SW.name; }
+  if(hw.enc){
+    HW.disabled = false;
+    HW.name = 'Hardware ('+hwName(hw.enc)+')';
+    HW.tag  = hwName(hw.enc)+' · default';
+    HW.t    = HW._t;
+    q.sub   = 'A working hardware encoder for '+name+' ('+hwName(hw.enc)+') was found on this machine, so you get the choice.';
+  } else {
+    // No hardware for THIS codec. For AV1 that is the expected case, not a
+    // fault, and the copy should not read like one.
+    HW.disabled = true;
+    HW.name = 'Hardware encoder';
+    HW.tag  = 'no '+name+' hardware on this machine';
+    HW.t    = 'Not available for '+name+' on this machine'
+            + (ci===2 ? '. Hardware AV1 encoders are recent-PC-GPU only and there is none here — the normal case, not a fault' : ', where no working hardware encoder for it was found')
+            + ', so '+name+' is made in software whatever this question said. Where the hardware does exist it is many times faster, using a fixed-function block on the chip; for '+name+' here, that block does not exist.';
+    q.sub   = 'Nothing on this machine encodes '+name+' in hardware'
+            + (ci===2 ? ' — no Mac has an AV1 encoder, so that is expected rather than a fault' : '')
+            + '. It will be encoded in software, which makes software the only option here.';
+    if(answers.encoder===0) answers.encoder = 1;         // the saved answer would
+    if(M[step] && M[step].id==='encoder' && armed===0) armed = 1;   // otherwise lie
+  }
+  // …and the software option names the encoder it will actually run. AV1 is not
+  // capped CRF: SVT-AV1 rejects the H.26x rate control, so the tier target IS
+  // the bitrate there (docs/quality-model.md, "AV1").
+  if(ci===2){
+    SW.tag  = 'SVT-AV1';
+    SW.name = 'Software (SVT-AV1)';
+    SW.t    = 'SVT-AV1 at preset 6, aimed straight at the tier bitrate (VBR). The capped CRF the H.26x paths use is not an option here — measured against a 2400 kbps target it overshot by 2.8× — so for AV1 the tier target IS the bitrate, which is exactly why the bpp calibration matters. Preset 6 measured 2.72× realtime against libx265 medium\'s 2.89×: near enough the same cost as software H.265, and the preset that earns the 25% the targets assume.';
+  } else {
+    SW.tag = SW._tag; SW.name = SW._name; SW.t = SW._t;
+  }
+}
+function syncForMachine(){ syncCodecQuestion(); syncEncoderQuestion(); }
+
+// The bridge writes window.__vtcHW when its probe returns and — being fixed
+// Python — has no way to tell us. Intercepting the assignment keeps the codec
+// and encoder copy honest the moment the real answer lands, with no polling.
+(function(){
+  let cap = null;
+  Object.defineProperty(window, '__vtcHW', {
+    configurable:true,
+    get(){ return cap; },
+    set(v){ cap = v; try{ syncForMachine(); if(SRC) render(); }catch(e){} }
+  });
+})();
 
 // ═══ glyphs ══════════════════════════════════════════════
 const S = g => `<svg viewBox="0 0 34 34">${g}</svg>`;
@@ -3793,6 +3968,10 @@ function drawComb(justSeated){
   });
 }
 function render(){
+  // The CODEC and ENCODER questions are rewritten from what this machine can do
+  // AND from the codec already chosen before anything is painted, so "Hardware"
+  // can never be offered for a codec this machine has no hardware for.
+  syncForMachine();
   const q=M[step];
   // A readout step (IGNORE) has nothing to choose between — auto-arm it so the live
   // readout and its Continue button show immediately, and suppress the option key
@@ -3830,6 +4009,7 @@ function render(){
   renderDestExtra();
   renderResizeExtra();
   renderIgnoreExtra();
+  renderPreviewCodecNote();
   drawRegions(); drawEstimate();
 }
 // The DESTINATION question carries inline extras: "new folder" gets a target-folder
@@ -4025,7 +4205,7 @@ function show(i){
   // codec-dependent default in the docs.
   let tag=o.tag;
   if(M[step].id==='saving' && answers.codec!==undefined && o.fits!==undefined){
-    const isH264 = answers.codec===1;
+    const isH264 = answers.codec===0;      // 0 H.264 · 1 H.265 · 2 AV1, as everywhere else
     if(o.fits===(isH264?1:0)) tag=`${o.tag} · suits your ${isH264?'H.264':'H.265/AV1'} choice`;
   }
   $('#well').innerHTML=`<div class="fade"><div class="well-tag">${tag}</div>
@@ -4075,7 +4255,7 @@ function commitLabel(q, armedIdx){
   return (armedIdx===saved) ? 'Keep' : 'Update';
 }
 $('#commit').onclick=()=>{
-  const q=M[step], oi=armed;
+  const q=M[step], oi=armed, was=answers[q.id];
   const keyEl=$('#keys').querySelector(`.key[data-i="${oi}"]`);
   fly(keyEl,q.id,oi,()=>{
     answers[q.id]=oi;
@@ -4091,6 +4271,9 @@ $('#commit').onclick=()=>{
         renderDestExtra(); drawEstimate();
       });
     }
+    // Choosing AV1 changes what will PLAY the library, not just what is written,
+    // so it is confirmed here rather than discovered afterwards.
+    if(q.id==='codec') syncEncoderQuestion();   // hardware follows the codec now
     const nowComplete = SRC && M.every(x=>answers[x.id]!==undefined);
     const next=M.findIndex(x=>answers[x.id]===undefined);
     step=next===-1?step:next;
@@ -4104,6 +4287,14 @@ $('#commit').onclick=()=>{
     // question is the destination, and landing in a modal the instant you pick
     // one traps someone who only wanted to set that and then go back and adjust
     // something else. Start is right there and lights up; let them press it.
+    if(q.id==='codec' && oi===2 && was!==2){
+      // If they came from the recap, the AV1 sheet goes first and hands back to
+      // the recap once answered — two sheets must never stack.
+      const back = nowComplete && reconfirm;
+      if(back) reconfirm=false;
+      av1Then = back ? ()=>setTimeout(openConfirm, 300) : null;
+      setTimeout(openAV1, 420);
+    }
     if(nowComplete && reconfirm){ reconfirm=false; setTimeout(openConfirm, 540); }
   });
 };
@@ -4130,9 +4321,10 @@ function drawEstimate(){
   // Read the densities from ADV, not a frozen copy: a retuned tier must move
   // this prediction too, or the mock estimate contradicts the run.
   const bpp = ADV.bpp[TIER_ORDER[answers.quality ?? 2]];
-  // codec factor: H.265 x0.60 at <=1080p (the bulk of a library), H.264 x1.0,
-  // AV1 roughly a further third below H.265
-  const codecF=[0.60,1.0,0.42][answers.codec];
+  // codec factor, by answer index: H.264 x1.0, H.265 x0.60 at <=1080p (the bulk
+  // of a library), AV1 x0.45 — the engine's own HEVC_FACTOR_HD / AV1_FACTOR_HD,
+  // so the prediction cannot drift from what the run will actually target.
+  const codecF=[1.0,0.60,0.45][answers.codec];
   // a typical fat library source sits around 0.16 bpp — WEB-DL and Blu-ray rips
   // with generous headroom. That is what the tier is measured against.
   const SRC_BPP=0.16;
@@ -4798,6 +4990,34 @@ function maybeAskCompat(){
 $('#compat-opts').querySelectorAll('.compat-opt').forEach(b=>b.onclick=()=>{ setFormat(b.dataset.v); advPush(); });
 $('#compat-go').onclick=()=>shutSheet('#compat-sheet');
 $('#compat-sheet').onclick=e=>{ if(e.target===$('#compat-sheet')) shutSheet('#compat-sheet'); };
+
+// ═══ AV1: an informed choice, not a warning ══════════════
+// Opened when AV1 BECOMES the codec answer (see #commit) — a re-commit of the
+// same choice is not a new decision and must not nag. The encode-cost line is
+// the only machine-dependent part: hardware AV1 exists on recent PC GPUs and
+// nowhere else, so on a Mac this is always the software path.
+let av1Then = null;                       // what to do once the sheet is answered
+function av1SpeedLine(){
+  const hw = hwFor(2);
+  return hw.enc
+    ? '<b>What it costs to make</b> — this machine has a hardware AV1 encoder ('+hwName(hw.enc)+'), so an AV1 run costs about what a hardware H.265 run costs today.'
+    : '<b>What it costs to make</b> — there is no hardware AV1 encoder here, and no Mac has one, so these files are made in software: roughly the speed of software H.265, and far slower than the hardware H.265 your runs use today. Expect a run to take considerably longer.';
+}
+function openAV1(){
+  const el=$('#av1-speed'); if(el) el.innerHTML = av1SpeedLine();
+  openSheet('#av1-sheet');
+}
+function av1Done(){ const f=av1Then; av1Then=null; if(f) f(); }
+$('#av1-go').onclick=()=>{ shutSheet('#av1-sheet'); av1Done(); };
+// The way out has to actually change the answer, not merely close the sheet.
+$('#av1-back').onclick=()=>{
+  shutSheet('#av1-sheet');
+  answers.codec = 1;                                   // H.265
+  if(M[step] && M[step].id==='codec') armed = 1;
+  render();                        // comb value, well, estimate and preview note
+  av1Done();
+};
+$('#av1-sheet').onclick=e=>{ if(e.target===$('#av1-sheet')){ shutSheet('#av1-sheet'); av1Done(); } };
 
 // ═══ bloated modern files ════════════════════════════════
 // H.265/VP9/AV1 sources are left alone by default: they are already efficient, so
@@ -5928,6 +6148,9 @@ $('#r-log').onclick=()=>{
 addEventListener('keydown',e=>{
   if(e.key!=='Escape') return;
   shutSheet('#confirm-sheet'); shutSheet('#report-sheet'); shutSheet('#big-sheet'); shutSheet('#adv-sheet'); shutSheet('#compat-sheet'); shutSheet('#about-sheet');
+  // Escape on the AV1 sheet means "carry on with what I chose" — the same as
+  // clicking away — but it still has to release whatever was waiting behind it.
+  if($('#av1-sheet').classList.contains('on')){ shutSheet('#av1-sheet'); av1Done(); }
 });
 
 // ═══ gate ════════════════════════════════════════════════
@@ -6620,6 +6843,17 @@ window.pvSetSampleName = pvSetSampleName;
   sync();
   new MutationObserver(sync).observe(src, {childList:true, characterData:true, subtree:true});
 })();
+// The tier previews are five-second samples encoded in H.265 (H.264 on Windows,
+// where the webview has no HEVC decoder) whatever OUTPUT codec the run is set to
+// — the preview worker takes a codec of its own. Two things follow for AV1, and
+// both push the same way: the panels are not AV1, and SVT-AV1 overshoots its
+// target on a clip this short (1.19× at 6s, 1.01× by 60s — docs/quality-model.md),
+// so even a real AV1 panel would read bigger than the codec is. Someone comparing
+// panels would draw the exact opposite conclusion, so say it beside them.
+function renderPreviewCodecNote(){
+  const el = document.getElementById('pv-av1');
+  if(el) el.hidden = answers.codec !== 2;
+}
 let pvCodec='h265', pvPos=0.5;
 $('#load').onclick=()=>{ if(window.__vtcRegenPreviews) window.__vtcRegenPreviews(pvCodec, pvPos); };
 // choose where in the first file the 5s sample comes from, then regenerate
@@ -7455,6 +7689,35 @@ window.setMode=setMode; window.U=U; window.W=W;
         ADV.modernMax = p.get('sel')!=null ? parseInt(p.get('sel'),10) : 25;
         M.forEach(x=>{ answers[x.id]=answers[x.id]??0; });
         if(typeof openModern==='function') openModern(true);
+      } else if(shot==='av1'){
+        // AV1 in its three review states. `at` picks the surface, `hw` fakes the
+        // probe the bridge would have done — the whole point is that the copy
+        // changes with the machine, which cannot be seen on one machine.
+        //   at=codec   the CODEC step with AV1 read in the well (default)
+        //   at=encoder the ENCODER step it now depends on
+        //   at=sheet   the informed-choice sheet
+        //   hw=mac     software AV1 only, no hardware  (default; every Mac)
+        //   hw=gpu     a recent PC GPU with hardware AV1
+        //   hw=none    neither — AV1 cannot be produced at all
+        const hw=p.get('hw')||'mac';
+        if(hw==='gpu') window.__vtcHW={h264:'h264_nvenc',h265:'hevc_nvenc',av1:'av1_nvenc',av1_software:true,available:true};
+        else if(hw==='none') window.__vtcHW={h264:'h264_videotoolbox',h265:'hevc_videotoolbox',av1:null,av1_software:false,available:true};
+        const at=p.get('at')||'codec';
+        const ci=M.findIndex(x=>x.id==='codec'), ei=M.findIndex(x=>x.id==='encoder');
+        if(typeof syncForMachine==='function') syncForMachine();
+        if(at==='codec'){
+          step=ci; armed = M[ci].opts[2].disabled ? null : 2;
+          if(typeof render==='function') render();
+          if(typeof show==='function') show(2);      // the blurb, armed or not
+        } else {
+          M.forEach(x=>{ answers[x.id]=answers[x.id]??0; });
+          answers.codec=2; delete answers.encoder;
+          step=ei; armed=null;
+          if(typeof render==='function') render();
+          if(typeof show==='function') show(0);      // the Hardware option's state
+          if(at==='sheet' && typeof openAV1==='function') openAV1();
+        }
+        if(typeof drawComb==='function') drawComb();
       } else if(shot==='toolbar'){
         // The gate/report aren't needed — just the brow. pickFolder above already
         // dropped the gate so the toolbar shows in its normal (source-chosen) state.

@@ -842,3 +842,106 @@ source of truth; the mirror also busts the preview cache key.
 jsdom harness `tests/ui/frame.js` driving the real commit button). Real encodes on
 both paths: software 4K→1080p (23.91 MB → 2.63 MB) and hardware VideoToolbox
 4K→720p, both probing at the expected dimensions with the original archived.
+
+
+---
+
+## AV1 round (2026-09-03) — the third output codec, in the interface
+
+The engine gained AV1 at `f2fe2f0`; this is the UI catching up. Every edit was a
+surgical, verified single-match replacement (no `Write` on the HTML — the Edit
+tool was unavailable this session, so replacements went through a helper that
+asserts exactly one match before writing). Rendered in headless Chrome at the
+app's own window size (1360×1088) via the inert `#__shot=` harness, both themes.
+Tests: **203 pytest pass**, and `drive/nav/frame/flight/modernsel` unchanged.
+
+### 1 · The CODEC question — AV1 is real
+`disabled:true` is gone. The blurb is three sentences held as consts above the
+model (`AV1_GAIN` / `AV1_PLAY` / `AV1_SOFT`) because the **last one depends on
+the machine** and is swapped by `syncCodecQuestion()`:
+
+- **software (every Mac, the default and the standalone mock)** — tag
+  *"Most efficient · least compatible"*, Speed meter 3.
+- **hardware AV1 found** (`cap.av1`, recent PC GPUs only) — tag *"Most efficient
+  · hardware AV1 found"*, Speed meter 9, and the third sentence says so.
+- **neither** (`cap.av1` null and `cap.av1_software` false) — genuinely
+  disabled, tag *"not available on this machine"*, stated the way the encoder
+  question states missing hardware. If AV1 was already the answer when that
+  lands, the answer falls back to H.265 rather than standing on something
+  impossible.
+
+Meters `[Space 9, Compat 3, Stream 6, Speed 3]` — best of the three on Space,
+worst on Compat, which is the whole trade. The About reference table's AV1 row
+was moved to the same numbers (was 9 / 5.5, "left alone") so the two cannot
+disagree, and the codec prose that said AV1 was "not currently an output option"
+was rewritten. Each blurb is trimmed to fit the well's ~7 lines without
+scrolling; the sheet carries the full statement.
+
+### 2 · The ENCODER question now follows the CHOSEN codec — a bug, not a nicety
+`webapp.py` gates that question once, on load, on `cap.available` — "is there
+*any* H.264/H.265 hardware". Pick AV1 on a Mac and Hardware still looked
+available while the engine fell through to software. The per-codec logic could
+not go in the bridge (fixed Python), so it lives in the HTML: `hwFor(codecIdx)`
+reads `window.__vtcHW`, and `syncCodecQuestion()` / `syncEncoderQuestion()` run
+from the top of `render()`, so the question is re-derived before every paint.
+
+- Hardware for the chosen codec → named as now (`Hardware (hevc videotoolbox)`).
+- None → the option is **disabled**, the `sub` says which codec has no hardware
+  here, and for AV1 adds "no Mac has an AV1 encoder, so that is expected rather
+  than a fault" — no error tone.
+- A saved `answers.encoder = Hardware` is corrected to Software when it becomes
+  untrue, so the recap and the confirm sheet cannot claim a hardware run.
+- The **Software** option renames itself for AV1 (*SVT-AV1*, preset 6, VBR) —
+  its old blurb described capped CRF at crf=21/20, which SVT-AV1 rejects.
+
+`window.__vtcHW` is now an accessor: the bridge assigns it when its probe
+returns and has no way to call us, so intercepting the assignment re-syncs the
+copy the moment the real answer lands, with no polling. Standalone (no
+pywebview) assumes the machine this is designed on — VideoToolbox H.264/H.265,
+no hardware AV1.
+
+### 3 · `#av1-sheet` — an informed choice, not a warning
+Modelled on `#compat-sheet` (same shapes, same "state the facts, ask one
+question"), opened when AV1 **becomes** the codec answer — re-committing the
+same answer does not nag. Gain, then risk, then what it costs to make (the only
+machine-dependent line), then a reminder that nothing is written until Start.
+Two ways out that both mean something: **Continue with AV1** or **Use H.265
+instead**, which actually changes the answer and repaints. If the choice was
+made from the recap, the sheet hands back to the recap when answered so two
+sheets never stack. One new rule: `.av1-w` swaps the accent left rule for
+`var(--warn-line)` on the playability paragraph — the report's "needs a look"
+cue, on the one paragraph that must not be skimmed. No dotted borders, no red.
+
+### 4 · The preview panels' AV1 caveat (`.pv-av1`)
+The tier previews are five-second samples encoded in H.265 whatever the run's
+output codec, and five seconds is exactly where SVT-AV1 overshoots (1.19× at 6s,
+1.01× by 60s — `docs/quality-model.md`). Both push the same way: an AV1 panel
+would read *bigger* than the codec really is. So a quiet note with the same
+amber rule sits under the preview Codec control, shown only when the run's codec
+is AV1. Deliberately not in the sheet — the misleading thing is the panels, and
+by the time someone compares them the sheet is long closed.
+
+### 5 · Two pre-existing codec-index bugs, fixed in passing
+`answers.codec` is `0 H.264 · 1 H.265 · 2 AV1` (the option order, and
+`_CODECS` in `webapp.py`), but two places still assumed the old H.265-first
+order: the SAVING step tagged the wrong option "suits your choice"
+(`isH264 = answers.codec===1`), and the estimate priced H.264 with H.265's
+factor and vice versa (`[0.60,1.0,0.42]`). Both corrected, and AV1's factor
+moved to **0.45** = the engine's `AV1_FACTOR_HD`, so the projection agrees with
+what the run will target and with the "about 25% under H.265" the copy promises.
+
+### Review renders
+`design-review/av1-{codec,encoder,sheet}-{light,dark}.png`,
+`av1-codec-hwgpu-light.png`, `av1-encoder-hwgpu-dark.png`,
+`av1-sheet-hwgpu-light.png`, `av1-codec-unavailable-{light,dark}.png`.
+Shot harness: `#__shot=av1&at=codec|encoder|sheet&hw=mac|gpu|none&theme=…`.
+
+### Left deliberately
+- The toolbar's `ENCODERS Soft/Hard` readout is written by the bridge's Python
+  and still lists H.264/H.265 only; overriding it from the HTML would mean
+  racing the bridge's own write. Wrong only by omission, on a PC with hardware
+  AV1.
+- The preview codec toggle still offers H.265/H.264 only. It is not an
+  oversight: `regenerate_previews()` maps anything that is not `h264` to H.265,
+  so an "AV1" button would silently produce H.265 panels labelled AV1 — exactly
+  the kind of untruth item 2 exists to remove. The caveat says so instead.

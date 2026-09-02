@@ -122,6 +122,25 @@ def test_modern_review_opens_on_all_not_a_chosen_number():
         f"  {x['n']}: got {x.get('g')!r}, want {x['e']!r}" for x in failed)
 
 
+@pytest.mark.skipif(not _have_jsdom(), reason="node + jsdom not installed (see tests/ui/README)")
+def test_av1_ui_tells_the_truth_about_this_machine():
+    """AV1's UI has to change with the machine, and getting it wrong states a
+    falsehood rather than looking untidy.
+
+    Three profiles: a Mac (software only — no Apple silicon encodes AV1), a PC
+    with a hardware AV1 card, and a machine with neither. The encoder question
+    must follow the CHOSEN codec rather than "is there any hardware at all",
+    which is what it used to do — pick AV1 on a Mac and Hardware stayed
+    selectable while the engine silently ran software.
+    """
+    r = subprocess.run(["node", "av1.js"], cwd=_UI, capture_output=True, text=True,
+                       stdin=subprocess.DEVNULL, timeout=120)
+    assert r.stdout.strip(), f"harness produced nothing:\n{r.stderr[:2000]}"
+    failed = [x for x in json.loads(r.stdout) if not x.get("ok")]
+    assert not failed, "AV1 UI misstates this machine:\n" + "\n".join(
+        f"  {x.get('n')}: got {x.get('g')!r}, want {x.get('e')!r}" for x in failed)
+
+
 def _run_all():
     # Ask the question directly. When pytest IS installed the decorator is
     # pytest's own and leaves no attribute behind, so relying on the marker ran
