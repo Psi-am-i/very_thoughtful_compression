@@ -428,6 +428,81 @@ class PlanRow:
         return None
 
 
+def encode_work(width: int, height: int, fps: float, duration: float) -> float:
+    """Output pixel-frames — the unit encoding time is actually spent in.
+
+    Not seconds of video: a 4K file takes roughly four times as long as a 1080p
+    one of the same length, and a 60fps file twice as long as a 30fps one. Counting
+    the pixels the encoder has to produce makes a rate measured on one library
+    usable on another, and makes a frame-size cap correctly predict a faster run.
+    """
+    if width <= 0 or height <= 0 or fps <= 0 or duration <= 0:
+        return 0.0
+    return float(width) * height * fps * duration
+
+
+def modern_review(config: RunConfig, probed, top_n: int = 200) -> dict:
+    """Every file that qualifies for a modern re-encode, worst first.
+
+    This is what the app puts in front of the user before it commits them to a
+    long night: how many files, how big, how much comes back, and how much work
+    it is. It deliberately reviews the FULL queue — any budget already set is
+    ignored here, because the budget is the question being asked, not an input.
+
+    `probed` is (MediaInfo, size) pairs, the shape the GUI's probe cache holds.
+    `work` is in output pixel-frames (see encode_work); the caller turns that into
+    a time using a rate measured on this machine, because only the caller knows
+    what this machine has managed before.
+    """
+    open_cfg = replace(config, modern_files=frozenset(), modern_max_files=0)
+    rows = []
+    for info, size in probed:
+        if not info.ok or not info.vcodec:
+            continue
+        if classify_codec(info.vcodec) is not CodecCategory.MODERN:
+            continue
+        mode, _outcome, target = decide(open_cfg, info)
+        if mode is not Mode.SHRINK or target <= 0:
+            continue
+        saved = size - predict_output_bytes(open_cfg, info, size, mode, target)
+        if saved <= 0:
+            continue
+        src_kbps = info.effective_bps / 1000.0
+        dims = capped_dims(info.display_width, info.display_height, config.max_short_edge)
+        out_w, out_h = dims if dims else (info.display_width, info.display_height)
+        rows.append({
+            "name": info.path.name,
+            "path": str(info.path),
+            "bytes": size,
+            "saved_bytes": int(saved),
+            "kbps": round(src_kbps),
+            "over": round(src_kbps / target, 1) if target else 0.0,
+            "seconds": info.duration or 0.0,
+            "work": encode_work(out_w, out_h, info.fps, info.duration or 0.0),
+        })
+    rows.sort(key=lambda r: (-r["saved_bytes"], r["path"]))
+    return {
+        "files": len(rows),
+        "bytes": sum(r["bytes"] for r in rows),
+        "saved_bytes": sum(r["saved_bytes"] for r in rows),
+        "seconds": sum(r["seconds"] for r in rows),
+        "work": sum(r["work"] for r in rows),
+        # Cumulative work down the ranked list, so "the top 25" can be priced
+        # without the caller re-deriving it — element i is the work for the first
+        # i+1 files. This is what makes a "top X" choice show its own time.
+        "work_cum": list(_running_total(r["work"] for r in rows)),
+        "saved_cum": list(_running_total(float(r["saved_bytes"]) for r in rows)),
+        "top": [{k: v for k, v in r.items() if k != "work"} for r in rows[:top_n]],
+    }
+
+
+def _running_total(values):
+    total = 0.0
+    for v in values:
+        total += v
+        yield total
+
+
 def pick_modern_shortlist(config: RunConfig, rows: list["PlanRow"]) -> frozenset[str]:
     """The modern-source files this run should spend its budget on, worst-first.
 
@@ -684,7 +759,7 @@ def _build_detail(config: RunConfig, info: MediaInfo, mode: Mode, target: int,
         out_ext=ext,
         container_reason=encode.container_reason(config, info),
         width=src_w, height=src_h,
-        out_width=out_w, out_height=out_h, fps=info.fps,
+        out_width=out_w, out_height=out_h, fps=info.fps, duration=dur,
         src_kbps=info.effective_bps / 1000.0, vid_kbps=vid_kbps, out_kbps=out_kbps, bpp=bpp,
         audio_action=res.audio_action,
         subs_summary=subs_summary,

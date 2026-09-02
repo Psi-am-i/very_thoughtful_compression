@@ -232,3 +232,141 @@ def test_a_deferred_file_is_not_recorded_as_done():
             done += [r.path.name for r in pipeline.run(cfg) if r.outcome is Outcome.SHRINK]
         # one per run, fattest first, and every file eventually reached
         assert done == ["b.mp4", "c.mp4", "a.mp4"], done
+
+
+# ── the review: what the user is shown before committing a night ─────────────
+def _probed(d, kbps_list, w=1920, h=1080, fps=24.0, dur=3600.0, vcodec="hevc"):
+    """(info, size) pairs with sizes consistent with the bitrates."""
+    out = []
+    for i, kbps in enumerate(kbps_list):
+        f = Path(d) / f"clip{i:02d}.mp4"
+        size = int(kbps * 1000 / 8 * dur)
+        f.write_bytes(b"")                          # the review stats nothing; size is passed in
+        out.append((_info(path=str(f), vcodec=vcodec, kbps=kbps, w=w, h=h, fps=fps, dur=dur), size))
+    return out
+
+
+def test_the_review_reports_the_whole_queue_not_the_budget():
+    """The budget is the question being asked, so the review must ignore any
+    budget already set — otherwise "how many shall I do?" would be answered with
+    the number already chosen."""
+    with tempfile.TemporaryDirectory() as d:
+        cfg = _cfg(d, reencode_modern=True, modern_max_files=2)
+        r = pipeline.modern_review(cfg, _probed(d, [90000, 80000, 70000, 60000, 50000]))
+        assert r["files"] == 5, r["files"]
+
+
+def test_the_review_ranks_worst_first_and_totals_honestly():
+    with tempfile.TemporaryDirectory() as d:
+        cfg = _cfg(d, reencode_modern=True)
+        r = pipeline.modern_review(cfg, _probed(d, [50000, 90000, 70000]))
+        saved = [row["saved_bytes"] for row in r["top"]]
+        assert saved == sorted(saved, reverse=True), saved
+        assert r["saved_bytes"] == sum(saved)
+        assert r["bytes"] == sum(row["bytes"] for row in r["top"])
+        # "over" is how many times over its tier target each file is
+        assert all(row["over"] > 2.0 for row in r["top"]), r["top"]
+
+
+def test_the_review_excludes_what_would_not_be_touched():
+    with tempfile.TemporaryDirectory() as d:
+        cfg = _cfg(d, reencode_modern=True)
+        # a lean file, and an h264 file — neither is a modern re-encode candidate
+        probed = _probed(d, [2000]) + _probed(d, [90000], vcodec="h264")
+        assert pipeline.modern_review(cfg, probed)["files"] == 0
+
+
+def test_the_review_is_empty_when_the_option_is_off():
+    with tempfile.TemporaryDirectory() as d:
+        assert pipeline.modern_review(_cfg(d), _probed(d, [90000]))["files"] == 0
+
+
+def test_the_cumulative_columns_price_a_top_x_choice():
+    """"Top 25" has to show its own cost, so the review carries running totals
+    down the ranked list — element i covers the first i+1 files."""
+    with tempfile.TemporaryDirectory() as d:
+        cfg = _cfg(d, reencode_modern=True)
+        r = pipeline.modern_review(cfg, _probed(d, [90000, 70000, 50000]))
+        assert len(r["saved_cum"]) == 3 and len(r["work_cum"]) == 3
+        assert r["saved_cum"][0] == r["top"][0]["saved_bytes"]
+        assert r["saved_cum"][-1] == r["saved_bytes"]
+        assert r["work_cum"] == sorted(r["work_cum"])          # monotonic
+        assert abs(r["work_cum"][-1] - r["work"]) < 1.0
+
+
+def test_work_is_measured_in_output_pixels_not_minutes():
+    """A 4K file is ~4x the work of a 1080p file of the same length, and a frame
+    cap must therefore predict a faster run. Estimating from play length alone
+    would tell someone 46 hours when it is nearer 12."""
+    hd = pipeline.encode_work(1920, 1080, 24, 3600)
+    uhd = pipeline.encode_work(3840, 2160, 24, 3600)
+    assert abs(uhd / hd - 4.0) < 0.01
+    assert pipeline.encode_work(1920, 1080, 48, 3600) == 2 * hd     # fps counts too
+    for bad in ((0, 1080, 24, 60), (1920, 0, 24, 60), (1920, 1080, 0, 60), (1920, 1080, 24, 0)):
+        assert pipeline.encode_work(*bad) == 0.0                   # never guesses
+
+
+def test_a_frame_cap_lowers_the_predicted_work():
+    """The two settings compose: capping 4K at 1080p quarters the pixels the
+    encoder has to produce, so the review must price the run accordingly."""
+    with tempfile.TemporaryDirectory() as d:
+        probed = _probed(d, [90000], w=3840, h=2160)
+        full = pipeline.modern_review(_cfg(d, reencode_modern=True), probed)
+        capped = pipeline.modern_review(
+            _cfg(d, reencode_modern=True, max_short_edge=1080), probed)
+        assert abs(full["work"] / capped["work"] - 4.0) < 0.01
+
+
+# ── the time estimate ────────────────────────────────────────────────────────
+def test_the_rate_is_measured_from_real_encodes_only():
+    """"About 46 hours" is only worth saying if it came from somewhere real. A
+    remux is a stream copy and nearly instant — letting it into the average would
+    turn the estimate into a promise no encode could keep."""
+    from vtc import webapp
+    from vtc.result import FileDetail, FileResult, Outcome
+
+    def result(mode, elapsed, w=1920, h=1080, fps=24.0, dur=3600.0):
+        return FileResult(Path("/x/f.mp4"), Outcome.SHRINK, elapsed_s=elapsed,
+                          detail=FileDetail(mode=mode, out_width=w, out_height=h,
+                                            fps=fps, duration=dur))
+
+    one_hour_1080p24 = 1920 * 1080 * 24 * 3600
+    assert webapp._observed_rate([result("shrink", 3600.0)]) == one_hour_1080p24 / 3600.0
+    # a remux alongside it must not count at all
+    mixed = [result("shrink", 3600.0), result("remux", 0.2)]
+    assert webapp._observed_rate(mixed) == one_hour_1080p24 / 3600.0
+    # nothing measurable -> no rate, so the caller says so instead of guessing
+    assert webapp._observed_rate([]) is None
+    assert webapp._observed_rate([result("remux", 0.2)]) is None
+    assert webapp._observed_rate([result("shrink", 0.0)]) is None
+
+
+def test_a_new_measurement_is_folded_in_not_slammed_in():
+    """One run on unusual content is evidence, not the machine's speed."""
+    from vtc import webapp
+    assert webapp._blend_rate(None, 100.0) == 100.0        # nothing stored yet
+    assert webapp._blend_rate(0, 100.0) == 100.0
+    assert webapp._blend_rate("nonsense", 100.0) == 100.0
+    blended = webapp._blend_rate(100.0, 200.0)
+    assert 100.0 < blended < 200.0, blended                # moves toward, doesn't jump
+
+
+def test_the_estimate_says_where_its_number_came_from():
+    """A measured run beats a 5-second preview clip, and when there is neither the
+    app must admit it rather than invent an number."""
+    from vtc import webapp
+    from vtc.config import OutCodec
+
+    api = webapp.Api.__new__(webapp.Api)                   # no window, no pywebview
+    with tempfile.TemporaryDirectory() as d:
+        cfg = _cfg(d, out_codec=OutCodec.H265)
+        key = webapp._rate_key(cfg, hw=bool(__import__("vtc.encode", fromlist=["x"])
+                                            .select_hw_encoder(cfg)))
+        api._adv = {}
+        assert api._encode_rate(cfg) == (None, "")
+        api._adv = {webapp._SAMPLE_RATES_KEY: {key: 5.0}}
+        assert api._encode_rate(cfg) == (5.0, "a sample encode")
+        # a real run always wins over the rough sample
+        api._adv = {webapp._SAMPLE_RATES_KEY: {key: 5.0},
+                    webapp._RATES_KEY: {key: 9.0}}
+        assert api._encode_rate(cfg) == (9.0, "your last run")

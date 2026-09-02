@@ -16,6 +16,8 @@ import sys
 import time
 from pathlib import Path
 
+from dataclasses import replace
+
 from . import __version__, pipeline, report
 from .config import AudioPolicy, Container, Encoder, OutputMode, RunConfig, SourceAction
 from .model import OutCodec, Tier, hevc_factor
@@ -79,10 +81,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="eligible source codec, repeatable (default: hevc, vp9). AV1 is "
                         "excluded on purpose — it is already the most efficient, and "
                         "re-encoding it is usually a downgrade for a lot of hours")
-    m.add_argument("--modern-max", type=int, default=25, metavar="N",
-                   help="how many modern files to re-encode per run, worst first by "
-                        "predicted saving (default: 25; 0 = no limit). The ledger means "
-                        "the next run continues where this one stopped")
+    m.add_argument("--modern-max", type=int, default=0, metavar="N",
+                   help="how many modern files to re-encode THIS run, worst first by "
+                        "predicted saving (default: 0 = all of them). Use --dry-run first "
+                        "to see how many qualify and what it would cost; whatever you "
+                        "leave is queued, not dismissed — the next run carries on down "
+                        "the same list")
     g_ign = p.add_argument_group("ignore rules (files the scan pretends it never saw)")
     g_ign.add_argument("--ignore-under", type=float, default=None, metavar="MB",
                        help="ignore files smaller than this many MB")
@@ -295,7 +299,7 @@ def _print_header(cfg: RunConfig, dry: bool = False) -> None:
         *([f"MODERN:    re-encoding {'/'.join(cfg.modern_codecs)} sources over "
            f"{cfg.modern_over_tolerance:g}x tier target"
            + (f", {cfg.modern_max_files} file(s) this run (worst first)"
-              if cfg.modern_max_files else ", no per-run limit")]
+              if cfg.modern_max_files else ", ALL of them this run")]
           if cfg.reencode_modern else []),
         *_ignore_line(cfg),
         *([f"SOFTWARE:  {len(cfg.software_files)} file(s) picked out for the software encoder"]
@@ -332,6 +336,14 @@ def _print_dry_run(cfg: RunConfig) -> int:
     if not rows:
         print("  (no video files found)")
         return 0
+    # A dry run has to show the run that would ACTUALLY happen. With a modern
+    # budget in force some qualifying files are deferred, and a table listing them
+    # all as "shrink" would promise five encodes where two were going to happen.
+    # Re-decide against the same shortlist the run would use.
+    if cfg.reencode_modern and cfg.modern_max_files > 0:
+        cfg = replace(cfg, modern_files=pipeline.pick_modern_shortlist(cfg, rows))
+        rows = [PlanRow(r.path, r.info, *pipeline.decide(cfg, r.info))
+                if r.info.ok and r.info.vcodec else r for r in rows]
     print(f"  {'file':<44s} {'res':>9s} {'codec':>6s} {'src':>8s} {'→':^3s} {'action':<10s} {'target':>8s} {'~save':>6s}")
     print("  " + "─" * 100)
     est_saved = 0.0
@@ -360,12 +372,66 @@ def _print_dry_run(cfg: RunConfig) -> int:
     # Lead with what happens to the files being TOUCHED. Averaging the saving
     # across a whole library — most of which is deliberately left alone — makes
     # worthwhile work read as pointless.
-    print(f"  {len(rows)} file(s): {n_change} would be re-encoded, {len(rows)-n_change} left as-is")
+    # Queued files are counted apart from left-as-is ones: they are waiting for a
+    # later run's budget, not decided against, and folding them into "left as-is"
+    # would hide the very thing --modern-max is being used to control.
+    queued = sum(1 for r in rows if r.outcome is Outcome.DEFER_MODERN)
+    tail = f", {queued} queued for a later run" if queued else ""
+    print(f"  {len(rows)} file(s): {n_change} would be re-encoded, "
+          f"{len(rows) - n_change - queued} left as-is{tail}")
     if n_change:
         pct = (est_saved / work_src * 100) if work_src else 0
         print(f"  Those {n_change}: {human_bytes(work_src)} -> ~{human_bytes(work_src - est_saved)}"
               f"  |  est. recovery ~{human_bytes(est_saved)} ({pct:.0f}% of what is touched)")
+    _print_modern_review(cfg, rows)
     return 0
+
+
+def _print_modern_review(cfg: RunConfig, rows) -> None:
+    """Size up the modern re-encode queue before anyone commits a night to it.
+
+    Hours per file is the whole problem with this option, so a dry run says how
+    many qualify and names the worst offenders — and says plainly that the choice
+    of how many to do is `--modern-max`, and that the rest are not lost.
+    """
+    if not cfg.reencode_modern:
+        return
+    review = pipeline.modern_review(cfg, [(r.info, _size_of(r.path)) for r in rows])
+    n = review["files"]
+    print()
+    if not n:
+        print("  MODERN: nothing qualifies — no modern file is far enough over target.")
+        return
+    print(f"  MODERN: {n} bloated {'/'.join(cfg.modern_codecs)} file(s) qualify — "
+          f"{human_bytes(review['bytes'])}, est. recovery ~{human_bytes(review['saved_bytes'])}")
+    print(f"          This is SLOW work — {_hms(review['seconds'])} of video to re-encode, "
+          f"and a re-encode runs far slower than real time.")
+    for row in review["top"][:5]:
+        print(f"            {row['name'][:52]:<52s} {human_bytes(row['bytes']):>9s}  "
+              f"{row['over']:.1f}x over  saves ~{human_bytes(row['saved_bytes'])}")
+    if n > 5:
+        print(f"            … and {n - 5} more")
+    doing = f"all {n}" if not cfg.modern_max_files else f"the top {min(cfg.modern_max_files, n)}"
+    print(f"          This run would do {doing}. Choose with --modern-max N; whatever is "
+          f"left is queued, not dropped —")
+    print("          re-run and it carries on down the same worst-first list.")
+
+
+def _hms(seconds: float) -> str:
+    """A play length a person can read. "0.0 hours" looks like a broken number, so
+    short durations are said in minutes and long ones in hours."""
+    if seconds < 90:
+        return f"{int(seconds)} seconds"
+    if seconds < 5400:
+        return f"{seconds / 60:.0f} minutes"
+    return f"{seconds / 3600:.1f} hours"
+
+
+def _size_of(p: Path) -> int:
+    try:
+        return p.stat().st_size
+    except OSError:
+        return 0
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

@@ -74,6 +74,9 @@ class FileDetail:
     out_width: int = 0              # frame actually written — differs only when a
     out_height: int = 0             #   frame-size cap bit (0 on records made before it existed)
     fps: float = 0.0
+    duration: float = 0.0           # play length, seconds — with fps and the output
+                                    #   frame it gives the work done, which is how a
+                                    #   run measures its own encoding rate
     src_kbps: float = 0.0           # source video bitrate
     vid_kbps: float = 0.0           # video bitrate produced (target for a re-encode; source for a remux)
     out_kbps: float = 0.0           # actual total output bitrate (from size/duration)

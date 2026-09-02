@@ -18,6 +18,7 @@ The engine (pipeline/model/config) is untouched and UI-agnostic.
 from __future__ import annotations
 
 import hashlib
+import time as _time
 from dataclasses import replace
 import json
 import re
@@ -945,6 +946,57 @@ def _save_settings(adv: dict) -> None:
         log.warning("could not save settings: %s", e)
 
 
+# ── how fast this machine encodes ─────────────────────────────────────────────
+# Predicting "about 46 hours" is only worth saying if the number came from
+# somewhere real, so it is MEASURED rather than assumed: every run reports what it
+# managed, in output pixel-frames per second of wall clock (see
+# pipeline.encode_work for why that unit and not "minutes of video").
+#
+# Rates are kept per hardware/software path and per output codec, because those
+# differ by an order of magnitude and averaging them would make every estimate
+# wrong. A machine that has never encoded anything has no rate, and the app says
+# so plainly instead of inventing one.
+_RATES_KEY = "encodeRates"          # measured by real runs — trusted first
+_SAMPLE_RATES_KEY = "sampleRates"   # measured by a 5s preview clip — rough, labelled
+
+
+def _rate_key(config: RunConfig, hw: bool) -> str:
+    return f"{'hw' if hw else 'sw'}|{config.out_codec.value}"
+
+
+def _observed_rate(results: list) -> float | None:
+    """Output pixel-frames per wall-clock second, over this run's re-encodes.
+
+    Remuxes are excluded: a stream copy is nearly instant and would inflate the
+    rate into a promise no encode could keep.
+    """
+    work = elapsed = 0.0
+    for r in results:
+        d = getattr(r, "detail", None)
+        if not d or d.mode not in ("shrink", "transcode") or r.elapsed_s <= 0:
+            continue
+        w = pipeline.encode_work(d.out_width or d.width, d.out_height or d.height,
+                                 d.fps, d.duration)
+        if w > 0:
+            work += w
+            elapsed += r.elapsed_s
+    return (work / elapsed) if work > 0 and elapsed > 0 else None
+
+
+def _blend_rate(old, new: float) -> float:
+    """Fold a new measurement into the stored one rather than replacing it.
+
+    A single run on unusual content is not the machine's speed, but it is
+    evidence — so weight it at a third and let the estimate converge over a few
+    runs instead of lurching after each one.
+    """
+    try:
+        prev = float(old)
+    except (TypeError, ValueError):
+        prev = 0.0
+    return new if prev <= 0 else prev * 0.67 + new * 0.33
+
+
 class Api:
     """Exposed to JS as `window.pywebview.api.*`. All methods return JSON-able data."""
 
@@ -1310,11 +1362,20 @@ class Api:
                         log.info("preview %s: cache hit", key)
                     else:
                         vargs = encode.build_video_args(cfg2, sinfo, Mode.SHRINK, tgt, hw)
+                        _t0 = _time.monotonic()
                         rr = subprocess.run(
                             [FFMPEG, "-y", "-v", "error", "-i", str(sample), *vargs, "-an",
                              "-movflags", "+faststart", str(out)],
                             stdin=subprocess.DEVNULL, capture_output=True, text=True,
                             **TEXT_UTF8, **NO_WINDOW)
+                        # This clip is a real encode at the real settings, so it is
+                        # also the only speed measurement available BEFORE the first
+                        # run — which is exactly when someone is deciding whether to
+                        # commit to a night of modern re-encodes. Rough (5 seconds is
+                        # mostly start-up and one GOP), so it is stored separately and
+                        # always loses to a rate measured by an actual run.
+                        self._note_sample_rate(cfg2, sinfo, hw, seglen,
+                                               _time.monotonic() - _t0, rr.returncode)
                         if rr.returncode != 0 or not out.exists() or out.stat().st_size == 0:
                             log.error("preview %s failed: %s", key,
                                       (rr.stderr or "").strip().splitlines()[-1:])
@@ -1373,6 +1434,83 @@ class Api:
         rows = [pipeline.PlanRow(info.path, info, *pipeline.decide(config, info))
                 for info, _size in self._probes]
         return replace(config, modern_files=pipeline.pick_modern_shortlist(config, rows))
+
+    def modern_review(self, answers: dict):
+        """The whole queue of bloated modern files, so the user can size the job.
+
+        Re-encoding these takes hours per file, so the app does not quietly pick a
+        number: it reports how many qualify, what they weigh, what comes back and
+        how long it is likely to take, and lets the user say how many to do now.
+        Whatever they leave is deferred, not dismissed — the next run carries on
+        down the same worst-first list.
+        """
+        if self._src is None:
+            return {"error": "no folder"}
+        try:
+            config = build_config(self._src, answers)
+        except ValueError as e:
+            return {"error": str(e)}
+        if not config.reencode_modern:
+            return {"measured": True, "files": 0, "off": True}
+        # Half a probe pass is half an answer, and the wrong number here commits
+        # someone to a night of encoding. Say "counting" until it is complete.
+        if self._probed_for != self._src:
+            return {"measured": False, "files": 0}
+        review = pipeline.modern_review(config, self._probes)
+        rate, rate_from = self._encode_rate(config)
+        review["hours"] = (review["work"] / rate / 3600.0) if rate and review["work"] else None
+        review["rate_from"] = rate_from
+        review["measured"] = True
+        # Hours for each cut-off down the ranked list, so "the top 25" can show its
+        # own cost without a second call. Same index basis as `top`.
+        if rate:
+            review["hours_cum"] = [w / rate / 3600.0 for w in review["work_cum"]]
+        review.pop("work_cum", None)
+        review.pop("work", None)
+        return review
+
+    def _note_sample_rate(self, config: RunConfig, info, hw, seconds: float,
+                          elapsed: float, returncode: int) -> None:
+        """Record what a preview clip managed, as a first-guess encoding rate.
+
+        Never raises and never blocks the previews — an estimate is a nicety and
+        must not be able to break the thing the user is actually looking at.
+        """
+        try:
+            if returncode != 0 or elapsed <= 0.05 or seconds <= 0:
+                return                       # failed, or too quick to mean anything
+            dims = capped_dims(info.display_width, info.display_height, config.max_short_edge)
+            w, h = dims if dims else (info.display_width, info.display_height)
+            work = pipeline.encode_work(w, h, info.fps, seconds)
+            if work <= 0:
+                return
+            key = _rate_key(config, bool(hw))
+            rates = dict(self._adv.get(_SAMPLE_RATES_KEY) or {})
+            rates[key] = work / elapsed
+            self._adv[_SAMPLE_RATES_KEY] = rates
+            _save_settings(self._adv)
+        except Exception as e:  # noqa: BLE001
+            log.debug("could not record a sample encode rate: %s", e)
+
+    def _encode_rate(self, config: RunConfig) -> tuple[float | None, str]:
+        """This machine's measured encoding rate, and where the figure came from.
+
+        A real run beats a 5-second preview clip: the preview is dominated by
+        process start-up and one GOP, so it is only ever a rough opening guess.
+        Returns (None, "") when nothing has been measured — the caller must then
+        say it cannot estimate rather than pick a number.
+        """
+        hw = bool(encode.select_hw_encoder(config))
+        key = _rate_key(config, hw)
+        for store, label in ((_RATES_KEY, "your last run"),
+                             (_SAMPLE_RATES_KEY, "a sample encode")):
+            try:
+                v = float((self._adv.get(store) or {}).get(key) or 0)
+            except (TypeError, ValueError):
+                continue
+            if v > 0:
+                return v, label
+        return None, ""
 
     # -- projected estimate (real plan arithmetic on probed files) --------------
     def estimate(self, answers: dict):
@@ -2020,6 +2158,16 @@ class Api:
         config = self._with_modern_shortlist(config)
         results = pipeline.run(config, progress=prog, on_result=emit, files=files,
                                notify=notify, probed=probed)
+        # What this machine actually managed, folded into the stored rate so the
+        # next "about N hours" is grounded in this machine rather than a guess.
+        rate = _observed_rate(results)
+        if rate:
+            key = _rate_key(config, bool(encode.select_hw_encoder(config)))
+            rates = dict(self._adv.get(_RATES_KEY) or {})
+            rates[key] = _blend_rate(rates.get(key), rate)
+            self._adv[_RATES_KEY] = rates
+            _save_settings(self._adv)
+            log.info("encode rate for %s: %.3g pixel-frames/s", key, rates[key])
         summary = _summary(results)
         summary["mins"] = int((_time.monotonic() - run_t0) / 60)   # real elapsed (was hardcoded 0)
         summary["stopped"] = pipeline.stop_requested()              # user hit either Stop

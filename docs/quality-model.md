@@ -178,10 +178,24 @@ wrote at a silly bitrate — common in drone and action-cam footage. `reencode_m
   most efficient of the three, so a bloated AV1 file is rare; AV1 → H.265 is usually
   an efficiency *downgrade*; and AV1 → AV1 in software is punishing with no
   VideoToolbox AV1 encoder on most machines. Add it deliberately or not at all.
-- **A per-run budget, spent worst-first.** `modern_max_files` (default 25) caps how
-  many run at once, and `pick_modern_shortlist()` ranks candidates by predicted bytes
+- **A budget the user sets, spent worst-first.** `modern_max_files` caps how many run
+  at once (0 = all), and `pick_modern_shortlist()` ranks candidates by predicted bytes
   **saved** — not by percentage, and not by file size — so a night's encoding goes on
   the fattest files.
+
+  The engine does not pick that number: **it is answered, not defaulted.** Both front
+  ends put the queue in front of the user first — `pipeline.modern_review()` reports
+  how many qualify, what they weigh, what comes back, and how much work it is — and
+  ask how many to do now. In the GUI that is a sheet after the scan; on the CLI it is
+  `--dry-run`, which lists the worst offenders and names `--modern-max`.
+
+  The time estimate is **measured, never assumed**. Work is counted in output
+  pixel-frames (`pipeline.encode_work`) rather than minutes of video, because a 4K
+  file is roughly four times the work of a 1080p one of the same length — and because
+  that makes a frame-size cap correctly predict a faster run. Every run reports the
+  rate it achieved, blended into a stored per-path (hardware/software) and per-codec
+  figure; a tier preview clip provides a rougher opening guess before the first run.
+  When neither exists the app says it cannot estimate rather than inventing a number.
 
 The budget is a **drip, not a ceiling**. A file that qualifies but falls outside it
 gets its own outcome, `DEFER_MODERN`, which the ledger deliberately does **not**

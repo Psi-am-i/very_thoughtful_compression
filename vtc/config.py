@@ -123,12 +123,15 @@ class RunConfig:
     # with no VideoToolbox AV1 encoder on most machines. Add it on purpose or not
     # at all.
     modern_codecs: tuple[str, ...] = ("hevc", "vp9")
-    # Per-run budget, because a strict gate can still match hundreds of files and
-    # each one is slow. The shortlist is taken WORST-FIRST by predicted saving, so
-    # a night's encoding goes on the fattest files rather than an arbitrary few;
-    # the ledger then means the next run picks up where this one stopped, turning
-    # an impossible single run into a sustainable drip. 0 = no limit.
-    modern_max_files: int = 25
+    # How many to actually do this run, worst-first by predicted saving. 0 = all.
+    #
+    # This is the USER'S answer to "142 files qualify and it will take 46 hours —
+    # how many now?", not a safety default the engine picks for them: both front
+    # ends put the count, the size and the time in front of them and ask. The
+    # engine simply does what it is told. Whatever is left over is deferred rather
+    # than dismissed (Outcome.DEFER_MODERN), so the next run continues down the
+    # same worst-first list.
+    modern_max_files: int = 0
     # The shortlist this run actually picked (resolved paths, like software_files).
     # Empty means "no shortlist in force" — the gate alone decides. pipeline.run()
     # fills it in when a budget applies.
