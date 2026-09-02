@@ -531,10 +531,26 @@ _BRIDGE_JS = r"""
   api.hw_capabilities().then(cap=>{
     window.__vtcHW = cap;
     // Toolbar readout: real ffmpeg version + real hardware encoder for this machine.
-    const enc = cap && (cap.h265 || cap.h264 || '');
+    // The readout states what the PROBE found, per codec — not a guess and not a
+    // single family name. AV1 belongs here now, and it is the case that breaks the
+    // old one-family assumption: a PC can perfectly well have Intel QuickSync for
+    // H.264/H.265 and an NVIDIA card doing AV1, so the families are collected per
+    // codec and only collapsed into one name when they genuinely all agree.
     const famMap = {videotoolbox:'VideoToolbox', nvenc:'NVENC', qsv:'QuickSync', amf:'AMF'};
-    let fam = ''; for(const k in famMap){ if(enc && enc.indexOf(k)>=0){ fam = famMap[k]; break; } }
-    const hwCodecs = [cap&&cap.h264&&'H.264', cap&&cap.h265&&'H.265'].filter(Boolean).join(' ');
+    const famOf = (e)=>{ for(const k in famMap){ if(e && e.indexOf(k)>=0) return famMap[k]; } return e ? 'hardware' : ''; };
+    const hwList = [['H.264', cap&&cap.h264], ['H.265', cap&&cap.h265], ['AV1', cap&&cap.av1]]
+                     .filter(x=>x[1]);
+    const fams = [...new Set(hwList.map(x=>famOf(x[1])))];
+    const hwCodecs = hwList.map(x=>x[0]).join(' ');
+    const fam = fams.length === 1 ? fams[0] : '';
+    // Mixed families: name each, because "VideoToolbox H.264 H.265 AV1" would be a
+    // lie about which chip is doing what.
+    const hwText = fam ? `<b>${fam}</b> ${hwCodecs}`
+                       : hwList.map(x=>`${x[0]} <b>${famOf(x[1])}</b>`).join(' · ');
+    // Software: ffmpeg always brings x264/x265, but SVT-AV1 is a build option and
+    // can genuinely be missing — the one software gap worth stating.
+    const softText = `<b>ffmpeg ${(cap&&cap.ffmpeg_version)||'?'}</b>`
+                   + (cap && cap.av1_software === false ? ' <span class="cap-sep">· no AV1</span>' : '');
     // The version is written into the HTML for the standalone mock; in the app it
     // comes from the package, so the two can never disagree.
     if(cap && cap.file_manager) window.__vtcFileMgr = cap.file_manager;   // "Finder"/"Explorer"/"Files"
@@ -544,9 +560,10 @@ _BRIDGE_JS = r"""
       if(av) av.textContent = av.textContent.replace(/Version [\d.]+/, 'Version '+cap.app_version);
     }
     const rv = document.getElementById('rig-v');
-    if(rv) rv.innerHTML = (cap && cap.available)
-      ? `Soft <b>ffmpeg ${cap.ffmpeg_version||'?'}</b> · Hard <b>${fam||'hardware'}</b> ${hwCodecs}`
-      : `Soft <b>ffmpeg ${(cap&&cap.ffmpeg_version)||'?'}</b> · no hardware encoder`;
+    // `available` covers H.264/H.265 only; a machine with ONLY hardware AV1 still
+    // has hardware worth naming, so the readout keys off what was actually found.
+    if(rv) rv.innerHTML = `Soft ${softText} · `
+      + (hwList.length ? `Hard ${hwText}` : `no hardware encoder`);
     // Where HEVC won't play in the webview (Windows), default previews to H.264.
     if(cap && cap.preview_codec === 'h264' && typeof pvCodec!=='undefined'){
       try { pvCodec='h264'; document.querySelectorAll('#pv-codec button').forEach(b=>b.classList.toggle('on', b.dataset.c==='h264')); } catch(e){}

@@ -3530,8 +3530,38 @@ const hwName = e => String(e||'').replace(/_/g,' ');
 // recent-PC-GPU only, every Mac encodes it in software, and a build with neither
 // cannot make an AV1 file at all — which is a genuine "not available here",
 // stated the way the encoder question states missing hardware.
+// SPEED, per codec, on THIS machine. Every codec that has both a hardware and a
+// software path moves when the machine does — not just AV1 — and by how much it
+// really moves, which differs enormously between them. MEASURED on an M4 with
+// the app's own encoder arguments, 20s of 1080p30, as × realtime:
+//
+//        hardware   software
+//   H.264   7.27       6.32     libx264 is nearly as quick as the chip
+//   H.265   7.09       2.86     the big one: software costs you 2.5×
+//   AV1     (none)     3.06     SVT-AV1 preset 6 — actually a shade FASTER
+//                               than libx265, which is not the folklore
+//
+// The scale is × realtime, rounded, capped at 10 — so the numbers stay honest
+// against each other rather than being hand-balanced. Hardware AV1 is the one
+// figure not measured here (no such card on this machine); it is set to match
+// the other hardware paths, which is what NVENC/QSV AV1 is reported to do.
+const CODEC_SPEED = [ {hw:7, sw:6},      // 0 H.264
+                      {hw:7, sw:3},      // 1 H.265
+                      {hw:7, sw:3} ];    // 2 AV1 (hw estimated, see above)
+
+// Which path a codec will actually take here — hardware if the machine has it
+// AND the user hasn't insisted on software.
+function codecSpeed(i){
+  const hw = hwFor(i);
+  const forced = (answers.encoder === 1);        // 1 = Software, chosen deliberately
+  return (hw.enc && !forced) ? CODEC_SPEED[i].hw : CODEC_SPEED[i].sw;
+}
+
 function syncCodecQuestion(){
   const q = M.find(x=>x.id==='codec'); if(!q) return;
+  // Every codec's Speed meter, not only AV1's: H.265 halves without hardware and
+  // H.264 barely moves, and a static number would misstate both.
+  q.opts.forEach((opt, i)=>{ if(CODEC_SPEED[i]) opt.m[3] = codecSpeed(i); });
   const o = q.opts[2], hw = hwFor(2);
   if(!hw.enc && !hw.soft){
     o.disabled = true;
@@ -3540,12 +3570,12 @@ function syncCodecQuestion(){
   } else if(hw.enc){
     o.disabled = false;
     o.tag = 'Most efficient · hardware AV1 found';
-    o.m[3] = 9;                                          // on the chip, not in software
+    // speed already set from CODEC_SPEED above
     o.t = AV1_GAIN+' '+AV1_PLAY+' And this machine has a hardware AV1 encoder ('+hwName(hw.enc)+'), so it encodes on the chip — fast, and unusual.';
   } else {
     o.disabled = false;
     o.tag = 'Most efficient · least compatible';
-    o.m[3] = 3;                                          // software only: the slow path
+    // speed already set from CODEC_SPEED above
     o.t = AV1_GAIN+' '+AV1_PLAY+' '+AV1_SOFT;
   }
   // A codec that has just been found impossible cannot stay the answer — the
@@ -3565,6 +3595,12 @@ function syncEncoderQuestion(){
   const name = CODEC_SHORT[ci] || 'this codec';
   const hw = hwFor(ci), HW = q.opts[0], SW = q.opts[1];
   if(HW._t===undefined){ HW._t=HW.t; HW._name=HW.name; SW._t=SW.t; SW._tag=SW.tag; SW._name=SW.name; }
+  // This question IS the hardware-vs-software comparison, so its Speed meters
+  // have to be the ones for the codec in hand. A flat 10-vs-3 was badly wrong for
+  // H.264, where libx264 nearly keeps up with the chip (6.32× vs 7.27× measured)
+  // — it advertised a penalty that isn't there. For H.265 the gap really is that
+  // wide (2.86× vs 7.09×), and only the real numbers tell those two apart.
+  if(CODEC_SPEED[ci]){ HW.m[3] = CODEC_SPEED[ci].hw; SW.m[3] = CODEC_SPEED[ci].sw; }
   if(hw.enc){
     HW.disabled = false;
     HW.name = 'Hardware ('+hwName(hw.enc)+')';
