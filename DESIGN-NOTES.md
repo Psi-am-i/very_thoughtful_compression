@@ -606,3 +606,26 @@ adds no product behaviour and touches no shipped path.
 ### Tests
 `python -m pytest -q` → **132 passed.** jsdom `tests/ui/drive.js` → **51 checks, 0
 fails.** No test text changed.
+
+### Re-applied after data-loss (2026-09-02)
+Round-3 was lost in the data-loss incident (recovered only to round-2) and has now
+been **re-applied faithfully** onto the current `vtc/vtc_app_v3.html`, matching this
+spec and the reference PNGs. All four changes are back:
+1. IGNORE step is a legible readout — exact intro copy, five labelled rows
+   (Smaller than · Larger than · Filename contains · Extensions · Already processed)
+   read live from `ADV.ign*`/`ADV.ledger` with bright `--ink` weight-600 values, the
+   one-line "nothing set" case, and a single **"Change ignore settings"** jump; the
+   old faint `--ink-3` readout, the mono "These will be skipped" key, the meter row
+   and the hint are gone (new `.ig-*` CSS; `render()` readout branch; `readoutWell()`).
+2. `commitLabel(q,armed)` drives every step's button: Confirm / Update (only when the
+   armed value truly differs) / Keep / Continue (readout).
+3. "Advanced" → "Settings" in all visible copy (gear title/aria-label, modal title,
+   every "Settings → X" pointer); ids (`#adv-*`, `data-sec`) unchanged.
+4. Settings group "Library" → **Processing** with sections **Ignore rules** +
+   **Parallel jobs** (rail labels and `<h3>`s; `data-sec` ids `ignore`/`run` stable).
+**Verification:** `python -m pytest -q` → **132 passed**; jsdom `tests/ui/drive.js` →
+51 checks, 0 fails. Rendered in headless Chrome (both themes) over a throwaway local
+HTTP server via an inert `#__shot=…` harness; fresh PNGs in `design-review/`:
+`ignore-{dark,light}-{rules,none}.png`, `settings-processing-{dark,light}.png`.
+All edits were made with surgical verified string replacements — the HTML was never
+rewritten wholesale (no Write on the shipped file).

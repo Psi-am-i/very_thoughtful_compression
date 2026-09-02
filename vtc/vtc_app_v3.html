@@ -362,6 +362,7 @@ body{
 .q-sub{margin-top:9px;font-size:17px;color:var(--ink-2);line-height:1.5;max-width:60ch}
 
 .keys{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 14px;flex:0 0 auto}
+.keys[hidden]{display:none}
 .key{
   font-family:'IBM Plex Mono',monospace;font-size:14.5px;font-weight:500;letter-spacing:.05em;
   padding:9px 15px;border-radius:var(--r);border:1px solid var(--rule);color:var(--ink);cursor:pointer;
@@ -403,6 +404,7 @@ body{
 
 /* the meters sit ON the floor of the stage: the question and its options are the
    top of the column, and everything between them is deliberate air */
+.meters[hidden]{display:none}
 .meters{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:auto;
   padding-top:14px;flex:0 0 auto}
 .meter .ml{font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.14em;
@@ -442,6 +444,19 @@ body{
 .de-txt{flex:1;min-width:120px}
 .de-num:focus,.de-txt:focus{outline:none;border-color:var(--accent)}
 .de-unit{font-size:11px;color:var(--ink-3)}
+/* ── IGNORE readout ── the walkthrough's last step is a pure readout of the live
+   ignore rules (from ADV.ign*), not a control. Off the ink tokens so both themes
+   stay legible: intro is clear secondary (--ink-2), rule VALUES are bright (--ink,
+   weight 600) — the legibility fix that replaced the old faint --ink-3 readout. */
+.ig-intro{font-size:12.5px;color:var(--ink-2);line-height:1.55}
+.ig-list{display:flex;flex-direction:column;gap:7px;margin-top:2px}
+.ig-row{display:flex;align-items:baseline;gap:12px}
+.ig-lab{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-2);min-width:150px;flex:0 0 auto}
+.ig-val{font-size:13px;color:var(--ink);font-weight:600;flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis}
+.ig-empty{font-size:13px;color:var(--ink);font-weight:600;margin-top:2px}
+.ig-act{margin-top:2px}
 .commit{display:flex;align-items:center;gap:13px;padding-top:16px;flex:0 0 auto}
 .btn-commit{font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600;letter-spacing:.17em;
   text-transform:uppercase;padding:11px 24px;background:var(--accent);color:#fff;border:0;
@@ -1630,7 +1645,7 @@ body{
           <svg class="th-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5 A8 8 0 1 1 9.5 4 A6.4 6.4 0 0 0 20 14.5 Z" fill="currentColor"></path></svg>
             <span class="th-lab mono" id="theme-lab">Dark</span>
           </button>
-          <button class="gear" id="gear" title="Advanced settings" aria-label="Advanced settings">
+          <button class="gear" id="gear" title="Settings" aria-label="Settings">
           <svg viewBox="0 0 1024 1024" aria-hidden="true">
             <path d="M 0 509.29 C 0 481.91 2.66 451.87 8.00 419.16 C 44.26 421.65 78.66 414.53 111.19 397.82 C 143.73 381.11 169.24 356.58 187.73 324.22 C 206.22 290.80 214.57 255.96 212.80 219.69 C 211.02 183.42 200.00 150.18 179.73 119.96 C 226.66 79.42 281.42 48.13 344 26.09 C 360.71 56.31 383.99 80.40 413.86 98.36 C 443.73 116.31 476.44 125.29 512 125.29 C 547.55 125.29 580.17 116.31 609.86 98.36 C 639.55 80.40 662.75 56.31 679.46 26.09 C 741.33 48.13 796.08 79.42 843.73 119.96 C 828.08 148.76 820.26 179.78 820.26 213.02 C 820.26 246.27 828.79 277.65 845.86 307.16 C 863.28 337.38 886.93 360.85 916.79 377.56 C 946.66 394.27 978.48 402.62 1012.26 402.62 C 1020.08 438.53 1024 474.09 1024 509.29 C 1024 532.76 1021.51 559.96 1016.53 590.89 C 983.82 591.60 953.15 600.40 924.53 617.29 C 895.91 634.18 873.06 657.38 856 686.89 C 837.86 718.89 829.24 752.40 830.13 787.42 C 831.02 822.45 840.71 854.71 859.20 884.22 C 811.19 928.31 758.22 962.09 700.26 985.56 C 683.55 954.98 660.17 930.62 630.13 912.49 C 600.08 894.36 567.28 885.29 531.73 885.29 C 493.68 885.29 458.93 895.51 427.46 915.96 C 395.99 936.40 372.62 963.51 357.33 997.29 C 297.24 978.09 241.60 948.05 190.39 907.16 C 210.66 877.29 221.60 844.31 223.19 808.22 C 224.80 772.13 216.17 737.38 197.33 703.96 C 178.13 670.18 151.37 644.85 117.06 627.96 C 82.75 611.07 46.93 604.76 9.60 609.02 C 3.19 579.16 0 545.91 0 509.29 Z M 376 373.82 C 338.66 411.16 320 456.31 320 509.29 C 320 562.27 338.75 607.51 376.26 645.02 C 413.77 682.53 459.02 701.29 512 701.29 C 564.97 701.29 610.22 682.53 647.73 645.02 C 685.24 607.51 704 562.27 704 509.29 C 704 456.31 685.24 411.07 647.73 373.56 C 610.22 336.05 564.97 317.29 512 317.29 C 459.02 317.29 413.68 336.13 376 373.82 Z"></path>
           </svg>
@@ -1949,7 +1964,7 @@ body{
             <p>Before encoding, the expected output is modelled: if it won't clear your saving threshold, the encode never starts. Afterwards the source is replaced only if the new file exists, is non-empty, ffprobes as a valid video, and actually beat the threshold. If not, the original stays and we report what happened in the run report.</p>
             <p><b>Nothing is ever silently lost</b> — dropped subtitle tracks archive the original even on delete, and every outcome is named in the report.</p>
             <p><b>A stopped run picks up where it left off.</b> Every file that reaches a decision is recorded in a resume ledger at the scan root, tagged with a signature of the settings that produced it. Re-run a processed file and it will be skipped — the absolute target has been reached and the ledger check both prevent that happening.</p>
-            <p><b>Quality is part objective, part perceptual.</b> There is measurably more information in a higher-quality file — but exactly what you call that, or how much difference still counts as "the same", is a judgement. Codecs are good at some material and less good at others: grainy sources need more space to encode all that detail, so a tier up can be worth it there. Software encoders (libx264/libx265) are more nuanced — better quality for the same bitrate — while hardware encoders (VideoToolbox) are much, much faster. How much speed is worth trading for how much quality is a call only you can make. We've set <b>Excellent</b> at roughly a streaming platform's 1080p release and banded <b>OK, Good, Stellar</b> and <b>Insane</b> around it the same way — but your eye might land differently, so every tier's density is yours to change in <b>Advanced settings → Quality tiers</b>.</p>
+            <p><b>Quality is part objective, part perceptual.</b> There is measurably more information in a higher-quality file — but exactly what you call that, or how much difference still counts as "the same", is a judgement. Codecs are good at some material and less good at others: grainy sources need more space to encode all that detail, so a tier up can be worth it there. Software encoders (libx264/libx265) are more nuanced — better quality for the same bitrate — while hardware encoders (VideoToolbox) are much, much faster. How much speed is worth trading for how much quality is a call only you can make. We've set <b>Excellent</b> at roughly a streaming platform's 1080p release and banded <b>OK, Good, Stellar</b> and <b>Insane</b> around it the same way — but your eye might land differently, so every tier's density is yours to change in <b>Settings → Quality tiers</b>.</p>
           </div>
           <div class="docs-col ref-col">
             <div class="ref-block">
@@ -1959,7 +1974,7 @@ body{
                 <tbody id="a-tiers-body"></tbody>
               </table>
               <div class="ref-n"><b>*&nbsp;Score</b> — the tier's H.264 bits-per-pixel-per-frame&nbsp;× 1000. Every other codec's target is derived from it by the relative compression strength between them. The <b>H.264</b> and <b>H.265</b> columns are Mbps at 1080p30; each file re-derives its own target from its real pixels and frame rate (4K ~4×, 60fps ~2×). Floor 1500 kbps; never above the source.</div>
-              <div class="ref-n" style="margin-top:8px">These are the shipped defaults — retune any tier in <b>Advanced → Quality tiers</b> and this table shows your values. A source already at or under a tier's density is already efficient and barely shrinks; the number to watch is your source's own score, shown under each preview.</div>
+              <div class="ref-n" style="margin-top:8px">These are the shipped defaults — retune any tier in <b>Settings → Quality tiers</b> and this table shows your values. A source already at or under a tier's density is already efficient and barely shrinks; the number to watch is your source's own score, shown under each preview.</div>
             </div>
           </div>
         </div>
@@ -2219,7 +2234,7 @@ body{
     </div>
     <div class="sheet-b">
       <p class="compat-lead mono" id="compat-n">Some files in this library aren't MP4.</p>
-      <p class="sheet-w" style="border-left-color:var(--rule)">We recommend the MP4 container — it's compatible with almost any device. Containers like MKV can hold more audio and subtitle tracks than MP4, but most people don't need that and they're not as widely compatible. You can change this any time in Advanced settings.</p>
+      <p class="sheet-w" style="border-left-color:var(--rule)">We recommend the MP4 container — it's compatible with almost any device. Containers like MKV can hold more audio and subtitle tracks than MP4, but most people don't need that and they're not as widely compatible. You can change this any time in Settings.</p>
       <div class="compat-opts" id="compat-opts">
         <button class="compat-opt" data-v="convert">
           <b>Convert all to MP4 <span style="color:var(--ink-3);font-weight:400">· remux + convert legacy</span></b>
@@ -2247,7 +2262,7 @@ body{
   <div class="sheet-c wide">
     <div class="sheet-h">
       <div class="sheet-e mono">For when the defaults aren't enough</div>
-      <h2 class="sheet-t">Advanced settings</h2>
+      <h2 class="sheet-t">Settings</h2>
     </div>
     <div class="sheet-b adv-2pane">
       <nav class="adv-rail" id="adv-rail">
@@ -2259,9 +2274,9 @@ body{
         <div class="adv-rail-grp">Quality</div>
         <button class="adv-nav" data-sec="tiers">Quality tiers</button>
         <button class="adv-nav" data-sec="tuning">Video tuning</button>
-        <div class="adv-rail-grp">Library</div>
-        <button class="adv-nav on" data-sec="ignore">Ignore files</button>
-        <button class="adv-nav" data-sec="run">Running</button>
+        <div class="adv-rail-grp">Processing</div>
+        <button class="adv-nav on" data-sec="ignore">Ignore rules</button>
+        <button class="adv-nav" data-sec="run">Parallel jobs</button>
         <div class="adv-rail-grp">App</div>
         <button class="adv-nav" data-sec="appearance">Appearance</button>
       </nav>
@@ -2459,7 +2474,7 @@ body{
       <!-- Ignore rules: files the scan pretends it never saw. -->
       <section class="adv-sec on" data-sec="ignore">
         <div class="adv-sec-h">
-          <h3>Ignore files</h3>
+          <h3>Ignore rules</h3>
           <button class="adv-mini" id="adv-ign-reset" disabled="">Clear rules</button>
         </div>
         <div class="adv-grid">
@@ -2532,7 +2547,7 @@ body{
       </section>
 
       <section class="adv-sec" data-sec="run">
-        <h3>Running</h3>
+        <h3>Parallel jobs</h3>
         <div class="adv-grid">
           <div class="adv-row">
             <div class="adv-lab"><b>Parallel jobs</b><span>How many files are encoded at once. Hardware encoders rarely benefit past 2.</span></div>
@@ -3175,7 +3190,7 @@ const M = [
     sub:'The last decision, and the only irreversible one. Verification runs first regardless — a source is never replaced unless the new file exists, is the right play length, probes successfully as valid and is meaningfully smaller.',
     opts:[
       {k:'Replace · archive original', recap:'Replace in place · original archived', tag:'Original kept, moved aside · default', name:'Replace in place, archive original',
-       t:'The new file takes the original\'s exact name and location, so Plex and Jellyfin libraries don\'t notice a thing. The original is not lost — it is moved to an archive folder (an “originals” folder at the source root by default; set another location under Advanced → Destination). You decide if and when to clear the archive.', m:[6,10,10,9], hot:0},
+       t:'The new file takes the original\'s exact name and location, so Plex and Jellyfin libraries don\'t notice a thing. The original is not lost — it is moved to an archive folder (an “originals” folder at the source root by default; set another location under Settings → Destination). You decide if and when to clear the archive.', m:[6,10,10,9], hot:0},
       {k:'Replace · delete original', recap:'Replace in place · original deleted', tag:'Most space · no undo', name:'Replace in place, delete original',
        t:'The new file takes the original\'s name and location; the original is deleted once the new file verifies. Maximum space saved immediately, and the only option with no undo. The run report still names exactly what happened to every file.', m:[10,10,10,9], hot:1},
       {k:'New folder · keep original', recap:'New files to a folder · originals untouched', tag:'Originals untouched', name:'New files in a new folder',
@@ -3192,11 +3207,11 @@ const M = [
   // Start. The estimate still reflects the ignored files (drawEstimate reads ADV.ign*).
   // The meter row is a poor fit for a readout, so it is neutral/flat.
   { id:'ignore', short:'IGNORE', readout:true,
-    title:'Here\'s what will be skipped',
-    sub:'Before anything runs, this is the set of files the scan will pretend it never saw — filtered out up front, not measured, not encoded, not counted. These rules are set under Advanced → Ignore files and applied to every run; this step just shows you what they currently are so nothing skips silently. Change them under Advanced → Ignore files and this readout follows.',
+    title:'Files being ignored',
+    sub:'Before anything runs, this is the set of files the scan will pretend it never saw — filtered out up front, not measured, not encoded, not counted. This is a readout only: the rules are set in Settings → Ignore files and this step just shows you what they currently are so nothing skips silently.',
     opts:[
-      {k:'These will be skipped', recap:'Ignore rules acknowledged', tag:'Read live from Advanced → Ignore files', name:'What the scan will skip',
-       t:'This is a readout, not a control — it shows the ignore rules exactly as they are configured under Advanced → Ignore files, so the walkthrough never hides what it is quietly leaving out. The estimate on the right already reflects these skips. Use “Change in settings” to edit the rules.', m:[6,10,9,6], hot:0},
+      {k:'These will be skipped', recap:'Ignore rules acknowledged', tag:'Read live from Settings → Ignore files', name:'What the scan will skip',
+       t:'This is a readout, not a control — it shows the ignore rules exactly as they are configured in Settings → Ignore files, so the walkthrough never hides what it is quietly leaving out. The estimate on the right already reflects these skips. Use “Change ignore settings” to edit the rules.', m:[6,10,9,6], hot:0},
     ]},
 ];
 const METERS = ['Space','Compat','Stream','Speed'];
@@ -3543,10 +3558,16 @@ function drawComb(justSeated){
     const a=answers[q.id], done=a!==undefined;
     const reachable = done || i===step || i===next;
     const cls=['tooth', done?'done':'', i===step?'now':'', justSeated===q.id?'arrived':''];
+    // The IGNORE tooth is a readout — its "value" is a live count of active rules,
+    // not one of the (non-existent) option keys.
+    const val = q.readout
+      ? (anyIgnoreRuleSet() ? `${ignoreActiveCount()} active` : 'None')
+      : (done ? q.opts[a].k : '');
+    const showVal = q.readout ? (done || i===step) : done;
     return `<button class="${cls.filter(Boolean).join(' ')}" data-i="${i}" ${reachable?'':'disabled'}${done?` title="Click to revisit ${q.short.toLowerCase()}"`:''}>
       <span class="n">${String(i+1).padStart(2,'0')}</span>
       <span class="k">${q.short}</span>
-      ${done?`<span class="v">${q.opts[a].k}</span>`:''}</button>`;
+      ${showVal?`<span class="v">${val}</span>`:''}</button>`;
   }).join('');
   wrap.querySelectorAll('.tooth').forEach(t=>{
     t.onclick=()=>{ step=+t.dataset.i; armed=answers[M[step].id]??null; render(); };
@@ -3554,13 +3575,18 @@ function drawComb(justSeated){
 }
 function render(){
   const q=M[step];
-  // A readout step (IGNORE) has a single acknowledgement option and nothing to
-  // choose between — auto-arm it so the live readout and Confirm show immediately.
-  if(q.readout && armed===null) armed=0;
+  // A readout step (IGNORE) has nothing to choose between — auto-arm it so the live
+  // readout and its Continue button show immediately, and suppress the option key
+  // buttons, the meter row and the hint (there is no choice to arm, meter or hint at),
+  // painting a neutral note in the well instead.
+  const readout = !!q.readout;
+  if(readout && armed===null) armed=0;
   $('#title').textContent=q.title;
   $('#sub').textContent=q.sub;
-  $('#keys').innerHTML=q.opts.map((o,i)=>`<button class="key ${armed===i?'armed':''} ${o.disabled?'disabled':''}" data-i="${i}">${o.k}</button>`).join('');
-  $('#meters').innerHTML=METERS.map(m=>
+  const keysEl=$('#keys'), metersEl=$('#meters');
+  keysEl.hidden=readout; metersEl.hidden=readout;
+  keysEl.innerHTML = readout ? '' : q.opts.map((o,i)=>`<button class="key ${armed===i?'armed':''} ${o.disabled?'disabled':''}" data-i="${i}">${o.k}</button>`).join('');
+  metersEl.innerHTML = readout ? '' : METERS.map(m=>
     `<div class="meter"><div class="ml"><span>${m}</span><b data-m="${m}">–</b></div>
      <div class="track"><div class="fill" data-f="${m}"></div></div></div>`).join('');
   $('#keys').querySelectorAll('.key').forEach(k=>{
@@ -3578,9 +3604,10 @@ function render(){
     k.onclick=()=>{ armed=i; render(); show(i); };
   });
   $('#commit').disabled=armed===null;
-  $('#commit').textContent=answers[q.id]!==undefined?'Update':'Confirm';
-  $('#hint').textContent=armed===null?'Nothing armed':`Armed: ${q.opts[armed].k}`;
-  if(armed!==null) show(armed); else clearWell();
+  $('#commit').textContent=commitLabel(q, armed);
+  $('#hint').textContent = readout ? '' : (armed===null?'Nothing armed':`Armed: ${q.opts[armed].k}`);
+  if(readout) readoutWell();
+  else if(armed!==null) show(armed); else clearWell();
   renderDestExtra();
   renderResizeExtra();
   renderIgnoreExtra();
@@ -3626,7 +3653,7 @@ function renderDestExtra(){
     el.hidden=false;
     el.innerHTML = `<div class="de-hint">Replaced originals move to `
       + (custom ? `<b>${esc(ADV.archiveDir)}</b>` : `an <b>“originals”</b> folder at the source root`)
-      + `. Nothing is deleted — change the archive location under <b>Advanced → Destination</b>.</div>`;
+      + `. Nothing is deleted — change the archive location under <b>Settings → Destination</b>.</div>`;
   } else { el.hidden=true; el.innerHTML=''; }        // Replace · delete — no extras
 }
 // ── FRAME SIZE inline extra ──────────────────────────────────────────────────
@@ -3665,13 +3692,36 @@ function renderResizeExtra(){
 // more — a single "Change in settings" button jumps to Advanced → Ignore files,
 // the one source of truth. Renders as line items when rules exist, or a plain
 // "nothing is ignored" line when they don't.
-function ignoreRuleItems(){
-  const items=[];
-  if(ADV.ignUnderMb!=='' && ADV.ignUnderMb!=null) items.push(['Smaller than', `under ${ADV.ignUnderMb} MB`]);
-  if(ADV.ignOverMb!=='' && ADV.ignOverMb!=null)  items.push(['Larger than', `over ${ADV.ignOverMb} MB`]);
-  if((ADV.ignExts||[]).length)  items.push(['Extensions', (ADV.ignExts||[]).map(e=>'.'+e).join(', ')]);
-  if((ADV.ignNames||[]).length) items.push(['Name contains', (ADV.ignNames||[]).map(n=>'“'+n+'”').join(', ')]);
-  return items;
+// The five ignore rules as labelled rows, read LIVE from the shared ADV.ign* state
+// (the same state the Settings → Ignore files section edits). Every rule is always
+// listed — showing its value or a plain "—" when unset — so the readout reflects the
+// full rule set at a glance, never a subset. "Already processed" mirrors ADV.ledger.
+function ignoreRuleRows(){
+  const rows=[];
+  const under = (ADV.ignUnderMb!=='' && ADV.ignUnderMb!=null) ? `Under ${ADV.ignUnderMb} MB` : '—';
+  const over  = (ADV.ignOverMb!=='' && ADV.ignOverMb!=null)  ? `Over ${ADV.ignOverMb} MB` : '—';
+  const exts  = (ADV.ignExts||[]).length ? (ADV.ignExts||[]).map(e=>'.'+e).join(', ') : '—';
+  const names = (ADV.ignNames||[]).length ? (ADV.ignNames||[]).map(n=>'“'+n+'”').join(', ') : '—';
+  rows.push(['Smaller than', under]);
+  rows.push(['Larger than', over]);
+  rows.push(['Filename contains', names]);
+  rows.push(['Extensions', exts]);
+  rows.push(['Already processed', ADV.ledger ? 'Yes' : 'No']);
+  return rows;
+}
+function anyIgnoreRuleSet(){
+  return (ADV.ignUnderMb!=='' && ADV.ignUnderMb!=null)
+      || (ADV.ignOverMb!=='' && ADV.ignOverMb!=null)
+      || (ADV.ignExts||[]).length || (ADV.ignNames||[]).length || !!ADV.ledger;
+}
+function ignoreActiveCount(){
+  let n=0;
+  if(ADV.ignUnderMb!=='' && ADV.ignUnderMb!=null) n++;
+  if(ADV.ignOverMb!=='' && ADV.ignOverMb!=null) n++;
+  if((ADV.ignExts||[]).length) n++;
+  if((ADV.ignNames||[]).length) n++;
+  if(ADV.ledger) n++;
+  return n;
 }
 function renderIgnoreExtra(){
   const el=$('#ignore-extra'); if(!el) return;
@@ -3679,20 +3729,19 @@ function renderIgnoreExtra(){
   const choice = (armed!==null ? armed : (q ? answers[q.id] : undefined));
   if(!q || q.id!=='ignore' || choice===undefined){ el.hidden=true; el.innerHTML=''; return; }
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
-  const items=ignoreRuleItems();
   el.hidden=false;
+  const intro = `<div class="ig-intro">The following files will be ignored. These rules are set in "Settings → Ignore files" and are applied to every run. Changes must be made in Settings.</div>`;
   let body;
-  if(items.length){
-    body = `<div class="de-hint" style="margin-bottom:8px">Skipping — read live from your settings:</div>`
-      + items.map(([lab,val])=>`<div class="de-row"><span class="de-lab">${esc(lab)}</span>`
-          +`<span class="de-path">${esc(val)}</span></div>`).join('')
-      + `<div class="de-hint" style="opacity:.75;margin-top:2px">Everything else in the folder is considered. These skipped files are not measured, encoded or counted — the estimate on the right already leaves them out.</div>`;
+  if(anyIgnoreRuleSet()){
+    body = intro + `<div class="ig-list">`
+      + ignoreRuleRows().map(([lab,val])=>`<div class="ig-row"><span class="ig-lab">${esc(lab)}</span>`
+          +`<span class="ig-val">${esc(val)}</span></div>`).join('')
+      + `</div>`;
   } else {
-    body = `<div class="de-hint"><b>Nothing is being ignored</b> — every file in the folder is considered. The encode decision (already at tier, too small a saving, wrong codec) is still made per file, but nothing is filtered out up front.</div>`;
+    body = intro + `<div class="ig-empty">Nothing is being ignored — every file in the folder is considered.</div>`;
   }
   el.innerHTML = body
-    + `<div class="de-row" style="margin-top:2px"><span class="de-lab"></span>`
-    + `<button class="de-btn" id="ig-goto">Change in settings…</button></div>`;
+    + `<div class="ig-act"><button class="de-btn" id="ig-goto">Change ignore settings</button></div>`;
   const go=$('#ig-goto');
   if(go) go.onclick=()=>{ if(typeof openAdvSection==='function') openAdvSection('ignore'); };
 }
@@ -3746,6 +3795,28 @@ function clearWell(){
   $('#well').innerHTML=`<div class="well-empty mono">Hover a key to read what it does.</div>`;
   document.querySelectorAll('.fill').forEach(f=>f.style.width='0');
   document.querySelectorAll('[data-m]').forEach(b=>b.textContent='–');
+}
+// A readout step has no armed choice to explain, so the well carries a neutral note
+// rather than an option description — the panel itself (renderIgnoreExtra) is the
+// content, and the estimate on the right already reflects the ignored files.
+function readoutWell(){
+  $('#well').classList.remove('lit');
+  $('#well').innerHTML=`<div class="well-empty mono">Nothing to preview here — the space saved shown on the right already leaves out anything being ignored.</div>`;
+  document.querySelectorAll('.fill').forEach(f=>f.style.width='0');
+  document.querySelectorAll('[data-m]').forEach(b=>b.textContent='–');
+}
+// The Continue button's label states honestly what pressing it does:
+//   • fresh (never answered)                → "Confirm"
+//   • re-opened, armed value CHANGED         → "Update"
+//   • re-opened, armed value UNCHANGED       → "Keep"   (nothing to change)
+//   • readout step (nothing to arm)          → "Continue"
+// "Update" only ever shows when the armed index actually differs from the saved one,
+// so the button never claims a change that isn't happening.
+function commitLabel(q, armedIdx){
+  if(q && q.readout) return 'Continue';
+  const saved = q ? answers[q.id] : undefined;
+  if(saved===undefined) return 'Confirm';
+  return (armedIdx===saved) ? 'Keep' : 'Update';
 }
 $('#commit').onclick=()=>{
   const q=M[step], oi=armed;
@@ -4769,9 +4840,9 @@ function confirmWork(){
           $('#c-proj').textContent = 'no change'; $('#c-saved').textContent = 'nothing';
           el.innerHTML = ig
             ? `<b>No files to run on — all ${ig.toLocaleString()} were ignored by your rules.</b>`
-              + `<span>Your Advanced ignore rules removed every file in this folder — most likely the `
+              + `<span>Your ignore rules removed every file in this folder — most likely the `
               + `<b>“ignore files under a size”</b> rule (these files are smaller than it). `
-              + `Open <b>Advanced → Ignore rules</b> to change it, then this folder will show its files.</span>`
+              + `Open <b>Settings → Ignore rules</b> to change it, then this folder will show its files.</span>`
             : `<b>No video files here.</b>`
               + `<span>Nothing in this folder is a video type VTC can process.</span>`;
           return;
@@ -6615,6 +6686,42 @@ function setMode(mode){
 }
 $('#mode-seg').querySelectorAll('.mode-b').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
 window.setMode=setMode; window.U=U; window.W=W;
+
+// ── design-review shot harness (inert) ───────────────────────────────────────
+// With no `#__shot=…` in the URL this does nothing and ships as-is. With a shot
+// hash it drives EXISTING functions (pickFolder, render, openAdvSection) into a
+// reviewed state so headless Chrome can screenshot it. It adds no product
+// behaviour and touches no shipped path — the guard below is the whole of it.
+(function reviewShot(){
+  const h = location.hash || '';
+  if(h.indexOf('__shot=')<0) return;
+  const p = new URLSearchParams(h.replace(/^#/,''));
+  const shot = p.get('__shot');
+  const theme = p.get('theme');
+  const root = document.documentElement;
+  if(theme==='dark'){ root.setAttribute('data-theme','dark'); root.setAttribute('data-theme-pref','dark'); }
+  else if(theme==='light'){ root.removeAttribute('data-theme'); root.setAttribute('data-theme-pref','light'); }
+  const go=()=>{
+    try{
+      const sp=$('#splash'); if(sp) sp.hidden=true;
+      if(typeof pickFolder==='function') pickFolder(-1);   // demo folder + scan
+      if(shot==='ignore'){
+        const rules = p.get('rules')==='1';
+        if(rules){ ADV.ignUnderMb=250; ADV.ignOverMb=8000; ADV.ignExts=['avi','wmv']; ADV.ignNames=['sample','trailer']; ADV.ledger=true; }
+        else { ADV.ignUnderMb=''; ADV.ignOverMb=''; ADV.ignExts=[]; ADV.ignNames=[]; ADV.ledger=false; }
+        const idx = M.findIndex(x=>x.id==='ignore');
+        M.forEach(x=>{ if(x.id!=='ignore') answers[x.id]=answers[x.id]??0; });
+        step = idx; armed = null;
+        if(typeof render==='function') render();
+        if(typeof drawComb==='function') drawComb();
+      } else if(shot==='settings'){
+        if(typeof openAdvSection==='function') openAdvSection('ignore');
+      }
+    }catch(e){ /* review-only; never affects the app */ }
+  };
+  if(document.readyState==='complete') setTimeout(go, 60);
+  else window.addEventListener('load', ()=>setTimeout(go, 60));
+})();
 </script>
 
 
