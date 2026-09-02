@@ -963,7 +963,16 @@ _SAMPLE_RATES_KEY = "sampleRates"   # measured by a 5s preview clip — rough, l
 
 
 def _rate_key(config: RunConfig, hw: bool) -> str:
-    return f"{'hw' if hw else 'sw'}|{config.out_codec.value}"
+    """Rates are per hardware/software path, per codec, AND per parallelism.
+
+    The first two differ by an order of magnitude. The third matters because the
+    rate is measured PER STREAM (from each file's own wall time): four encodes at
+    once contend for the same silicon, so each one is slower than it would be
+    alone. A rate learned at jobs=1 would make a jobs=4 run look four times
+    faster than it is. Keying on it means a measurement is only ever reused for
+    the concurrency it was taken at.
+    """
+    return f"{'hw' if hw else 'sw'}|{config.out_codec.value}|j{max(1, config.jobs)}"
 
 
 def _observed_rate(results: list) -> float | None:
@@ -1460,13 +1469,17 @@ class Api:
             return {"measured": False, "files": 0}
         review = pipeline.modern_review(config, self._probes)
         rate, rate_from = self._encode_rate(config)
-        review["hours"] = (review["work"] / rate / 3600.0) if rate and review["work"] else None
+        # `rate` is per stream, so N files running `jobs` at a time finish in
+        # roughly a jobs-th of the summed per-file time.
+        jobs = max(1, config.jobs)
+        review["hours"] = ((review["work"] / rate / 3600.0 / jobs)
+                           if rate and review["work"] else None)
         review["rate_from"] = rate_from
         review["measured"] = True
         # Hours for each cut-off down the ranked list, so "the top 25" can show its
         # own cost without a second call. Same index basis as `top`.
         if rate:
-            review["hours_cum"] = [w / rate / 3600.0 for w in review["work_cum"]]
+            review["hours_cum"] = [w / rate / 3600.0 / jobs for w in review["work_cum"]]
         review.pop("work_cum", None)
         review.pop("work", None)
         return review

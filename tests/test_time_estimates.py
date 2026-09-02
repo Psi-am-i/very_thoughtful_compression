@@ -119,3 +119,45 @@ def test_the_review_and_the_clock_agree():
         review = pipeline.modern_review(cfg, infos)
         per_file = sum(pipeline.encode_seconds(cfg, i, rate) for i, _s in infos)
         assert abs(review["work"] / rate - per_file) < 1e-6
+
+
+def test_every_file_result_is_actually_timed():
+    """`elapsed_s` must be populated, because it is the ONLY measurement of how
+    fast this machine encodes and every future estimate is built on it.
+
+    It was declared on FileResult and never assigned by anything — always 0.0 —
+    so _observed_rate could never return a rate, the app fell back to constants
+    measured on one developer's Mac forever, and nothing anywhere said so. A dead
+    measurement is worse than no measurement: it looks like it is working.
+    """
+    import shutil
+    import subprocess
+    if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
+        print("  skip test_every_file_result_is_actually_timed (no ffmpeg)")
+        return
+    from vtc import webapp
+    from vtc.config import Encoder, SourceAction
+    with tempfile.TemporaryDirectory() as d:
+        src = Path(d)
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+                        "-i", "testsrc2=size=1280x720:rate=30", "-t", "2",
+                        "-c:v", "libx264", "-b:v", "12000k", "-pix_fmt", "yuv420p",
+                        str(src / "clip.mp4")], check=True, stdin=subprocess.DEVNULL)
+        cfg = RunConfig(src=src, encoder=Encoder.HARDWARE, ledger_enabled=False,
+                        source_action=SourceAction.KEEP)
+        results = pipeline.run(cfg)
+        assert results and results[0].elapsed_s > 0, "process_file is not being timed"
+        # …and that timing must turn into a usable rate, which is the whole point
+        assert webapp._observed_rate(results) is not None, "no rate from a real encode"
+
+
+def test_the_rate_is_kept_per_concurrency():
+    """A rate is measured PER STREAM, so four encodes at once are each slower than
+    one alone. Reusing a jobs=1 measurement for a jobs=4 run would claim a
+    fourfold speed-up that contention never delivers."""
+    from vtc import webapp
+    with tempfile.TemporaryDirectory() as d:
+        one = RunConfig(src=Path(d), jobs=1)
+        four = RunConfig(src=Path(d), jobs=4)
+        assert webapp._rate_key(one, hw=True) != webapp._rate_key(four, hw=True)
+        assert webapp._rate_key(one, hw=True) != webapp._rate_key(one, hw=False)

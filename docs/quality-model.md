@@ -224,9 +224,18 @@ pixels-per-second machine, so:
 **The rate is measured on this machine.** Every run records what it actually achieved
 (`_observed_rate`, excluding remuxes — a stream copy is near-instant and would inflate
 the figure into a promise no encode could keep), blended a third at a time into a
-stored value so one odd run cannot lurch the clock. Rates are kept per hardware/software
-path and per output codec, which differ by an order of magnitude; averaging them would
-make every estimate wrong.
+stored value so one odd run cannot lurch the clock. Rates are kept per
+hardware/software path, per output codec, and per `jobs` setting: the first two differ
+by an order of magnitude, and the third matters because the rate is measured *per
+stream* — four encodes at once contend for the same silicon, so a rate learned at
+`jobs=1` would claim a fourfold speed-up that contention never delivers.
+
+Measured accuracy, hardware VideoToolbox, synthetic content:
+
+| Measured on | Predicting | Error |
+|---|---|---|
+| 1080p30 | 2160p30 (4× the pixels) | +8% |
+| 1080p30 | 1080p60 (2× the frames) | +1% (the old fps-blind model: −49%) |
 
 Before the first run there is nothing to measure, so two fallbacks stand in, in order:
 a tier preview clip (a real encode at the real settings, but five seconds of it, mostly

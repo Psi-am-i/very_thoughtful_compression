@@ -851,7 +851,15 @@ def run(config: RunConfig, progress: ProgressCB | None = None,
         # A file the user picked out goes to software even on a hardware run:
         # passing no hardware encoder IS the software path (see build_video_args).
         hw = None if config.forces_software(f) else hw_encoder
-        return process_file(config, ledger, hw, f, progress, notify=notify, probed=probed)
+        # Time every file. Beyond the report, this is the ONLY measurement of how
+        # fast this machine really encodes, and every future "about N hours" is
+        # built on it — so it is taken here, at the one point every return path
+        # from process_file passes through, rather than at any of the dozen inside.
+        t0 = time.monotonic()
+        r = process_file(config, ledger, hw, f, progress, notify=notify, probed=probed)
+        if r is not None:
+            r.elapsed_s = time.monotonic() - t0
+        return r
 
     with ThreadPoolExecutor(max_workers=max(1, config.jobs)) as pool:
         futures = [pool.submit(work, f) for f in files]
