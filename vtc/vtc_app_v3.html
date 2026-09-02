@@ -4241,7 +4241,7 @@ const ADV_DEFAULTS = { format:'convert', subKinds:['normal','forced','hoh'], sub
   // eligible source list (AV1 deliberately absent — see Settings for why);
   // modernOver is how many times over its tier target a file must be; modernMax
   // caps how many run at once, worst-first, and 0 means "all of them".
-  reencodeModern:false, modernCodecs:['hevc','vp9'], modernOver:2.0, modernMax:25 };
+  reencodeModern:false, modernCodecs:['hevc','vp9'], modernOver:2.0, modernMax:0 };
 // A plain Object.assign would share the one bpp object between ADV and the
 // defaults, so editing a tier would quietly rewrite what "Reset" restores.
 const advDefaults = ()=> Object.assign({}, ADV_DEFAULTS, {
@@ -5122,13 +5122,13 @@ function openModern(force){
     if(!r) return;
     if(!force && !(r.files>0)) return;
     MR.data=r;
-    // Start from the standing per-run budget, so the sheet opens on the setting
-    // the engine would otherwise use — and on "All" when that covers everything.
-    const budget = (typeof ADV.modernMax==='number') ? ADV.modernMax : 0;
-    MR.sel = (budget>0 && budget < r.files) ? budget : 0;
-    // Open far enough to show the cut line when the pick is small; a bigger pick
-    // keeps the short list and reveals the rest on "Show more".
-    MR.shown = (MR.sel>0 && MR.sel+2<=12) ? MR.sel+2 : 8;
+    // Open on ALL of them, always — never on a number we chose for them. A
+    // pre-selected budget reads as a recommendation, and the whole point of this
+    // sheet is that the size of the job is the user's call: they are shown what
+    // the work is and reduce it from there. (Simon's call, and it is also why the
+    // engine's own default is 0/all: nothing picks a number but a person.)
+    MR.sel = 0;
+    MR.shown = 8;
     mrAll();
     openSheet('#modern-sheet');
     mrPoll();

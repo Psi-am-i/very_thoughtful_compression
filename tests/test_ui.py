@@ -105,6 +105,23 @@ def test_frame_size_answer_reaches_the_settings():
         f"  {x['n']}: got {x.get('g')!r}, want {x['e']!r}" for x in failed)
 
 
+@pytest.mark.skipif(not _have_jsdom(), reason="node + jsdom not installed (see tests/ui/README)")
+def test_modern_review_opens_on_all_not_a_chosen_number():
+    """The review sheet must never open pre-set to a budget.
+
+    How many hours to spend is the user's decision; the sheet exists to show them
+    the work and let them reduce it. Opening on "top 25" would read as a
+    recommendation — and a budget stored from a previous answer must not creep
+    back in as one either.
+    """
+    r = subprocess.run(["node", "modernsel.js"], cwd=_UI, capture_output=True, text=True,
+                       stdin=subprocess.DEVNULL, timeout=120)
+    assert r.stdout.strip(), f"harness produced nothing:\n{r.stderr[:2000]}"
+    failed = [x for x in json.loads(r.stdout) if not x["ok"]]
+    assert not failed, "review sheet pre-selects a budget:\n" + "\n".join(
+        f"  {x['n']}: got {x.get('g')!r}, want {x['e']!r}" for x in failed)
+
+
 def _run_all():
     # Ask the question directly. When pytest IS installed the decorator is
     # pytest's own and leaves no attribute behind, so relying on the marker ran
