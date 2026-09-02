@@ -17,6 +17,7 @@ The engine (pipeline/model/config) is untouched and UI-agnostic.
 
 from __future__ import annotations
 
+import atexit
 import json
 import re
 import threading
@@ -29,6 +30,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 from . import __version__, encode, netmove, pipeline
 from .config import AudioPolicy, Container, Encoder, OutputMode, RunConfig, SourceAction
@@ -117,11 +119,25 @@ _FAULT_FILE = None
 
 
 def _log_environment() -> None:
-    """Record what the app resolved to and whether hardware encoding is real."""
+    """Record what the app resolved to. Cheap — no subprocesses, so it cannot
+    delay the window (see _log_tools for the part that spawns ffmpeg)."""
     log.info("=== Very Thoughtful Compression starting ===")
     log.info("python %s on %s (%s)", platform.python_version(),
              platform.platform(), platform.machine())
     log.info("frozen=%s  resource_base=%s", bool(getattr(sys, "_MEIPASS", None)), _resource_base())
+
+
+def _log_tools() -> None:
+    """Record the ffmpeg/ffprobe versions and whether hardware encoding is real.
+
+    Five ffmpeg/ffprobe spawns (two -version, one -encoders, two 1-frame test
+    encodes). This USED to run before the window was created, so nothing appeared
+    on screen until it finished — cheap when the binaries are warm, but on a
+    freshly-unzipped bundle every spawn pays macOS's first-exec check on an ~80 MB
+    static binary and the app looked hung. It runs on a background thread now; the
+    probes are cached, so the page's own hw_capabilities call reuses this work.
+    """
+    t0 = time.monotonic()
     for label, tool in (("ffmpeg", FFMPEG), ("ffprobe", FFPROBE)):
         ver = "?"
         try:
@@ -130,7 +146,8 @@ def _log_environment() -> None:
         except Exception as e:  # noqa: BLE001
             ver = f"<could not run: {e}>"
         log.info("%s -> %s  [%s]", label, tool, ver)
-    log.info("hardware encoders: %s", encode.hardware_report(FFMPEG))
+    log.info("hardware encoders: %s  (probed in %.2fs)",
+             encode.hardware_report(FFMPEG), time.monotonic() - t0)
 
 
 # ── bundle-aware resource + tool resolution ──────────────────────────────────
@@ -1637,7 +1654,24 @@ def _summary(results: list) -> dict:
     return {"done": done, "skip": skip, "fail": fail, "tb": saved / 1e12, "mins": 0}
 
 
+def _kill_children() -> None:
+    """Take the running ffmpeg down with us when the app quits.
+
+    Closing the window mid-run used to leave ffmpeg orphaned: it kept encoding a
+    temp nothing would ever move into place, so resuming the run put a second
+    ffmpeg on the same CPU/GPU and the resumed encode crawled. Registered both on
+    the window-closed event and via atexit, since a quit can take either route.
+    """
+    try:
+        n = encode.kill_running_children()
+        if n:
+            log.info("shutdown: killed %d orphaned encode(s)", n)
+    except Exception:  # noqa: BLE001 — shutdown must never raise
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    t_start = time.monotonic()
     reconfigure_std_streams()   # UTF-8 stdout/stderr before anything prints a path
     log_path = _setup_logging()
     _install_crash_handlers(log_path)
@@ -1655,7 +1689,16 @@ def main(argv: list[str] | None = None) -> int:
     if not html.is_file():
         print(f"HTML not found: {html}", file=sys.stderr)
         return 2
-    _log_environment()          # record tools + hardware ability on load
+    _log_environment()          # cheap; the ffmpeg probing runs off the startup path
+    atexit.register(_kill_children)
+    swept = pipeline.sweep_stale_scratch()   # part-encodes abandoned by a past crash
+    if swept:
+        log.info("swept %d stale scratch file(s) from %s", swept, pipeline.TMPROOT)
+    # Probe the tools on a background thread so the window can come up now. The
+    # result is only needed once the page asks for hw_capabilities, which happens
+    # after it loads — by then this has usually finished, and if it hasn't, the
+    # cache lock makes that call wait for this one rather than re-probe.
+    threading.Thread(target=_log_tools, name="vtc-probe", daemon=True).start()
     # Serve the app over the same local HTTP server that serves the previews, so the
     # page origin is http:// — the generated preview <video>s then load without the
     # file:// mixed-content restrictions WKWebView/EdgeChromium impose.
@@ -1674,10 +1717,10 @@ def main(argv: list[str] | None = None) -> int:
     window.events.loaded += lambda: (log.info("window loaded"), window.evaluate_js(_BRIDGE_JS))
     try:
         window.events.closing += lambda: log.info("window closing (user)")
-        window.events.closed += lambda: log.info("window closed")
+        window.events.closed += lambda: (log.info("window closed"), _kill_children())
     except Exception:  # noqa: BLE001 — event names vary across pywebview versions
         pass
-    log.info("webview.start()")
+    log.info("webview.start() — %.2fs after main() began", time.monotonic() - t_start)
     try:
         webview.start()
     except Exception:

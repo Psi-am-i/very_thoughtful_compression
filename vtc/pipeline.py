@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable
@@ -42,6 +43,34 @@ ABORT_FILE = Path(tempfile.gettempdir()) / f"vtc_abort.{os.getpid()}"
 
 def abort_requested() -> bool:
     return ABORT_FILE.exists()
+
+
+# A temp only survives run_file if the app died before it could be moved into place
+# or unlinked — a force-quit, a crash, a power cut. Nothing else ever cleaned these
+# up, so every interrupted run left a part-encoded file (often several GB) in scratch
+# forever. Sweep them at startup.
+STALE_SCRATCH_AGE = 24 * 3600
+
+
+def sweep_stale_scratch(max_age: float = STALE_SCRATCH_AGE) -> int:
+    """Delete abandoned encode temps from scratch. Returns how many went.
+
+    Age is the guard, not the pid: ffmpeg writes its output continuously, so a temp
+    an encode is still working on always has a fresh mtime — including one belonging
+    to a SECOND app instance, which a pid-based sweep would have to identify across
+    platforms to avoid deleting out from under it.
+    """
+    if not TMPROOT.is_dir():
+        return 0
+    cutoff, n = time.time() - max_age, 0
+    for f in TMPROOT.iterdir():
+        try:
+            if f.is_file() and f.stat().st_mtime < cutoff:
+                f.unlink()
+                n += 1
+        except OSError:
+            pass
+    return n
 
 
 def stop_requested() -> bool:

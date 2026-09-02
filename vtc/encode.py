@@ -34,22 +34,30 @@ from .winproc import NO_WINDOW, TEXT_UTF8
 # Cache of `ffmpeg -hide_banner -encoders` output, keyed by the ffmpeg binary.
 _ENCODERS_CACHE: dict[str, str] = {}
 
+# Guards both probe caches. The GUI now probes on a background thread at startup
+# while the page's own hw_capabilities call arrives a moment later, so without
+# this the two race and each spawns its own ffmpeg — the second waits for the
+# first's answer instead. Re-entrant: hardware_report holds it across the calls
+# to _encoders_list / _encoder_works below.
+_PROBE_LOCK = threading.RLock()
+
 
 def _encoders_list(ffmpeg: str) -> str:
     """Cached `ffmpeg -hide_banner -encoders` text (empty string on failure)."""
-    cached = _ENCODERS_CACHE.get(ffmpeg)
-    if cached is not None:
-        return cached
-    try:
-        out = subprocess.run(
-            [ffmpeg, "-hide_banner", "-encoders"],
-            capture_output=True, text=True, stdin=subprocess.DEVNULL,
-            **TEXT_UTF8, **NO_WINDOW,
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        out = ""
-    _ENCODERS_CACHE[ffmpeg] = out
-    return out
+    with _PROBE_LOCK:
+        cached = _ENCODERS_CACHE.get(ffmpeg)
+        if cached is not None:
+            return cached
+        try:
+            out = subprocess.run(
+                [ffmpeg, "-hide_banner", "-encoders"],
+                capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                **TEXT_UTF8, **NO_WINDOW,
+            ).stdout
+        except (OSError, subprocess.SubprocessError):
+            out = ""
+        _ENCODERS_CACHE[ffmpeg] = out
+        return out
 
 
 # Cache of "does this encoder actually WORK here" keyed by (ffmpeg, encoder).
@@ -65,22 +73,23 @@ def _encoder_works(ffmpeg: str, enc: str) -> bool:
     test of whatever hardware the user actually has.
     """
     key = (ffmpeg, enc)
-    cached = _ENCODER_WORKS_CACHE.get(key)
-    if cached is not None:
-        return cached
-    try:
-        r = subprocess.run(
-            [ffmpeg, "-hide_banner", "-v", "error",
-             "-f", "lavfi", "-i", "testsrc2=size=128x128:rate=1",
-             "-frames:v", "1", "-c:v", enc, "-f", "null", "-"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL, timeout=30, **NO_WINDOW,
-        )
-        ok = r.returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        ok = False
-    _ENCODER_WORKS_CACHE[key] = ok
-    return ok
+    with _PROBE_LOCK:
+        cached = _ENCODER_WORKS_CACHE.get(key)
+        if cached is not None:
+            return cached
+        try:
+            r = subprocess.run(
+                [ffmpeg, "-hide_banner", "-v", "error",
+                 "-f", "lavfi", "-i", "testsrc2=size=128x128:rate=1",
+                 "-frames:v", "1", "-c:v", enc, "-f", "null", "-"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, timeout=30, **NO_WINDOW,
+            )
+            ok = r.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            ok = False
+        _ENCODER_WORKS_CACHE[key] = ok
+        return ok
 
 
 # Hardware encoders per output codec, in preference order: VideoToolbox (Apple),
@@ -478,6 +487,29 @@ class _tracked:
 def abort_running() -> int:
     """Kill every ffmpeg started by this process. Returns how many were signalled."""
     _abort.set()
+    with _live_lock:
+        procs = list(_live_procs)
+    n = 0
+    for p in procs:
+        try:
+            if p.poll() is None:
+                p.kill()
+                n += 1
+        except OSError:
+            pass
+    return n
+
+
+def kill_running_children() -> int:
+    """Kill any ffmpeg still running, WITHOUT latching the abort flag.
+
+    For process shutdown. ffmpeg is a separate process, so when the app quits
+    mid-run Python exiting does not take it with us — it is reparented and keeps
+    encoding a temp file nobody will ever move into place, competing with the
+    resumed run for the very same CPU/GPU. Distinct from abort_running() because
+    that one sets a latch meant for a user-requested stop; at exit there is no
+    later attempt to suppress, and the latch would have to be cleared again.
+    """
     with _live_lock:
         procs = list(_live_procs)
     n = 0
