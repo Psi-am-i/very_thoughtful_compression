@@ -441,6 +441,20 @@ def encode_work(width: int, height: int, fps: float, duration: float) -> float:
     return float(width) * height * fps * duration
 
 
+def encode_seconds(config: RunConfig, info, rate: float) -> float:
+    """Wall-seconds to re-encode this file at `rate` output pixel-frames/second.
+
+    THE one place a predicted encode time is worked out, so the clock during a run
+    and the "this will take about N hours" quoted before one can never disagree.
+    Returns 0.0 when the answer isn't knowable (no geometry, no length, no rate) —
+    the caller decides what to assume, rather than this quietly inventing it.
+    """
+    dims = capped_dims(info.display_width, info.display_height, config.max_short_edge)
+    w, h = dims if dims else (info.display_width, info.display_height)
+    work = encode_work(w, h, info.fps or 0.0, info.duration or 0.0)
+    return (work / rate) if work > 0 and rate > 0 else 0.0
+
+
 def modern_review(config: RunConfig, probed, top_n: int = 200) -> dict:
     """Every file that qualifies for a modern re-encode, worst first.
 

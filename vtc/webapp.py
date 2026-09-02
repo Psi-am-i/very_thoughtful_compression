@@ -1924,9 +1924,23 @@ class Api:
         # assumed 0.18x that was 4.5x too pessimistic. That mattered beyond the
         # clock: the picker quotes this figure BEFORE you commit, with no chance to
         # self-correct, so it was quoting 545 hours for a job nearer 120.
-        HW_SPEED, SW_SPEED = 6.0, 0.82            # ×realtime at 1080p
+        HW_SPEED, SW_SPEED = 6.0, 0.82            # ×realtime at 1080p30 — the FALLBACK
         enc_speed = HW_SPEED if hw else SW_SPEED
         REMUX_S, SKIP_S = 10.0, 0.10
+        # Prefer what this machine has actually managed. The constants above were
+        # measured once, here, on an M-series Mac; they are a reasonable opening
+        # guess and nothing more, and they cannot know about a slower disk, a
+        # busier machine, or harder content. Every run now records its own rate
+        # (see _observed_rate), so from the second run on the clock is calibrated
+        # to this machine rather than to mine.
+        rate, rate_from = self._encode_rate(config)
+        if not rate:
+            # Convert the fallback into the same unit. The constants were quoted
+            # "×realtime at 1080p" without an fps, so they are read at the model's
+            # reference 30 — which one real run then replaces outright.
+            rate = enc_speed * _PX_1080P * 30.0
+        else:
+            log.info("run estimate calibrated from %s (%.3g pixel-frames/s)", rate_from, rate)
         probe_by_path = {info.path: info for info, _ in self._probes}
 
         # A RESUMED file costs nothing — the pipeline sees it in the ledger and
@@ -1954,14 +1968,29 @@ class Api:
                 return False
 
         def _work_of(info) -> float:
-            """Predicted wall-seconds for one PROBED file (a skip is ~free)."""
+            """Predicted wall-seconds for one PROBED file (a skip is ~free).
+
+            Priced in OUTPUT pixel-frames (pipeline.encode_work) — the frames the
+            encoder actually has to produce. Two things follow that the older
+            duration÷speed model got wrong: a 60fps file costs twice a 30fps one
+            of the same length, and a frame-size cap makes the run genuinely
+            faster. Capping a 4K library at 1080p quarters the work, and the clock
+            has to say so or it quotes four times the truth.
+            """
             mode = pipeline.decide(config, info)[0]
             if mode in (Mode.SHRINK, Mode.TRANSCODE):
                 # This file's OWN speed: a ticked file is software even on a
-                # hardware run, and it dominates the clock when it is.
-                spd = SW_SPEED if config.forces_software(info.path) else enc_speed
-                spd *= _PX_1080P / info.pixels if info.pixels else 1.0   # 4K costs ~4x
-                return (info.duration / spd) if info.duration else (30 * 60 / spd)
+                # hardware run, and it dominates the clock when it is. The ratio
+                # between the two constants still holds when the rate itself is
+                # measured, since a measurement is taken on one path or the other.
+                r = rate * (SW_SPEED / enc_speed) if config.forces_software(info.path) else rate
+                secs = pipeline.encode_seconds(config, info, r)
+                if secs > 0:
+                    return secs
+                # Not knowable from this file — no geometry, or no length. Assume a
+                # typical episode at the reference frame, which is what the older
+                # model did for a length-less file anyway.
+                return (info.duration or 30 * 60) / enc_speed
             return REMUX_S if mode is Mode.REMUX else SKIP_S
 
         # Average over the PROBED MIX — skips included. An un-probed file is assumed

@@ -189,13 +189,7 @@ wrote at a silly bitrate — common in drone and action-cam footage. `reencode_m
   ask how many to do now. In the GUI that is a sheet after the scan; on the CLI it is
   `--dry-run`, which lists the worst offenders and names `--modern-max`.
 
-  The time estimate is **measured, never assumed**. Work is counted in output
-  pixel-frames (`pipeline.encode_work`) rather than minutes of video, because a 4K
-  file is roughly four times the work of a 1080p one of the same length — and because
-  that makes a frame-size cap correctly predict a faster run. Every run reports the
-  rate it achieved, blended into a stored per-path (hardware/software) and per-codec
-  figure; a tier preview clip provides a rougher opening guess before the first run.
-  When neither exists the app says it cannot estimate rather than inventing a number.
+  The time estimate is **measured, never assumed** — see below.
 
 The budget is a **drip, not a ceiling**. A file that qualifies but falls outside it
 gets its own outcome, `DEFER_MODERN`, which the ledger deliberately does **not**
@@ -209,6 +203,39 @@ re-evaluated instead of appearing to ignore the setting.
 
 The tool can never eat its own output this way: our own files are HEVC, but they
 carry our tags and are caught by the second-generation guard before any of this runs.
+
+## How long it will take
+
+The app quotes a time in three places — the "about N hours" before you commit, the
+countdown during a run, and the modern re-encode review — and they are all the same
+arithmetic, `pipeline.encode_seconds()`. A review promising ten hours beside a clock
+counting forty is a bug nobody finds until 3am.
+
+**The unit is output pixel-frames per second**, not minutes of video
+(`pipeline.encode_work` = width × height × fps × duration). An encoder is a
+pixels-per-second machine, so:
+
+- a 4K file costs roughly four times a 1080p one of the same length;
+- a 60fps file costs twice a 30fps one;
+- and a **frame-size cap makes the run genuinely faster** — capping a 4K library at
+  1080p quarters the work, and an estimate priced on the source frame would quote
+  four times the truth.
+
+**The rate is measured on this machine.** Every run records what it actually achieved
+(`_observed_rate`, excluding remuxes — a stream copy is near-instant and would inflate
+the figure into a promise no encode could keep), blended a third at a time into a
+stored value so one odd run cannot lurch the clock. Rates are kept per hardware/software
+path and per output codec, which differ by an order of magnitude; averaging them would
+make every estimate wrong.
+
+Before the first run there is nothing to measure, so two fallbacks stand in, in order:
+a tier preview clip (a real encode at the real settings, but five seconds of it, mostly
+start-up — rough, and labelled "a sample encode"), then constants measured once on an
+M-series Mac (6.0× realtime hardware, 0.82× software, at 1080p30). At the reference
+30fps those constants reproduce the older duration÷speed model exactly, so nothing was
+silently re-rated when this changed.
+
+Where no estimate is possible at all, the app says so rather than inventing a number.
 
 ## Encoders and what actually controls quality
 
