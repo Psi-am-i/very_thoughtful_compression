@@ -789,3 +789,56 @@ adds `.lit` so the accent left border matches. It reads the live ignore state:
   estimate on the right counts them all."
 The Ignore Continue still advances (the `fly()` no-key-tile early-return is
 untouched). Renders show the rail in both states/themes (same files as item 2).
+
+---
+
+## Backend round 1 (2026-09-02) — FRAME SIZE is wired to the engine
+
+The first of the mock UI's five additions to stop being a mock. Before this, the
+walkthrough's **Frame Size** step recorded an answer that `build_config()` never
+read: choosing "1080p" changed nothing about the run. It now reaches ffmpeg.
+
+**The shape of it.** One pure function, `model.capped_dims(width, height,
+max_height)`, returns the output frame or `None` when the cap doesn't bite (off,
+geometry unknown, or the source already short enough — nothing is ever upscaled).
+Both returned dimensions are even, because yuv420p subsamples chroma 2×2 and an
+odd dimension is either rejected or quietly padded; an odd hand-typed cap is
+rounded down before anything scales to it. Every consumer calls that one function:
+
+- `pipeline.decide()` prices the tier target against the **output** frame. This is
+  the point of the feature — a tier is a bits-per-pixel density, so a quarter of
+  the pixels costs a quarter of the bitrate at the same quality. The HEVC factor
+  moves with it (a downscaled 4K file earns the HD factor, not the 4K one).
+- `encode.build_video_args()` leads with `-vf scale=W:H:flags=lanczos`. Lanczos
+  because this is only ever a downscale, and softening the picture before a
+  bitrate-limited encoder gives away the quality the cap was meant to buy.
+- `pipeline._build_detail()` reports the frame written and computes bpp against it,
+  so the caption reads `… shrunk to 5040 kbps · 2160p→1080p · 0.101 bpp`.
+- `RunConfig.settings_signature()` includes the cap, so changing it re-evaluates a
+  library rather than reading as work already done. Verified end to end: an
+  uncapped run leaves a 4K file at-tier, a second uncapped run resumes past it, and
+  the same run with a 1080p cap re-opens and shrinks it.
+
+**Deliberately unchanged.** A cap is not a licence to re-encode: a file already
+below the *capped* target is still left alone, because rescaling it could not clear
+the minimum-saving bar. A REMUX is a stream copy and is never rescaled.
+
+**Known limit, left as the user's call:** the cap cannot reach `modern` sources.
+H.265/AV1/VP9 are never transcoded by policy, so a 4K HEVC file stays 4K however
+the cap is set. Changing that is a separate decision (it is on the open list as
+"modern codecs over target are intentionally never re-encoded — revisit?").
+
+**Previews.** The tier previews encode the same 5-second clip the run will process,
+so they had to honour the cap or they would show 4K panels — with 4K sizes and
+densities — for a run about to write 1080p. The preview worker only ever sees the
+settings dict, never the walkthrough's answers, so the UI mirrors the resolved cap
+into `ADV.resizeHeight` on commit (and clears it on "Start over"). The run itself
+still maps `answers.resize` directly and overrides the mirror, so there is one
+source of truth; the mirror also busts the preview cache key.
+
+**CLI parity:** `--max-height ROWS`, and the run header states the cap when set.
+
+**Verified:** 150 pytest pass (17 new in `tests/test_frame_size.py`, plus a new
+jsdom harness `tests/ui/frame.js` driving the real commit button). Real encodes on
+both paths: software 4K→1080p (23.91 MB → 2.63 MB) and hardware VideoToolbox
+4K→720p, both probing at the expected dimensions with the original archived.

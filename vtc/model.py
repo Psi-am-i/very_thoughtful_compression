@@ -98,6 +98,32 @@ def classify_codec(codec_name: str | None) -> CodecCategory:
     return CodecCategory.OTHER
 
 
+def capped_dims(width: int, height: int, max_height: int) -> tuple[int, int] | None:
+    """Output (width, height) when a frame-size cap actually bites, else None.
+
+    The cap is on HEIGHT — the rows of the frame, the "p" in 1080p — and the
+    aspect ratio is always preserved. None means "encode the frame exactly as it
+    is": the cap is off, the geometry is unknown, or the source is already at or
+    below it. Nothing is ever upscaled, so a cap can only ever remove pixels.
+
+    Both returned dimensions are EVEN. H.264/H.265 in yuv420p subsample chroma
+    2x2, so an odd dimension is either rejected outright or quietly padded — and
+    an odd *cap* (a hand-typed 1081) would take the encoder with it, which is why
+    the cap itself is rounded down before anything is scaled to it.
+
+    Pure arithmetic on the stored pixel dimensions: both axes scale by the same
+    factor and the sample aspect ratio is passed through untouched, so an
+    anamorphic source keeps its display shape.
+    """
+    if max_height <= 0 or width <= 0 or height <= 0:
+        return None
+    cap = max_height - (max_height % 2)
+    if cap < 2 or height <= cap:
+        return None
+    w = int(round(width * cap / height / 2)) * 2      # nearest even width
+    return (max(2, w), cap)
+
+
 def hevc_factor(pixels: int, factors: tuple[float, float, float] | None = None) -> float:
     """H.265 efficiency factor for an output frame of `pixels` (w*h).
 

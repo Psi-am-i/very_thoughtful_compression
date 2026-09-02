@@ -22,7 +22,7 @@ from . import encode, netmove
 from .config import AudioPolicy, Container, OutputMode, RunConfig, SourceAction
 from .ffprobe import MediaInfo, probe
 from .ledger import Ledger
-from .model import OutCodec, classify_codec, over_target, target_kbps
+from .model import OutCodec, capped_dims, classify_codec, over_target, target_kbps
 from .model import CodecCategory
 from .result import EncodeResult, FileDetail, FileResult, Mode, Note, Outcome, ProgressCB
 
@@ -166,9 +166,21 @@ def decide(config: RunConfig, info: MediaInfo) -> tuple[Mode | None, Outcome | N
     if info.vtc_lossy_generation and not config.allow_second_generation:
         return (None, Outcome.SKIP_SECOND_GEN, 0)
 
+    # A frame-size cap changes the price as well as the picture. A tier is a
+    # DENSITY (bits per pixel per frame), so the target must be struck against the
+    # frame we are about to write, not the one we are reading: capping a 4K source
+    # at 1080p quarters the pixels and so quarters the bitrate at the SAME quality.
+    # That is the whole point of the setting — pricing it off the source frame
+    # would hand the smaller picture a 4K bitrate it has no use for.
+    #
+    # `hevc_factor` is likewise documented in terms of the OUTPUT frame, so a
+    # downscaled 4K file correctly earns the HD factor rather than the 4K one.
+    scaled = capped_dims(info.width, info.height, config.max_height)
+    out_pixels = (scaled[0] * scaled[1]) if scaled else info.pixels
+
     def tgt(clamp: bool) -> int:
         return target_kbps(
-            config.tier, info.pixels, info.fps, config.out_codec,
+            config.tier, out_pixels, info.fps, config.out_codec,
             src_kbps=src_kbps if clamp else None,
             floor_kbps=config.bitrate_floor_kbps,
             bpp=config.bpp_for(),
@@ -214,6 +226,13 @@ def decide(config: RunConfig, info: MediaInfo) -> tuple[Mode | None, Outcome | N
             # actually SHRINKING the file (never inflating — the floor is only a
             # fallback when the source bitrate is unknown).
             t = int(src_kbps * 0.85) if src_kbps > 0 else config.bitrate_floor_kbps
+            # A capped rescue shrinks its target with its frame, for the same
+            # bits-per-pixel reason as the tier path above. Scaled DOWN only and
+            # never floored back up: the floor exists to stop a target becoming
+            # garbage, and applying it here could hand a small legacy file MORE
+            # bitrate than the source it came from.
+            if scaled and info.pixels > 0:
+                t = max(1, int(t * out_pixels / info.pixels))
             return (Mode.TRANSCODE, None, t)
         return (None, Outcome.SKIP_INCOMPATIBLE, 0)
 
@@ -567,7 +586,15 @@ def _build_detail(config: RunConfig, info: MediaInfo, mode: Mode, target: int,
     # bpp from the VIDEO bitrate we aimed for (target for a re-encode, source for a
     # lossless remux), not the size-derived total (which includes audio/subs).
     vid_kbps = float(target) if mode in (Mode.SHRINK, Mode.TRANSCODE) else info.effective_bps / 1000.0
-    bpp = (vid_kbps * 1000.0) / (info.pixels * info.fps) if info.pixels and info.fps else 0.0
+    # The frame we actually wrote. A REMUX is a stream copy, so a frame-size cap
+    # cannot apply to it however it is set — only a re-encode can rescale.
+    scaled = None if mode is Mode.REMUX else capped_dims(info.width, info.height, config.max_height)
+    out_w, out_h = scaled if scaled else (info.width, info.height)
+    # bpp against the OUTPUT frame, or a downscale would report a density the file
+    # does not have: the same bitrate over a quarter of the pixels is four times
+    # the density, and that is exactly what the reader is being asked to judge.
+    out_pixels = out_w * out_h
+    bpp = (vid_kbps * 1000.0) / (out_pixels * info.fps) if out_pixels and info.fps else 0.0
 
     nsub = len(info.subtitles)
     if nsub == 0:
@@ -591,7 +618,8 @@ def _build_detail(config: RunConfig, info: MediaInfo, mode: Mode, target: int,
         src_ext=src_file.suffix.lower(),
         out_ext=ext,
         container_reason=encode.container_reason(config, info),
-        width=info.width, height=info.height, fps=info.fps,
+        width=info.width, height=info.height,
+        out_width=out_w, out_height=out_h, fps=info.fps,
         src_kbps=info.effective_bps / 1000.0, vid_kbps=vid_kbps, out_kbps=out_kbps, bpp=bpp,
         audio_action=res.audio_action,
         subs_summary=subs_summary,

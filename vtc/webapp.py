@@ -34,7 +34,7 @@ import tempfile
 from . import __version__, encode, netmove, pipeline
 from .config import AudioPolicy, Container, Encoder, OutputMode, RunConfig, SourceAction
 from .ffprobe import probe
-from .model import OutCodec, Tier, target_kbps
+from .model import OutCodec, Tier, capped_dims, target_kbps
 from .result import Mode, Outcome
 from .winproc import NO_WINDOW, TEXT_UTF8, reconfigure_std_streams
 
@@ -299,6 +299,41 @@ _FORMAT = {
 }
 
 
+# FRAME SIZE — the walkthrough's `resize` answer as a cap on the OUTPUT HEIGHT in
+# vertical pixels (the "p" in 1080p). Index 5 is "Custom height", whose number
+# lives in ADV.resizeCustom. Keep in step with the `resize` question's `opts`
+# order in vtc_app_v3.html.
+_RESIZE_HEIGHTS = {0: 0, 1: 2160, 2: 1440, 3: 1080, 4: 720}
+_RESIZE_CUSTOM = 5
+# The UI's own bounds on the custom box, re-applied here: a number that arrives
+# from anywhere other than that box (a hand-edited session file, an older build)
+# still cannot ask for a 12-pixel-tall library.
+_RESIZE_MIN, _RESIZE_MAX = 120, 8192
+
+
+def _max_height(a: dict, adv: dict) -> int:
+    """The frame-size cap for this run, or 0 for "leave the frame alone".
+
+    A MISSING `resize` answer is 0, not a default cap: a session saved before the
+    question existed — a crash-resume, say — must come back and finish encoding
+    the library it started, not silently begin rescaling it halfway through.
+    """
+    choice = a.get("resize")
+    if choice is None:
+        return 0
+    try:
+        idx = int(choice)
+    except (TypeError, ValueError):
+        return 0
+    if idx != _RESIZE_CUSTOM:
+        return _RESIZE_HEIGHTS.get(idx, 0)
+    try:
+        n = int(float(adv.get("resizeCustom") or 0))
+    except (TypeError, ValueError):
+        return 0
+    return min(_RESIZE_MAX, max(_RESIZE_MIN, n)) if n > 0 else 0
+
+
 def build_config(src: Path, a: dict) -> RunConfig:
     """Map the mockup's `answers` (question id -> chosen index) to a RunConfig."""
     codec = _CODECS[a["codec"]]
@@ -352,6 +387,13 @@ def build_config(src: Path, a: dict) -> RunConfig:
         # meaning stays obvious in logs and in the ledger.
         cfg.sub_kinds = () if len(picked) == len(valid) else picked
     _apply_advanced(cfg, adv)
+    # Frame size LAST, and only when the walkthrough actually asked: the answer is
+    # the source of truth, and it overrides the mirrored `resizeHeight` that
+    # _apply_advanced just read. That mirror exists solely so the tier previews
+    # encode at the frame size the run will produce — the preview worker only ever
+    # sees the settings dict, never the walkthrough's answers.
+    if "resize" in a:
+        cfg.max_height = _max_height(a, adv)
     return cfg
 
 
@@ -412,6 +454,11 @@ def _apply_advanced(cfg: RunConfig, adv: dict) -> None:
         cfg.keep_mkv_for_audio = bool(adv["keepMkvAudio"])
     if "ledger" in adv:
         cfg.ledger_enabled = bool(adv["ledger"])
+    # The frame-size cap mirrored from the walkthrough (see _max_height). build_config
+    # overrides this from the answer itself; it is read here so the paths that only
+    # have the settings dict — the tier previews above all — match the real run.
+    if (v := _num("resizeHeight", int, 0, _RESIZE_MAX)) is not None:
+        cfg.max_height = v if v >= _RESIZE_MIN else 0
 
     # Per-tier quality density. Only tiers the user actually retuned are carried
     # across, so an untouched tier keeps its anchored default rather than being
@@ -1142,7 +1189,8 @@ class Api:
             adv = self._adv or {}
             # Anything that changes how a TIER encodes must bust that tier's cache.
             adv_sig = _psig(adv.get("floor"), adv.get("hevcHd"), adv.get("hevc4k"),
-                            adv.get("hevc8k"), json.dumps(adv.get("bpp") or {}, sort_keys=True))
+                            adv.get("hevc8k"), json.dumps(adv.get("bpp") or {}, sort_keys=True),
+                            adv.get("resizeHeight"))
             # The SOURCE clip depends only on which file and where we cut it.
             clip_sig = _psig(str(first), f"{start:.3f}", f"{seglen:.3f}")
 
@@ -1221,14 +1269,21 @@ class Api:
                     # only took effect at run time would make the comparison a lie.
                     cfg2 = RunConfig(src=src, out_codec=codec, tier=tier, ffmpeg=FFMPEG)
                     _apply_advanced(cfg2, self._adv)
-                    tgt = target_kbps(tier, sinfo.pixels, sinfo.fps, codec,
+                    # A frame-size cap is part of what a tier will DO to this file, so
+                    # the panel has to be encoded at the capped frame and priced at it
+                    # too (build_video_args adds the scale filter from the same cfg).
+                    # A preview that showed a 4K encode of a run that will write 1080p
+                    # would misreport both the size and the density on the panel.
+                    _dims = capped_dims(sinfo.width, sinfo.height, cfg2.max_height)
+                    tgt_pixels = (_dims[0] * _dims[1]) if _dims else sinfo.pixels
+                    tgt = target_kbps(tier, tgt_pixels, sinfo.fps, codec,
                                       floor_kbps=cfg2.bitrate_floor_kbps,
                                       bpp=cfg2.bpp_for(tier), hevc=cfg2.hevc_factors())
                     # The tier's TARGET density for this file — compare against source
                     # BPP. Derived from the TUNED target above, so a retuned tier's
                     # panel reports the density it was actually encoded at.
-                    bpp = (tgt * 1000.0 / (sinfo.pixels * sinfo.fps)
-                           if sinfo.pixels and sinfo.fps else 0.0)
+                    bpp = (tgt * 1000.0 / (tgt_pixels * sinfo.fps)
+                           if tgt_pixels and sinfo.fps else 0.0)
                     # Already encoded this exact clip? Reuse it — no second encode.
                     if out.exists() and out.stat().st_size > 0:
                         log.info("preview %s: cache hit", key)

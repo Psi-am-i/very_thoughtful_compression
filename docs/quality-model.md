@@ -109,6 +109,42 @@ the old logic computed `target = source_bitrate × ratio`, so every re-run re-an
 to the (now smaller) file and shaved another ~40% off, cutting a file down across
 successive runs (3.5 GB → 2.2 GB → 1.2 GB …) until it bottomed out near a bpp floor.
 
+## Frame size: a cap on height, priced into the target
+
+The walkthrough's **Frame Size** question (and `--max-height` on the CLI) caps the
+output **height** in vertical pixels — the "p" in 1080p. The aspect ratio is always
+kept, and nothing is ever upscaled: a source already at or below the cap is encoded
+at its own size, so a 1080p cap over a mixed library only touches what is taller.
+
+Because a tier is a *density*, the cap is a quality control and not a cosmetic one.
+The target is struck against the frame that is about to be **written**, not the one
+being read:
+
+```
+capped_dims(3840, 2160, max_height=1080) -> (1920, 1080)      # aspect kept, both even
+target = bpp × (1920 × 1080) × fps × codec_factor(1920×1080)
+```
+
+Capping 4K at 1080p quarters the pixels, so it quarters the bitrate at the *same*
+bits per pixel — the same picture quality in roughly a quarter of the bytes. (The
+codec factor moves too: a downscaled 4K file now earns the HD HEVC factor, 0.60,
+rather than the 4K one, 0.50 — so the real ratio is `4 × 0.50/0.60 ≈ 3.3×`.) The
+`-vf scale=W:H:flags=lanczos` filter, the target, and the reported bpp all come from
+the same `capped_dims()` call, so the report cannot disagree with the file.
+
+Two consequences worth knowing:
+
+- **A cap is not a licence to re-encode.** The gates below are unchanged, so a tall
+  file already *below* the capped target is still left alone: rescaling it could not
+  clear the minimum-saving bar, and would spend a generation of quality for nothing.
+- **It cannot reach `modern` sources.** H.265/AV1/VP9 files are never transcoded (see
+  below), so a 4K HEVC file stays 4K however the cap is set. A cap only reaches files
+  the engine was already willing to re-encode: H.264 and legacy codecs.
+
+A remux is a stream copy and cannot be rescaled at all, so a frame-size cap never
+applies to one. Changing the cap is part of the ledger signature, so a library that
+a previous run left alone is re-evaluated rather than read as already done.
+
 ## The re-encode gate: converge, don't re-cut
 
 A source is re-encoded **only if it is more than 10% over its tier target**

@@ -67,6 +67,13 @@ class RunConfig:
     tier: Tier = Tier.EXCELLENT
     min_saving_ratio: float = 0.75          # keep a shrink only if output <= this * source
 
+    # Frame size. A cap on the OUTPUT HEIGHT in vertical pixels (0 = off), with
+    # the aspect ratio preserved and nothing ever upscaled — a source already at
+    # or below the cap is encoded at its own size. It is a QUALITY setting, not a
+    # cosmetic one: a tier is a bits-per-pixel density, so a smaller frame earns a
+    # proportionally smaller target and the same quality costs far fewer bytes.
+    max_height: int = 0
+
     # Compatibility / non-MP4 policy
     remux_to_mp4: bool = True               # rehome MP4-friendly codecs into MP4 losslessly
     compat_transcode: bool = True           # transcode MP4-incompatible legacy codecs
@@ -248,6 +255,13 @@ class RunConfig:
         # matches ledgers written before this existed.
         if self.encoder is not Encoder.AUTO:
             parts.append(f"enc{self.encoder.value}")
+        # A frame-size cap changes the OUTPUT, and changing the cap must re-evaluate
+        # the library: a file finished at 1080p is NOT done for a later 720p run, and
+        # a file left alone at 4K becomes a candidate the moment a cap appears.
+        # Appended only when a cap is set, so an uncapped run still matches ledgers
+        # written before frame size existed.
+        if self.max_height > 0:
+            parts.append(f"maxh{self.max_height}")
         return "|".join(parts)
 
     def validate(self) -> list[str]:

@@ -89,6 +89,22 @@ def test_step_navigation_does_not_strand_you():
         f"  {x['n']}: got {x['g']!r}, want {x['e']!r}" for x in failed)
 
 
+@pytest.mark.skipif(not _have_jsdom(), reason="node + jsdom not installed (see tests/ui/README)")
+def test_frame_size_answer_reaches_the_settings():
+    """Committing the FRAME SIZE step must mirror the cap into the settings.
+
+    The run maps `answers.resize` itself, but the tier previews only ever see the
+    settings dict — so without the mirror the previews would encode 4K panels for
+    a run that is about to write 1080p, and misreport both size and density.
+    """
+    r = subprocess.run(["node", "frame.js"], cwd=_UI, capture_output=True, text=True,
+                       stdin=subprocess.DEVNULL, timeout=120)
+    assert r.stdout.strip(), f"harness produced nothing:\n{r.stderr[:2000]}"
+    failed = [x for x in json.loads(r.stdout) if not x["ok"]]
+    assert not failed, "frame-size wiring broken:\n" + "\n".join(
+        f"  {x['n']}: got {x.get('g')!r}, want {x['e']!r}" for x in failed)
+
+
 def _run_all():
     # Ask the question directly. When pytest IS installed the decorator is
     # pytest's own and leaves no attribute behind, so relying on the marker ran

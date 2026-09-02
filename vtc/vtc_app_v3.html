@@ -3748,6 +3748,29 @@ function renderDestExtra(){
 // vertical pixels / rows, the "p" in 1080p — styled like the destination extras.
 // The value lives in ADV.resizeCustom so it persists and can map to the engine
 // later (a height cap; aspect ratio preserved); the preset rungs need no extra UI.
+// The five preset rungs, by option index; index 5 is Custom (ADV.resizeCustom).
+// Keep in step with _RESIZE_HEIGHTS in webapp.py — the engine maps the same answer.
+const RESIZE_HEIGHTS = [0, 2160, 1440, 1080, 720];
+function resizeHeight(){
+  const i = answers.resize;
+  if(i===undefined) return 0;
+  if(i===5){
+    const n = parseInt(ADV.resizeCustom, 10);
+    return (isFinite(n) && n>0) ? Math.min(8192, Math.max(120, n)) : 0;
+  }
+  return RESIZE_HEIGHTS[i] || 0;
+}
+// Mirror the resolved cap into ADV so the TIER PREVIEWS encode at the frame size
+// the run will actually produce — the preview worker only ever sees the settings
+// dict, never the walkthrough's answers. The RUN reads the answer itself, so this
+// is a mirror and not a second source of truth; pushed only when it changes, so
+// re-committing the same choice doesn't churn the settings file.
+function syncResizeHeight(){
+  const h = resizeHeight();
+  if((ADV.resizeHeight||0) === h) return;
+  ADV.resizeHeight = h;
+  if(window.advPush) advPush();
+}
 function renderResizeExtra(){
   const el=$('#resize-extra'); if(!el) return;
   const q=M[step];
@@ -3766,6 +3789,7 @@ function renderResizeExtra(){
     const n=parseInt(inp.value,10);
     ADV.resizeCustom = (inp.value.trim()==='' || !isFinite(n) || n<=0) ? '' : Math.min(8192, Math.max(120,n));
     if(window.advPush) advPush();
+    syncResizeHeight();     // a typed number IS the cap when Custom is the choice
   };
 }
 // ── IGNORE inline extra ─────────────────────────────────────────────────────
@@ -3921,6 +3945,7 @@ $('#commit').onclick=()=>{
   const keyEl=$('#keys').querySelector(`.key[data-i="${oi}"]`);
   fly(keyEl,q.id,oi,()=>{
     answers[q.id]=oi;
+    if(q.id==='resize') syncResizeHeight();   // keep the previews on the run's frame size
     // The IGNORE step is now a readout (rules are set in Advanced), so committing it
     // just acknowledges the current ADV.ign* rules — nothing to write here.
     // "New folder" destination → let them pick where the output goes (real app only).
@@ -5236,6 +5261,8 @@ function drawReport(){
 function resetAll(){
   shutSheet('#report-sheet');
   for(const k in answers) delete answers[k];
+  syncResizeHeight();   // no answer means no cap — drop the mirror with the answers,
+                        // or the previews would keep encoding at the old frame size
   SRC=null; step=0; armed=null; window.pendingReconfirm=false;
   trashStatus=null; trashArmed=false;
   $('#unit').classList.remove('on','dimmed'); $('#unit').classList.add('off');

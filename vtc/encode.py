@@ -25,7 +25,7 @@ from pathlib import Path
 from .config import MP4_AUDIO_CODECS, AudioPolicy, Container, Encoder, RunConfig
 from .ffprobe import VTC_SIGNATURE, MediaInfo, SubtitleTrack
 from . import __version__
-from .model import OutCodec
+from .model import OutCodec, capped_dims
 from .result import EncodeResult, Mode, ProgressCB
 from .winproc import NO_WINDOW, TEXT_UTF8
 
@@ -184,6 +184,25 @@ def _hw_video_args(info: MediaInfo, enc: str, target_kbps: int) -> list[str]:
     return ["-c:v", enc, "-b:v", b, "-maxrate", b, *tag]      # unknown hw: plain ABR
 
 
+def _scale_args(config: RunConfig, info: MediaInfo) -> list[str]:
+    """`-vf scale=…` for a frame-size cap, or nothing when the frame is untouched.
+
+    The dimensions are computed in Python (capped_dims) rather than left to an
+    ffmpeg expression like `scale=-2:min(ih,1080)`: the exact output size is
+    needed anyway to price the target and to report what was written, and one
+    arithmetic path for all three means the report cannot disagree with the file.
+    It also sidesteps quoting an expression across three platforms' shells.
+
+    Lanczos because this is only ever a DOWNSCALE, where the default bilinear
+    visibly softens — and softening the picture before handing it to a
+    bitrate-limited encoder gives away the very quality the cap was meant to buy.
+    """
+    dims = capped_dims(info.width, info.height, config.max_height)
+    if not dims:
+        return []
+    return ["-vf", f"scale={dims[0]}:{dims[1]}:flags=lanczos"]
+
+
 def build_video_args(
     config: RunConfig,
     info: MediaInfo,
@@ -191,9 +210,11 @@ def build_video_args(
     target_kbps: int,
     hw_encoder: str | None,
 ) -> list[str]:
-    """The `-c:v ...` argument list only (no input/output/audio/subs).
+    """The video argument list only (no input/output/audio/subs) — the codec args,
+    preceded by a `-vf scale=…` when a frame-size cap applies.
 
-    REMUX     -> stream copy (+ hvc1 tag if the source is already HEVC).
+    REMUX     -> stream copy (+ hvc1 tag if the source is already HEVC). A copy
+                 cannot be rescaled, so a frame-size cap never reaches it.
     SHRINK    -> capped-CRF at the tuned tier ceiling (crf 20/21, preset medium).
     TRANSCODE -> higher-fidelity capped-CRF (crf 18/20, preset slow).
     `hw_encoder` (a specific *_videotoolbox/nvenc/qsv/amf name, or None for
@@ -205,8 +226,13 @@ def build_video_args(
             vargs += ["-tag:v", "hvc1"]
         return vargs
 
+    # Everything past here re-encodes, so a frame-size cap can apply. It leads the
+    # video args: the filter graph feeds the encoder, so it has to be in place
+    # before the codec settings that will be applied to the frames coming out of it.
+    scale = _scale_args(config, info)
+
     if hw_encoder:
-        return _hw_video_args(info, hw_encoder, target_kbps)
+        return [*scale, *_hw_video_args(info, hw_encoder, target_kbps)]
 
     if mode == Mode.TRANSCODE:
         crf264, crf265, preset = 18, 20, "slow"
@@ -229,12 +255,12 @@ def build_video_args(
     bufsize = f"{target_kbps}k"
 
     if config.out_codec == OutCodec.H264:
-        return ["-c:v", "libx264", "-crf", str(crf264), "-preset", preset,
+        return [*scale, "-c:v", "libx264", "-crf", str(crf264), "-preset", preset,
                 "-maxrate", maxrate, "-bufsize", bufsize,
                 "-profile:v", "high", "-pix_fmt", "yuv420p"]
 
     profile = _hevc_profile(info)
-    return ["-c:v", "libx265", "-crf", str(crf265), "-preset", preset,
+    return [*scale, "-c:v", "libx265", "-crf", str(crf265), "-preset", preset,
             "-maxrate", maxrate, "-bufsize", bufsize,
             "-profile:v", profile, "-tag:v", "hvc1"]
 

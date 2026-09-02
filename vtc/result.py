@@ -63,8 +63,10 @@ class FileDetail:
     src_ext: str = ""               # source container, e.g. ".mkv"
     out_ext: str = ""               # output container, e.g. ".mp4" / ".mkv"
     container_reason: str = ""      # WHY this container — set when output stays non-MP4
-    width: int = 0
+    width: int = 0                  # SOURCE frame
     height: int = 0
+    out_width: int = 0              # frame actually written — differs only when a
+    out_height: int = 0             #   frame-size cap bit (0 on records made before it existed)
     fps: float = 0.0
     src_kbps: float = 0.0           # source video bitrate
     vid_kbps: float = 0.0           # video bitrate produced (target for a re-encode; source for a remux)
@@ -102,6 +104,11 @@ class FileDetail:
             bits.append(f"legacy {codec} transcoded @ {self.vid_kbps:.0f} kbps")
         else:  # shrink
             bits.append(f"{codec} shrunk to {self.vid_kbps:.0f} kbps")
+        # 3 · the frame, but only when a size cap actually changed it. Said in the
+        # same "p" the user chose the cap in, so the line answers the question they
+        # asked ("make my library 1080p") rather than restating pixel dimensions.
+        if self.out_height and self.height and self.out_height != self.height:
+            bits.append(f"{self.height}p→{self.out_height}p")
         if self.bpp:
             bits.append(f"{self.bpp:.3f} bpp")
         if self.audio_action:
