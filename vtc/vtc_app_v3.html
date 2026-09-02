@@ -57,6 +57,10 @@
   /* Watch status: a live/paused readout. Green reads as "running" without
      borrowing the accent (which means "armed choice" everywhere else). */
   --live:#3f9a52; --live-soft:rgba(63,154,82,.16); --paused:#b9852b;
+  /* Report "Needs a look" WARNING cue — a quiet amber that must never be
+     confused with the accent (which means SELECTED). Distinct hue + a dotted
+     outline is how a warning reads without competing with selection. */
+  --warn:#b9852b; --warn-line:rgba(185,133,43,.7); --warn-soft:rgba(185,133,43,.08);
 }
 /* ── dark: two neutral variants, chosen in Advanced → Appearance ────────────
    The old warm graphite ("dirty brown") is gone. Dark is NEUTRAL and comes in
@@ -89,6 +93,7 @@
   --paper-lift:#323b48; --paper-hover:#28303b; --paper-4b:#1a1f27;
   --field-bed:#151920; --field-ink:233,236,241; --field-accent:rgba(232,84,31,0.5);
   --live:#5cba6f; --live-soft:rgba(92,186,111,.18); --paused:#d6a24a;
+  --warn:#d6a24a; --warn-line:rgba(214,162,74,.7); --warn-soft:rgba(214,162,74,.10);
 }
 /* ---- NEAR-BLACK ---- */
 :root[data-theme="dark"][data-dark="black"]{
@@ -1136,17 +1141,38 @@ body{
 /* the three outcome tiles switch the list below to that outcome, like the tabs */
 .r-s.tab{cursor:pointer}
 .r-s.tab:hover{background:var(--paper-3)}
+/* SELECTED is the one solid-accent treatment — a solid accent border + a
+   crisp inset accent ring. Only the selected card reads this way. */
 .r-s.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
-.r-s.warn{border-color:var(--accent);background:rgba(232,84,31,.06)}
+/* "Needs a look" WARNING (count>0) is a quieter, unmistakably different cue:
+   a DOTTED amber outline over a faint amber wash, plus a small amber warning
+   dot in the label. Dotted + amber can't be read as the solid-accent SELECTED
+   state. When this card is ALSO selected, .sel wins the border/ring (accent)
+   and the warning drops to just the amber dot, so the two never compete. */
+.r-s.warn{border-color:var(--warn-line);border-style:dotted;background:var(--warn-soft)}
+.r-s.warn.sel{border-style:solid;background:var(--warn-soft)}
+.r-s.warn .r-s-l::before{content:"";display:inline-block;width:6px;height:6px;
+  border-radius:50%;background:var(--warn);margin-right:6px;vertical-align:baseline;
+  position:relative;top:0}
 .r-s-l{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;
   text-transform:uppercase;color:var(--ink-3)}
 .r-s-v{font-size:25px;font-weight:700;letter-spacing:-.03em;margin-top:3px;font-variant-numeric:tabular-nums}
-.r-s.warn .r-s-v{color:var(--accent)}
+.r-s.warn .r-s-v{color:var(--warn)}
+.r-s.warn.sel .r-s-v{color:var(--warn)}
 .r-tabs{display:flex;gap:0;border-bottom:1px solid var(--rule);margin-bottom:2px}
 .r-tabs button{background:none;border:0;border-bottom:2px solid transparent;cursor:pointer;
   font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;letter-spacing:.14em;
   text-transform:uppercase;color:var(--ink-3);padding:8px 12px;margin-bottom:-1px}
 .r-tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+/* "Needs a look" tab WARNING cue (count>0): a small amber dot before the label
+   and a DOTTED amber underbar — quiet, and unmistakably not the solid-accent
+   underline that marks the SELECTED (.on) tab. When this tab is also selected,
+   .on wins the underline (solid accent) and only the amber dot remains, so
+   selection stays unambiguous. */
+.r-tabs button.warn{color:var(--warn);border-bottom-style:dotted;border-bottom-color:var(--warn-line)}
+.r-tabs button.warn::before{content:"";display:inline-block;width:6px;height:6px;
+  border-radius:50%;background:var(--warn);margin-right:7px;vertical-align:middle}
+.r-tabs button.warn.on{color:var(--ink);border-bottom-style:solid;border-bottom-color:var(--accent)}
 .r-list{max-height:46vh;overflow:auto;font-family:'IBM Plex Mono',monospace;font-size:13.5px}
 /* The FILENAME is the thing you read, so it gets the flexible column; the sizes
    are short and fixed-width, so they take only what they need and sit next to
@@ -1602,15 +1628,14 @@ body{
           <div class="a">Very Thoughtful</div>
           <div class="b" data-squeeze="Compression" data-head=".36" data-tail=".025" data-thin="2" data-thin-x=".8"><span class="squeeze"><i style="letter-spacing:0.2600em">C</i><i style="letter-spacing:0.2260em">o</i><i style="letter-spacing:0.1849em">m</i><i style="letter-spacing:0.1504em">p</i><i style="letter-spacing:0.1234em">r</i><i style="letter-spacing:0.0945em">e</i><i style="letter-spacing:0.0541em">s</i><i style="letter-spacing:-0.0278em">s</i><i style="letter-spacing:-0.0708em">i</i><i style="letter-spacing:-0.0850em"><span class="thin" style="transform: scaleX(0.8); margin-right: -2.8px;">o</span></i><i><span class="thin" style="transform: scaleX(0.8); margin-right: -3.2px;">n</span></i></span></div>
         </div>
-        <!-- One compact capability line under the wordmark: encoders, then the
-             quality-definitions state. Kept to a single row so IDENTITY stays a
-             tidy two-line block and the brow never grows to a second shelf. -->
+        <!-- One compact capability line under the wordmark: the encoders
+             readout only. (The "Quality definitions" portion was removed on
+             request; renderQualityRig() no-ops safely when #rig-q is absent.)
+             Kept to a single row so IDENTITY stays a tidy two-line block and
+             the brow never grows to a second shelf. -->
         <div class="brow-caps">
           <span class="rig-l">Encoders</span>
           <span class="rig-v" id="rig-v">Soft <b>ffmpeg</b> · Hard <b>detecting…</b></span>
-          <span class="cap-sep">·</span>
-          <span class="rig-l">Quality</span>
-          <span class="rig-v" id="rig-q"><b>Default</b></span>
         </div>
       </div>
 
@@ -2985,7 +3010,12 @@ document.querySelectorAll('[data-squeeze]').forEach(buildSqueeze);
   const SOLID_S=1.25; // s at maximum compression: every coil closed
   const CRUSH=-0.05;  // em of ink OVERLAP there — letters overlapping, gone solid
 
+  // A generation token: each go() bumps it, and the running step()/repeat loop
+  // bails the moment a newer boot has started. This lets the intro REPLAY on a
+  // restart without stacking two spring loops over the same letters.
+  let gen=0;
   const go=()=>{
+    const myGen=++gen;
     const fs=parseFloat(getComputedStyle(el).fontSize);
     const head=parseFloat(el.dataset.head);
     const sb=c=>SB[c]!==undefined?SB[c]:.055;
@@ -3034,6 +3064,7 @@ document.querySelectorAll('[data-squeeze]').forEach(buildSqueeze);
 
     let s=0, v=0, t0=null, prev=null, arriving=true, loopT=null, cycleStart=0;
     const step=now=>{
+      if(myGen!==gen) return;   // a newer boot has taken over — abandon this loop
       if(t0===null){ t0=now; prev=now; }
       const t=now-t0;
       // real frame delta, clamped: a 120Hz screen must not run the spring at
@@ -3060,7 +3091,7 @@ document.querySelectorAll('[data-squeeze]').forEach(buildSqueeze);
           // measured from when this cycle BEGAN, so it repeats on a true 5s beat
           // rather than 5s-plus-however-long-the-animation-took
           const wait=Math.max(400, REPEAT-(performance.now()-cycleStart));
-          loopT=setTimeout(()=>{ if(!$('#unit').classList.contains('on')) run(); }, wait);
+          loopT=setTimeout(()=>{ if(myGen===gen && !$('#unit').classList.contains('on')) run(); }, wait);
           return;
         }
       }
@@ -3079,20 +3110,50 @@ document.querySelectorAll('[data-squeeze]').forEach(buildSqueeze);
   };
   // Hold the wordmark until the splash bows out, so it isn't spent underneath it.
   const fire=()=> (document.fonts && document.fonts.ready) ? document.fonts.ready.then(go) : go();
-  if(document.getElementById('splash')) document.addEventListener('splash-done', fire, {once:true});
-  else fire();
+  // A PERSISTENT listener (not {once}) so the squeeze replays every time the
+  // splash bows out — cold start AND a restart, which re-shows the splash and
+  // re-fires 'splash-done' (see __vtcPlayIntro below).
+  document.addEventListener('splash-done', fire);
+  // Cold start: if there is no splash element right now, boot the wordmark
+  // straight away; otherwise wait for the splash to bow out.
+  if(!document.getElementById('splash')) fire();
+  // Expose the wordmark boot so the restart path can replay it directly if the
+  // splash is skipped (e.g. reduced-motion), keeping the intro consistent.
+  window.__vtcBootWordmark = fire;
 })();
 
 // ═══ splash: Picnic Labs fades in, holds, then fades to the first page ════
+// Runs on cold start AND replays on a restart ("Start over"): both call the same
+// playSplash(), so a restart re-shows the splash, replays its fade/reveal, and
+// re-fires 'splash-done' — which the wordmark IIFE listens for to run the squeeze.
 (function(){
-  const splash=document.getElementById('splash');
-  if(!splash) return;
-  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-  requestAnimationFrame(()=>requestAnimationFrame(()=>splash.classList.add('in')));  // fade in
-  const out=reduced?500:2400, gone=reduced?1000:3200;
-  // On fade-out, tell the gate to perform its wordmark as it's revealed.
-  setTimeout(()=>{ splash.classList.add('gone'); document.dispatchEvent(new Event('splash-done')); }, out);
-  setTimeout(()=>splash.remove(), gone);
+  const first=document.getElementById('splash');
+  if(!first) return;
+  // Keep a pristine clone so the splash can be re-shown after it's removed on
+  // cold start — the restart re-inserts this instead of rebuilding the markup.
+  const template=first.cloneNode(true);
+  const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let timers=[];
+  const clearTimers=()=>{ timers.forEach(clearTimeout); timers=[]; };
+  function playSplash(){
+    clearTimers();
+    let splash=document.getElementById('splash');
+    if(!splash){                              // removed after a previous play — re-insert
+      splash=template.cloneNode(true);
+      document.body.appendChild(splash);
+    }
+    // Reset to the pre-fade state, then fade in on the next frames.
+    splash.classList.remove('gone','in');
+    void splash.offsetWidth;                  // reflow so the transition re-triggers
+    requestAnimationFrame(()=>requestAnimationFrame(()=>splash.classList.add('in')));
+    const out=reduced()?500:2400, gone=reduced()?1000:3200;
+    // On fade-out, tell the gate to perform its wordmark as it's revealed.
+    timers.push(setTimeout(()=>{ splash.classList.add('gone'); document.dispatchEvent(new Event('splash-done')); }, out));
+    timers.push(setTimeout(()=>splash.remove(), gone));
+  }
+  // Expose for the restart path (resetAll → __vtcPlayIntro).
+  window.__vtcPlayIntro = playSplash;
+  playSplash();                               // cold start
 })();
 
 // ═══ folders (chosen at the gate, not in the run) ════════
@@ -5028,7 +5089,13 @@ function drawReport(){
   // Showing "Needs a look · 3" under a block reading 107 was just confusing.
   const counts={ok:R.done, fail:R.fail, skip:R.skip};
   $('#r-tabs').innerHTML=[['ok','Success'],['skip','Left alone'],['fail','Needs a look']]
-    .map(([k,l])=>`<button data-t="${k}" class="${rTab===k?'on':''}">${l} · ${counts[k].toLocaleString()}</button>`).join('');
+    .map(([k,l])=>{
+      // 'warn' marks the "Needs a look" tab when its count>0, giving it the quiet
+      // amber cue (dot + dotted underline) that reads distinct from the accent
+      // 'on' selected underline — so you can always tell which tab is selected.
+      const warn = (k==='fail' && counts.fail>0) ? ' warn' : '';
+      return `<button data-t="${k}" class="${rTab===k?'on':''}${warn}">${l} · ${counts[k].toLocaleString()}</button>`;
+    }).join('');
   $('#r-tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{ rTab=b.dataset.t; trashArmed=false; drawReport(); });
   const rows=R.rows.filter(r=>r.t===rTab);
   $('#r-list').innerHTML = rows.length
@@ -5138,6 +5205,12 @@ function resetAll(){
   $('#gate').classList.remove('picking');
   $('#src-v').textContent='—';
   drawComb(); drawRegions(); clearWell(); render();
+  // Returning to the top replays the full intro exactly like a fresh launch:
+  // re-show the splash + replay its fade/reveal, which re-fires 'splash-done' so
+  // the wordmark squeeze runs again. If the splash is unavailable (e.g. it was
+  // never present), boot the wordmark directly so the intro still plays.
+  if(typeof window.__vtcPlayIntro==='function') window.__vtcPlayIntro();
+  else if(typeof window.__vtcBootWordmark==='function') window.__vtcBootWordmark();
 }
 function newFolderSameSettings(){
   shutSheet('#report-sheet');
@@ -6716,6 +6789,29 @@ window.setMode=setMode; window.U=U; window.W=W;
         if(typeof drawComb==='function') drawComb();
       } else if(shot==='settings'){
         if(typeof openAdvSection==='function') openAdvSection('ignore');
+      } else if(shot==='report'){
+        // Drive the run-complete report with a GUARANTEED non-zero "Needs a look"
+        // so the warning-vs-selected treatment is visible. `tab` picks which tab/
+        // card is selected (ok|skip|fail) so both states can be captured:
+        //   tab=ok   → another tab selected while Needs-a-look warns
+        //   tab=fail → Needs-a-look selected (accent) + warning cue not competing.
+        try{
+          // modelRun() reads SRC + answers; the mock scan sets SRC asynchronously,
+          // so give it a synchronous stand-in here (review-only).
+          if(!window.SRC) window.SRC={k:'/Volumes/NAS/Movies',n:'412 files · 2.84 TB',files:412,tb:2.84};
+          M.forEach(x=>{ answers[x.id]=answers[x.id]??0; });
+          RUN = (typeof modelRun==='function') ? modelRun() : RUN;
+          if(RUN){
+            if(!RUN.fail){ RUN.fail = 7; RUN.failedRetryable = 3;
+              RUN.rows.push({f:'Aguirre (1972).mkv',t:'fail',sev:'err',d:'all encode strategies failed · source untouched'}); }
+            rTab = p.get('tab') || 'ok';
+          }
+          if(typeof drawReport==='function') drawReport();
+          if(typeof openSheet==='function') openSheet('#report-sheet');
+        }catch(e){}
+      } else if(shot==='toolbar'){
+        // The gate/report aren't needed — just the brow. pickFolder above already
+        // dropped the gate so the toolbar shows in its normal (source-chosen) state.
       }
     }catch(e){ /* review-only; never affects the app */ }
   };

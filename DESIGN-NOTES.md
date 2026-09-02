@@ -629,3 +629,99 @@ HTTP server via an inert `#__shot=…` harness; fresh PNGs in `design-review/`:
 `ignore-{dark,light}-{rules,none}.png`, `settings-processing-{dark,light}.png`.
 All edits were made with surgical verified string replacements — the HTML was never
 rewritten wholesale (no Write on the shipped file).
+
+---
+
+## Review-pass 4 — three directed changes (2026-09-02)
+
+Applied non-destructively; LIGHT theme unchanged apart from the toolbar caption;
+self-contained (inline only). Every edit was a surgical, verified string
+replacement — the shipped HTML was never rewritten wholesale (no Write on
+`vtc/vtc_app_v3.html`). Rendered/observed in headless Chrome (both themes)
+over a throwaway local HTTP server via the inert `#__shot=…` harness. Tests:
+**132 pytest + 51 jsdom checks pass** (unchanged; no test text touched).
+
+### 1 · Toolbar — "Quality definitions" caption removed
+The brow's capability line under the wordmark used to read
+`ENCODERS Soft ffmpeg · Hard detecting… · QUALITY Default`. The **Quality**
+portion is gone; only the **Encoders** readout remains. The `#rig-q` span,
+its `Quality` label and the `·` separator were removed from `.brow-caps`
+(~line 1608); `renderQualityRig()` is untouched and already no-ops safely when
+`#rig-q` is absent (`const el=…; if(!el) return;`), so the reset-on-customise
+logic is simply inert now with no dead references. Spacing stays balanced —
+`.brow-caps` is a baseline-aligned flex row, so dropping the trailing items
+leaves the label+value pair tidy under the wordmark. Renders (both themes):
+`design-review/toolbar-light.png`, `toolbar-dark.png` — caption shows
+`ENCODERS Soft ffmpeg · Hard detecting…` only.
+
+### 2 · Report — "Needs a look" warning made distinct from SELECTED
+Previously both the SELECTED stat card/tab and the "Needs a look" WARNING used
+`border-color:var(--accent)`, so you couldn't tell which was selected. Now:
+- **SELECTED stays the one solid-accent treatment** — `.r-s.sel` keeps its
+  solid accent border + inset accent ring; the `.r-tabs button.on` tab keeps
+  its solid-accent underline. Only the selected card/tab reads that way.
+- **"Needs a look" (count>0) gets a quiet, unmistakable amber cue** that cannot
+  be read as selection: a **dotted amber outline** over a faint amber wash on
+  the card (`.r-s.warn` → `border-style:dotted; border-color:var(--warn-line);
+  background:var(--warn-soft)`), a **small amber warning dot** before the label
+  (`.r-s.warn .r-s-l::before`), the count in amber (`.r-s.warn .r-s-v{color:
+  var(--warn)}`), and on the tab a matching **amber dot + dotted amber
+  underbar** (`.r-tabs button.warn` + `::before`).
+- **When "Needs a look" IS selected**, `.sel`/`.on` win the border/underline
+  (solid accent) so it reads as selected, and the amber wash + dot remain but
+  no longer compete (`.r-s.warn.sel{border-style:solid}`,
+  `.r-tabs button.warn.on{border-bottom-style:solid;border-bottom-color:
+  var(--accent)}`).
+New tokens: `--warn / --warn-line / --warn-soft` (amber `#b9852b` light,
+`#d6a24a` dark — the same family as the existing `--paused`, added to both
+`:root` and the dark Slate block; near-black inherits them). The render JS gained
+a `warn` class on the "Needs a look" tab when its count>0 (`drawReport`, the
+`#r-tabs` map). Renders (both themes, non-zero Needs-a-look count) in the two
+required states: **(a) another tab selected while Needs-a-look warns** —
+`design-review/report-warn-otherselected-{light,dark}.png`; **(b) Needs-a-look
+selected** — `report-warn-selected-{light,dark}.png`. Selection is unambiguous
+in all four.
+
+### 3 · Intro animation replays on "Start over" (not just cold start)
+The splash + wordmark intro used to play only on a cold launch. It now ALSO
+replays when the user restarts via the report's **"Start over"** (`#r-reset`
+→ `resetAll()`). Cold start is unchanged (still plays).
+- The **splash IIFE** was refactored so its fade sequence lives in a reusable
+  `playSplash()` exposed as `window.__vtcPlayIntro`. It keeps a pristine clone
+  of `#splash`, and on replay re-inserts it if it was removed, resets
+  `.gone/.in`, forces a reflow so the CSS transition re-triggers, fades in →
+  fades out → **re-fires `splash-done`**, then removes it again. Cold start just
+  calls the same `playSplash()`.
+- The **wordmark IIFE** now listens for `splash-done` **persistently** (was
+  `{once:true}`) and exposes its boot as `window.__vtcBootWordmark`, so the
+  squeeze runs every time the splash bows out. A **generation token** (`gen` /
+  `myGen`) guards the spring's `step()` RAF loop and its 5-s repeat so a
+  replayed boot supersedes any in-flight loop instead of stacking two springs
+  over the same letters. `go()` already fully resets the letters (spread open,
+  opacity 0, then `run()`), so re-invoking it replays the squeeze cleanly.
+- **`resetAll()`** (after clearing answers, reopening the gate — `unit` loses
+  `.on`, gains `.off`) calls `window.__vtcPlayIntro()` (falling back to
+  `__vtcBootWordmark()` if the splash is unavailable).
+
+**How it was verified (it's motion):** a CDP probe loaded the app, let the cold
+splash run and be removed (`splashPresent:false`, both globals exposed), picked
+a folder so the gate closed (`unitOn:true`), then called `resetAll()` and
+sampled state: the splash was **back and fading** (`splashPresent:true,
+splashIn:true, splashGone:false`), the gate had **reopened** (`unitOn:false`),
+and the wordmark letters were in the **spread pre-boot state**
+(`wordSpreadMax≈9.9 em`), i.e. the squeeze had reset and was running again — the
+same signature as a fresh launch. Frame grabs: `design-review/
+restart-splash-replay.png` (the Picnic Labs splash re-shown) and
+`restart-wordmark-reveal.png` (the gate revealed with the "Compression" wordmark
+mid-squeeze).
+
+### Harness note
+The inert `#__shot=…` review hook gained two review-only shots: `report`
+(builds a `modelRun()` with a guaranteed non-zero "Needs a look", `tab=ok|fail`
+selecting which card/tab is active, then `drawReport()` + opens `#report-sheet`;
+it sets a synchronous stand-in `SRC`/`answers` since the mock scan is async) and
+`toolbar` (just drops the gate to show the brow). No product path is touched.
+
+### Tests
+`python -m pytest -q` → **132 passed.** jsdom `tests/ui/drive.js` → **51 checks,
+0 fails** (nav/flight/dup drivers also pass). No test text changed.
