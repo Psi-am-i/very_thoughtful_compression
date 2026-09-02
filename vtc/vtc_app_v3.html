@@ -964,6 +964,74 @@ body{
 .compat-opt.on{border-color:var(--accent);background:var(--paper-hi);box-shadow:inset 3px 0 0 var(--accent)}
 .compat-opt b{display:block;font-size:14.5px;color:var(--ink);margin-bottom:2px}
 .compat-opt span{display:block;font-size:12.5px;color:var(--ink-2);line-height:1.45}
+/* ── Bloated modern files: the Settings section + the up-front review sheet ────
+   Re-encoding an H.265/VP9 source is normally never done — it buys its saving
+   with a second lossy generation and hours of machine time — so the whole thing
+   is off by default, and the review sheet exists to put that cost in front of the
+   user BEFORE a night of encoding. Modelled on #compat-sheet: state the facts,
+   ask one question. Every colour is a theme token, so both themes read alike. */
+.mr-lead{font-size:15px;font-weight:500;color:var(--ink);margin:0;line-height:1.55}
+.mr-lead b{font-weight:700}
+.mr-lead .mr-big{color:var(--accent);font-weight:700}
+.mr-note{font-size:14px;color:var(--ink-2);line-height:1.6;margin:12px 0 0}
+.mr-note b{color:var(--ink);font-weight:600}
+.mr-h{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--ink-3);margin:22px 0 7px}
+.mr-hn{text-transform:none;letter-spacing:0;font-size:11.5px}
+/* The ranked list — worst first, by the space each file actually gives back,
+   because that (not size, not percentage) is what a night of encoding buys. */
+.mr-list{border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;
+  max-height:32vh;overflow-y:auto}
+.mr-row{display:grid;grid-template-columns:26px minmax(0,1fr) 54px 74px 86px;
+  align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--rule);
+  font-size:13.5px;color:var(--ink-2)}
+.mr-row:last-child{border-bottom:0}
+.mr-rank{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-3);text-align:right}
+.mr-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mr-over,.mr-size,.mr-saved{font-family:'IBM Plex Mono',monospace;font-size:12px;
+  text-align:right;white-space:nowrap}
+.mr-over{color:var(--ink-3)}
+.mr-row.in .mr-over{color:var(--ink-2)}
+.mr-saved{font-weight:600}
+/* Column heads: "4.7×" and "−13.6 GB" mean nothing unlabelled. */
+.mr-row.mr-head{position:sticky;top:0;z-index:1;background:var(--paper-2);
+  font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3);padding:6px 12px}
+.mr-row.mr-head span{font-family:inherit;font-size:inherit;color:inherit;font-weight:400}
+/* A row inside the chosen count: brighter, wearing the accent edge that means
+   "armed" everywhere else in this interface. */
+.mr-row.in{color:var(--ink);background:var(--panel);box-shadow:inset 3px 0 0 var(--accent)}
+.mr-row.in .mr-saved{color:var(--accent)}
+/* Where this run stops and the next one starts. */
+.mr-cut{display:flex;align-items:center;gap:10px;padding:7px 12px;
+  border-bottom:1px solid var(--rule);background:var(--paper-2)}
+.mr-cut span{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+.mr-cut::before,.mr-cut::after{content:"";flex:1;height:1px;background:var(--rule)}
+.mr-more{margin:8px 0 0}
+/* The one decision. */
+.mr-picks{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.mr-pick{font-family:'IBM Plex Mono',monospace;font-size:12.5px;letter-spacing:.02em;
+  padding:7px 13px;border:1px solid var(--rule);border-radius:var(--r);
+  background:var(--panel);color:var(--ink-2);cursor:pointer;transition:all .12s;white-space:nowrap}
+.mr-pick:hover:not(.on){border-color:var(--ink-3);color:var(--ink)}
+.mr-pick.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.mr-custom{display:flex;align-items:center;gap:7px;margin-left:4px}
+.mr-custom .mr-lab{font-size:13px;color:var(--ink-2)}
+.mr-custom input{font-family:'IBM Plex Mono',monospace;font-size:12.5px;width:74px;
+  text-align:right;padding:6px 7px;border:1px solid var(--rule);border-radius:var(--r);
+  background:var(--panel);color:var(--ink)}
+.mr-custom .adv-unit{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3)}
+/* What the current choice costs and returns, kept beside the Continue button. */
+.mr-foot{margin-right:auto;font-size:13px;color:var(--ink-2);line-height:1.45;max-width:60ch}
+.mr-foot b{color:var(--ink)}
+.mr-busy{display:inline-block;font-family:'IBM Plex Mono',monospace;color:var(--ink-3);
+  animation:pgsqueeze 2.4s cubic-bezier(.4,0,.3,1) infinite;transform-origin:left center}
+/* Settings section: the AV1 aside sits WITH its tick, so leaving it unticked
+   never reads as arbitrary. */
+.mo-chks{margin-top:7px}
+.mo-aside{font-size:12.5px;color:var(--ink-2);line-height:1.55;margin:8px 0 0;max-width:64ch}
+.mo-aside b{color:var(--ink);font-weight:600}
 /* ── Watch mode ────────────────────────────────────────────────────────────────
    A third interface, a sibling of Utilities. The mode switch toggles .watch on the
    unit; when set, the guided flow (comb + main + deck) hides and #watch-main shows.
@@ -2303,6 +2371,37 @@ body{
   </div>
 </div>
 
+<!-- Bloated modern files. Shown up front after a scan — the same moment as
+     #compat-sheet — but ONLY when the off-by-default modern re-encode is armed
+     AND the scan actually found files far over their tier target. It asks one
+     question: all of them, or only the worst N. The answer is ADV.modernMax
+     (0 = all). Choosing fewer loses nothing: a file we don't get to is never
+     recorded as done, so the next run comes back for it, worst first. -->
+<div class="sheet" id="modern-sheet">
+  <div class="sheet-c wide">
+    <div class="sheet-h">
+      <div class="sheet-e mono">Before we start · slow work</div>
+      <h2 class="sheet-t" id="modern-title">Some modern files are far bigger than they need to be</h2>
+    </div>
+    <div class="sheet-b">
+      <p class="mr-lead" id="modern-lead"></p>
+      <p class="mr-note" id="modern-time"></p>
+      <p class="sheet-w" style="border-left-color:var(--rule)">These are files a bad encoder wrote at a silly bitrate. VTC never re-encodes a modern codec unless you ask, because doing it spends a second generation of quality to buy the space back. Nothing else in your run is changed by this choice.</p>
+      <div class="mr-h">The worst offenders <span class="mr-hn" id="modern-rank-note"></span></div>
+      <div class="mr-list" id="modern-list"></div>
+      <button class="adv-mini mr-more" id="modern-more" hidden="">Show more</button>
+      <div class="mr-h">How many should we do this time?</div>
+      <div class="mr-picks" id="modern-picks"></div>
+      <p class="mr-note" id="modern-reassure">Whatever you leave is not lost. A file we don't get to isn't written down as done, so the next run picks up exactly where this one stops — worst first.</p>
+    </div>
+    <div class="sheet-f">
+      <div class="mr-foot" id="modern-foot"></div>
+      <button class="btn-ghost" id="modern-skip">Leave them alone</button>
+      <button class="btn-run" id="modern-go" style="width:auto;margin:0;padding:11px 26px">Continue</button>
+    </div>
+  </div>
+</div>
+
 <!-- Advanced Settings: the tunables the guided flow deliberately hides, plus the
      format & subtitle policy that later steps will make live. Opened by the gear. -->
 <div class="sheet" id="adv-sheet">
@@ -2323,6 +2422,7 @@ body{
         <button class="adv-nav" data-sec="tuning">Video tuning</button>
         <div class="adv-rail-grp">Processing</div>
         <button class="adv-nav on" data-sec="ignore">Ignore rules</button>
+        <button class="adv-nav" data-sec="modern">Bloated modern files</button>
         <button class="adv-nav" data-sec="run">Parallel jobs</button>
         <div class="adv-rail-grp">App</div>
         <button class="adv-nav" data-sec="appearance">Appearance</button>
@@ -2553,6 +2653,40 @@ body{
           </div>
           <div class="adv-row">
             <div class="adv-lab adv-subs-summary" id="adv-ign-summary"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Bloated modern files: the one narrow exception to "modern codecs are
+           left alone". Off by default, because turning it on costs a second lossy
+           generation and hours per file. An empty codec list is the same as off,
+           and the read-back below says so rather than letting it look armed. -->
+      <section class="adv-sec" data-sec="modern">
+        <div class="adv-sec-h">
+          <h3>Bloated modern files</h3>
+          <button class="adv-mini" id="adv-modern-review" disabled="">Review candidates</button>
+        </div>
+        <p class="adv-intro">VTC leaves H.265, VP9 and AV1 files alone. They are already efficient, so re-encoding one spends a second generation of quality and <b>hours per file</b> to buy back space that usually isn't there. The exception is a file a bad hardware encoder wrote at a silly bitrate — common in drone and action-cam footage — which can be several times the size it needs to be. Turn this on for that, and only when the machine can be left running.</p>
+        <div class="adv-grid one">
+          <div class="adv-row">
+            <div class="adv-lab"><b>Re-encode bloated modern files</b><span>Off by default, and normally best left off. With it on, a modern file is only touched when it is far over its tier target <i>and</i> the result would clear the minimum saving.</span></div>
+            <button class="adv-tog" id="adv-modern-tog" role="switch" aria-checked="false"></button>
+          </div>
+          <div class="adv-row adv-sub adv-row-col" id="adv-modern-codecs-row">
+            <div class="adv-lab"><b>Source codecs to consider</b><span>Which modern codecs are eligible. With none ticked nothing can qualify, so the feature is off.</span></div>
+            <div class="adv-checks mo-chks" id="adv-modern-codecs">
+              <button class="adv-chk" data-k="hevc" role="checkbox" aria-checked="true">H.265 / HEVC</button>
+              <button class="adv-chk" data-k="vp9" role="checkbox" aria-checked="true">VP9</button>
+              <button class="adv-chk" data-k="av1" role="checkbox" aria-checked="false">AV1</button>
+            </div>
+            <p class="mo-aside"><b>AV1 is left unticked on purpose.</b> It is the most efficient of the three, so a genuinely bloated AV1 file is rare; AV1 → H.265 is usually an efficiency downgrade rather than a saving; and with no hardware AV1 encoder on most machines it is punishingly slow. Tick it deliberately or not at all.</p>
+          </div>
+          <div class="adv-row adv-sub" id="adv-modern-over-row">
+            <div class="adv-lab"><b>Only when it's this far over target</b><span>How many times its tier target a file must be before it counts as bloated. At 2× the win is about half the file and clearly worth the hours; at 1.2× you would spend a night to save a sliver and a generation of quality.</span></div>
+            <div class="adv-ctrl"><input type="number" id="adv-modern-over" min="1" max="20" step="0.1"><span class="adv-unit">×</span></div>
+          </div>
+          <div class="adv-row">
+            <div class="adv-lab adv-subs-summary" id="adv-modern-summary"></div>
           </div>
         </div>
       </section>
@@ -4100,12 +4234,20 @@ const ADV_DEFAULTS = { format:'convert', subKinds:['normal','forced','hoh'], sub
   // RESIZE custom cap (px, long edge). '' = unset; only used when the RESIZE
   // question's Custom option is chosen. The rung options (2160/1440/1080/720)
   // carry their own value, so this only holds the free-form one.
-  resizeCustom:'' };
+  resizeCustom:'',
+  // Bloated modern files. OFF by default: re-encoding an H.265/VP9/AV1 source
+  // costs a second lossy generation and hours per file, so it is only ever worth
+  // it for a file a bad encoder wrote at a silly bitrate. modernCodecs is the
+  // eligible source list (AV1 deliberately absent — see Settings for why);
+  // modernOver is how many times over its tier target a file must be; modernMax
+  // caps how many run at once, worst-first, and 0 means "all of them".
+  reencodeModern:false, modernCodecs:['hevc','vp9'], modernOver:2.0, modernMax:25 };
 // A plain Object.assign would share the one bpp object between ADV and the
 // defaults, so editing a tier would quietly rewrite what "Reset" restores.
 const advDefaults = ()=> Object.assign({}, ADV_DEFAULTS, {
   bpp:Object.assign({}, BPP_DEFAULTS),
-  subKinds:ADV_DEFAULTS.subKinds.slice(), subLangs:[], ignExts:[], ignNames:[] });
+  subKinds:ADV_DEFAULTS.subKinds.slice(), subLangs:[], ignExts:[], ignNames:[],
+  modernCodecs:ADV_DEFAULTS.modernCodecs.slice() });
 const ADV = advDefaults();
 window.ADV = ADV;
 // Push the settings to the engine whenever they change: the ignore rules decide
@@ -4311,6 +4453,7 @@ function advToForm(){                                  // ADV -> controls
   $('#adv-ign-exts').value  = (ADV.ignExts ||[]).map(e=>'.'+e).join(', ');
   $('#adv-ign-names').value = (ADV.ignNames||[]).join(', ');
   advIgnSummary();
+  advModernForm();
   advHistoryInfo();
   $('#adv-format').querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.v===ADV.format));
   $('#adv-container').querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.v===ADV.container));
@@ -4440,6 +4583,35 @@ function advBind(){                                    // controls -> ADV
     ADV.ignUnderMb=''; ADV.ignOverMb=''; ADV.ignExts=[]; ADV.ignNames=[];
     advToForm(); advPush();
   };
+  // Bloated modern files. The master toggle, the eligible source codecs and the
+  // over-target bar. Every change re-reads the section (the sub-rows grey out when
+  // the master is off) and re-states the read-back, so an empty codec list can
+  // never sit there looking armed.
+  const mtog=$('#adv-modern-tog');
+  if(mtog) mtog.onclick=()=>{ ADV.reencodeModern=!ADV.reencodeModern; advModernForm(); advPush(); };
+  const mchk=$('#adv-modern-codecs');
+  if(mchk) mchk.querySelectorAll('.adv-chk').forEach(b=>{
+    b.onclick=()=>{
+      const k=b.dataset.k, list=ADV.modernCodecs||(ADV.modernCodecs=[]);
+      const i=list.indexOf(k);
+      if(i>=0) list.splice(i,1); else list.push(k);
+      advModernForm(); advPush();
+    };
+  });
+  num('#adv-modern-over','modernOver',{min:1,max:20,float:true});
+  const mover=$('#adv-modern-over');
+  if(mover){ const base=mover.oninput;
+    mover.oninput=(e)=>{ if(base) base(e); advModernSummary(); }; }
+  const mrev=$('#adv-modern-review');
+  if(mrev) mrev.onclick=()=>{
+    // Leaving Settings the normal way would ALSO offer the review; mark it as
+    // already offered for these settings so it opens once, not twice.
+    if(typeof modernMarkAsked==='function') modernMarkAsked();
+    shutSheet('#adv-sheet'); advPush();
+    if(typeof drawEstimate==='function') drawEstimate();
+    if(typeof openModern==='function') openModern(true);
+  };
+
   // Clearing the history is a real, irreversible edit to what the next run does,
   // so it confirms in place (turning the button into its own "Yes, clear")
   // rather than behind a dialog the webview would have to block on.
@@ -4495,6 +4667,9 @@ function advThemeForm(){
 function advClose(){
   shutSheet('#adv-sheet'); advPush();
   if(typeof drawEstimate==='function') drawEstimate();
+  // Arming the modern re-encode commits the machine to hours of work, so the
+  // review is offered as soon as Settings closes — not silently at the next scan.
+  if(typeof maybeAskModern==='function') maybeAskModern();
 }
 $('#adv-done').onclick=advClose;
 $('#adv-sheet').onclick=e=>{ if(e.target===$('#adv-sheet')) advClose(); };
@@ -4623,6 +4798,375 @@ function maybeAskCompat(){
 $('#compat-opts').querySelectorAll('.compat-opt').forEach(b=>b.onclick=()=>{ setFormat(b.dataset.v); advPush(); });
 $('#compat-go').onclick=()=>shutSheet('#compat-sheet');
 $('#compat-sheet').onclick=e=>{ if(e.target===$('#compat-sheet')) shutSheet('#compat-sheet'); };
+
+// ═══ bloated modern files ════════════════════════════════
+// H.265/VP9/AV1 sources are left alone by default: they are already efficient, so
+// re-encoding one buys its saving with a second lossy generation and hours of
+// machine time. The exception — a file a bad hardware encoder wrote at a silly
+// bitrate — is armed in Settings → Processing → Bloated modern files, and when it
+// IS armed this is where the cost is put in front of the user before a night of
+// encoding starts. One question: all of them, or only the worst N.
+//
+// Two surfaces over the same state, as with the non-MP4 policy: the Settings
+// section (the rules) and this sheet (the one decision, ADV.modernMax, 0 = all).
+
+// ── the Settings section ────────────────────────────────────────────────────
+// The feature is only genuinely armed when a source codec is ticked: an empty
+// list gives the engine nothing to match, so the UI must not look armed either.
+function modernArmed(){ return !!(ADV.reencodeModern && (ADV.modernCodecs||[]).length); }
+function modernCodecLabel(k){
+  const L = { hevc:'H.265', vp9:'VP9', av1:'AV1' };   // local: no module-level TDZ
+  return L[k] || k;
+}
+function modernCodecWords(){
+  const l = (ADV.modernCodecs||[]).map(modernCodecLabel);
+  if(!l.length) return '';
+  return l.length<2 ? l[0] : l.slice(0,-1).join(', ')+' and '+l[l.length-1];
+}
+function modernOverText(){
+  const v = +ADV.modernOver;
+  return (isFinite(v)?v:2).toFixed(1).replace(/\.0$/,'') + '×';
+}
+// ADV -> the section's controls. Also greys the two sub-rows while the master is
+// off (the house .moot idiom), so the parent/child relationship is visible.
+function advModernForm(){
+  const tog=$('#adv-modern-tog');
+  if(tog){ tog.classList.toggle('on', !!ADV.reencodeModern);
+    tog.setAttribute('aria-checked', ADV.reencodeModern ? 'true' : 'false'); }
+  const chk=$('#adv-modern-codecs');
+  if(chk) chk.querySelectorAll('.adv-chk').forEach(b=>{
+    const on = (ADV.modernCodecs||[]).indexOf(b.dataset.k) >= 0;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  const over=$('#adv-modern-over'); if(over) over.value = ADV.modernOver;
+  ['#adv-modern-codecs-row','#adv-modern-over-row'].forEach(id=>{
+    const r=$(id); if(r) r.classList.toggle('moot', !ADV.reencodeModern);
+  });
+  const rev=$('#adv-modern-review');
+  if(rev) rev.disabled = !(modernArmed() && SRC);   // SRC is a lexical global, not window.SRC
+  advModernSummary();
+}
+// Plain read-back of what the three controls add up to — including the honest
+// "you have switched it off by unticking everything" case.
+function advModernSummary(){
+  const el=$('#adv-modern-summary'); if(!el) return;
+  const codecs=(ADV.modernCodecs||[]).length;
+  el.classList.remove('warn');
+  if(!ADV.reencodeModern){
+    el.textContent = 'Off — H.265, VP9 and AV1 files are never re-encoded, whatever size they are.';
+    return;
+  }
+  if(!codecs){
+    el.classList.add('warn');
+    el.textContent = 'No source codecs are ticked, so nothing can qualify — this is off.';
+    return;
+  }
+  el.textContent = 'On — ' + modernCodecWords() + ' files more than ' + modernOverText()
+    + ' their tier target are eligible, worst first. Expect hours per file.';
+}
+
+// ── the review sheet ────────────────────────────────────────────────────────
+// MR.data is the last modern_review payload; MR.sel is the pending answer
+// (0 = all). MR.shown is how much of the ranked list is on screen.
+const MR = { data:null, sel:0, shown:8, poll:null, tries:0 };
+const MR_PRESETS = [10, 25, 50, 100];
+let _modernAskedFor = null;
+function modernKey(){
+  return (SRC?SRC.k:'') + '|' + (ADV.modernCodecs||[]).join(',') + '|' + ADV.modernOver;
+}
+function modernMarkAsked(){ _modernAskedFor = modernKey(); }
+function modernForget(){ _modernAskedFor = null; }   // Start over asks again
+function mrEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,
+  c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function mrSize(b){
+  b = Math.max(0, +b||0);
+  if(b>=1e12) return (b/1e12).toFixed(2)+' TB';
+  if(b>=1e9)  return (b/1e9).toFixed(b>=1e10?0:1)+' GB';
+  return (b/1e6).toFixed(0)+' MB';
+}
+// A file's playing time is recoverable from the two numbers the payload already
+// gives us (size and bitrate), so a "top 25" estimate can be those actual 25
+// files rather than a flat proportion of the whole library.
+function mrRowSecs(r){ return (r && r.kbps>0) ? (r.gb*1e9*8)/(r.kbps*1000) : 0; }
+function mrCount(){
+  const d=MR.data; if(!d) return 0;
+  const all=d.files||0;
+  return (!MR.sel || MR.sel>=all) ? all : Math.max(1, MR.sel|0);
+}
+function mrShare(n){                              // {saved, secs} for the worst n
+  const d=MR.data; if(!d) return {saved:0, secs:0};
+  const top=d.top||[], all=d.files||0;
+  if(!all || n>=all || !top.length) return {saved:d.saved_bytes||0, secs:d.seconds||0};
+  if(n<=top.length){
+    const rows=top.slice(0,n);
+    return { saved: rows.reduce((s,r)=>s+(+r.saved_gb||0)*1e9, 0),
+             secs:  rows.reduce((s,r)=>s+mrRowSecs(r), 0) };
+  }
+  const f = n/all;                                // past the rows we were given
+  return { saved:(d.saved_bytes||0)*f, secs:(d.seconds||0)*f };
+}
+// Hours for a slice of the library, at the SAME measured rate as the whole. Null
+// when the engine had nothing to measure against — we never invent a number.
+function mrHours(secs){
+  const d=MR.data;
+  if(!d || d.hours==null || !d.seconds) return null;
+  return d.hours * (secs/d.seconds);
+}
+function mrLead(){
+  const d=MR.data; if(!d) return;
+  const n=d.files||0, one=(n===1);
+  const ttl=$('#modern-title'), lead=$('#modern-lead'), tm=$('#modern-time');
+  if(ttl) ttl.textContent = !d.measured ? 'Some modern files are far bigger than they need to be'
+    : one ? 'One modern file is far bigger than it needs to be'
+          : n.toLocaleString()+' modern files are far bigger than they need to be';
+  if(lead){
+    if(!d.measured){
+      // Still probing: say so rather than show a number we know will move.
+      lead.innerHTML = '<span class="mr-busy">Still counting your library…</span> '
+        + '<b>'+n.toLocaleString()+'</b> so far, and this will grow.';
+    } else if(!n){
+      lead.innerHTML = 'Nothing in this library is bloated enough to qualify — every '
+        + mrEsc(modernCodecWords()) + ' file is under ' + modernOverText() + ' its tier target.';
+    } else {
+      lead.innerHTML = '<span class="mr-big">'+n.toLocaleString()+'</span> '
+        + mrEsc(modernCodecWords()) + ' file'+(one?'':'s')+' '+(one?'is':'are')
+        + ' more than <b>'+modernOverText()+'</b> '+(one?'its':'their')+' tier target'
+        + ' — <b>'+mrSize(d.bytes)+'</b> in all. Doing every one of them would give back'
+        + ' about <b>'+mrSize(d.saved_bytes)+'</b>.';
+    }
+  }
+  if(tm){
+    if(!n){ tm.textContent=''; return; }
+    if(d.hours==null){
+      tm.innerHTML = '<b>This is slow.</b> We can\'t put a number on it yet — nothing has '
+        + 'been encoded on this machine for us to measure against — but this is hours per '
+        + 'file, not minutes. A list this size is an overnight job at the very least.';
+    } else {
+      tm.innerHTML = '<b>This is slow.</b> Doing '
+        + (d.measured ? 'all '+n.toLocaleString() : 'everything found so far')
+        + ' would take about <b>'+swHuman(d.hours*3600)+'</b> of encoding'
+        + (d.rate_from ? ', based on '+mrEsc(d.rate_from) : '')
+        + (d.measured ? '.' : ' — and that will grow with the count.');
+    }
+  }
+}
+// The ranked list. Rows inside the chosen count wear the accent edge; the row
+// after them carries the cut line, so the answer is something you can see.
+function mrList(){
+  const list=$('#modern-list'); if(!list) return;
+  const d=MR.data, top=(d&&d.top)||[];
+  const note=$('#modern-rank-note'), more=$('#modern-more');
+  if(!top.length){
+    list.innerHTML = '<div class="sw-empty">'
+      + (d && d.measured ? 'Nothing qualifies at these settings.' : 'Still measuring…')
+      + '</div>';
+    if(note) note.textContent=''; if(more) more.hidden=true;
+    return;
+  }
+  const n = mrCount(), vis = Math.min(MR.shown, top.length);
+  let html = '<div class="mr-row mr-head"><span></span><span>File</span>'
+    + '<span>Over</span><span>Size</span><span>Gives back</span></div>';
+  for(let i=0;i<vis;i++){
+    const r=top[i], inRun = i<n;
+    if(!inRun && i>0 && (i-1)<n)
+      html += '<div class="mr-cut"><span>the next run picks up here</span></div>';
+    html += '<div class="mr-row'+(inRun?' in':'')+'">'
+      + '<span class="mr-rank">'+(i+1)+'</span>'
+      + '<span class="mr-name" title="'+mrEsc(r.name)+'">'+mrEsc(r.name)+'</span>'
+      + '<span class="mr-over">'+(+r.over||0).toFixed(1)+'×</span>'
+      + '<span class="mr-size">'+(+r.gb||0).toFixed(1)+' GB</span>'
+      + '<span class="mr-saved">−'+(+r.saved_gb||0).toFixed(1)+' GB</span></div>';
+  }
+  list.innerHTML = html;
+  if(note) note.textContent = '— ranked by the space each one gives back'
+    + ((d.files>top.length) ? ', top '+top.length.toLocaleString()+' of '+d.files.toLocaleString() : '');
+  if(more){
+    const left = top.length - vis;
+    more.hidden = (left<=0 && vis<=8);
+    more.textContent = left>0 ? 'Show '+Math.min(left,40)+' more' : 'Show fewer';
+  }
+}
+// The presets are only offered where they mean something: a "Top 100" on a
+// 40-file library would be the same as "All".
+function mrPicks(){
+  const wrap=$('#modern-picks'); if(!wrap) return;
+  const d=MR.data, all=(d&&d.files)||0;
+  if(!all){ wrap.innerHTML=''; return; }
+  const opts = MR_PRESETS.filter(p=>p<all);
+  const custom = (MR.sel>0 && opts.indexOf(MR.sel)<0 && MR.sel<all) ? MR.sel : '';
+  wrap.innerHTML = '<button class="mr-pick" data-n="0">'
+    + (d.measured ? 'All '+all.toLocaleString() : 'All of them') + '</button>'
+    + opts.map(p=>'<button class="mr-pick" data-n="'+p+'">Top '+p+'</button>').join('')
+    + '<span class="mr-custom"><span class="mr-lab">or just the top</span>'
+    + '<input type="number" id="modern-custom" min="1" max="'+all+'" step="1" placeholder="—"'
+    + ' aria-label="A number of files of your own" value="'+custom+'">'
+    + '<span class="adv-unit">files</span></span>';
+  wrap.querySelectorAll('.mr-pick').forEach(b=>{
+    b.onclick=()=>{ MR.sel = +b.dataset.n; const c=$('#modern-custom'); if(c) c.value=''; mrSync(); };
+  });
+  const ci=$('#modern-custom');
+  if(ci) ci.oninput=()=>{
+    const v=parseInt(ci.value,10);
+    MR.sel = isFinite(v) ? Math.max(1, Math.min(all, v)) : 0;
+    mrSync();                                   // re-render the list, not the picks
+  };
+  mrSync();
+}
+// Light the chosen preset, repaint the list's cut line, and restate the cost.
+function mrSync(){
+  const d=MR.data, all=(d&&d.files)||0;
+  document.querySelectorAll('#modern-picks .mr-pick').forEach(b=>{
+    const v=+b.dataset.n;
+    b.classList.toggle('on', v===0 ? (!MR.sel || MR.sel>=all) : (MR.sel===v));
+  });
+  mrList();
+  mrFoot();
+  const re=$('#modern-reassure');
+  if(re){
+    const n=mrCount(), left=Math.max(0, all-n);
+    re.innerHTML = left
+      ? 'The other <b>'+left.toLocaleString()+'</b> are not lost. A file we don\'t get to '
+        + 'isn\'t written down as done, so the next run picks up exactly where this one '
+        + 'stops — worst first. You can re-run VTC whenever you like and deal with the balance.'
+      : 'You\'ve picked all of them. If the run is interrupted nothing is lost either — only '
+        + 'files that finished are written down as done, so the next run resumes from there.';
+  }
+}
+function mrFoot(){
+  const el=$('#modern-foot'); if(!el) return;
+  const d=MR.data;
+  if(!d || !(d.files>0)){ el.innerHTML=''; return; }
+  const n=mrCount(), sh=mrShare(n), hrs=mrHours(sh.secs);
+  el.innerHTML = '<b>'+n.toLocaleString()+'</b> file'+(n===1?'':'s')
+    + ' · about <b>'+mrSize(sh.saved)+'</b> back · '
+    + (hrs==null ? 'encoding time not known yet'
+                 : 'about <b>'+swHuman(hrs*3600)+'</b> of encoding');
+}
+function mrAll(){ mrLead(); mrPicks(); }
+function mrStopPoll(){ if(MR.poll){ clearTimeout(MR.poll); MR.poll=null; } }
+// While the probe pass is still running the count is a floor, not a total — so
+// keep asking until it settles rather than leaving a stale number on screen.
+function mrPoll(){
+  mrStopPoll();
+  if(!MR.data || MR.data.measured || MR.tries>60) return;
+  MR.poll = setTimeout(()=>{
+    MR.tries++;
+    modernFetch().then(r=>{
+      if(!r || !$('#modern-sheet').classList.contains('on')) return;
+      MR.data=r; mrAll(); mrPoll();
+    });
+  }, 1500);
+}
+// The bridge call, feature-detected exactly like reencode_candidates; standalone
+// falls back to mock data so the sheet can be judged by opening the file.
+function modernFetch(){
+  try{
+    if(window.pywebview && window.pywebview.api && window.pywebview.api.modern_review){
+      return Promise.resolve(window.pywebview.api.modern_review(
+          Object.assign({adv: window.ADV||{}}, answers)))
+        .then(r => (r && !r.error) ? r : null).catch(()=>null);
+    }
+  }catch(e){}
+  return Promise.resolve(modernMock());
+}
+// Mock payload for the standalone file: believable, deterministic, and shaped
+// exactly like modern_review. It reacts to the Settings controls (raising the
+// over-target bar shortens the list; ticking AV1 lengthens it) so the two
+// surfaces can be seen to be one state. __vtcModernMockOpts lets the review
+// harness force the un-measured and no-estimate cases.
+function modernMock(){
+  const o = window.__vtcModernMockOpts || {};
+  const NAMES = ['Coastline Drone Reel 4K.mkv','Ski Trip Day 2 — GoPro.mp4',
+    'Wedding — Ceremony (full).mkv','Reef Dive, Raja Ampat.mp4','Aerial — Harvest 2024.mkv',
+    'Mountain Bike Descent.mp4','Northern Lights, Tromsø.mkv','Track Day — Onboard.mp4',
+    'City Timelapse Composite.mkv','Surf — Golden Hour.mp4','Canyon Flight (raw grade).mkv',
+    'Concert — Second Set.mp4','Farm Survey, North Field.mkv','Sailing — Channel Crossing.mp4',
+    'Desert Sunrise Hyperlapse.mkv','Forest Trail Run.mp4','Vineyard Overflight.mkv',
+    'Rally Stage 4 — Chase Cam.mp4','Storm Front, Coast Road.mkv','Marathon — Finish Line.mp4',
+    'Glacier Approach.mkv','Fireworks, New Year.mp4','Cattle Muster — East.mkv',
+    'Kite Surf Session.mp4','Lighthouse, Blue Hour.mkv','Rooftop Panorama.mp4',
+    'Cave Descent — Helmet Cam.mkv','River Kayak, Upper Falls.mp4','Bridge Inspection Pass.mkv',
+    'Motocross — Practice.mp4','Old Town Walkthrough.mkv','Harbour at Dawn.mp4',
+    'Quarry Survey — Grid 3.mkv','Snowboard Park Laps.mp4','Estuary Wildlife Hide.mkv',
+    'Air Show — Display Team.mp4','Rope Access Inspection.mkv','Coastal Path, Section 2.mp4',
+    'Solar Farm Overflight.mkv','Night Drive — City Loop.mp4'];
+  const bar = Math.max(1, +ADV.modernOver || 2);
+  const rows = NAMES.map((name,i)=>{
+    const gbv  = 24.1 * Math.pow(0.945, i);
+    const over = 4.70 * Math.pow(0.982, i);
+    return { name, gb:+gbv.toFixed(1), saved_gb:+(gbv*(0.564 - i*0.0022)).toFixed(1),
+             kbps: Math.round(41200 * Math.pow(0.962, i)), over:+over.toFixed(1) };
+  }).filter(r => r.over >= bar);
+  // Codec mix: the default (HEVC + VP9) is the 1.0 case; AV1 adds a little,
+  // dropping one takes its share away.
+  const W = { hevc:0.62, vp9:0.20, av1:0.18 };
+  const mix = (ADV.modernCodecs||[]).reduce((s,k)=>s+(W[k]||0), 0) / 0.82;
+  const keep = rows.length / NAMES.length;
+  const files = Math.max(rows.length, Math.round(142 * keep * mix));
+  const scale = (142 ? files/142 : 0);
+  const measured = (o.measured===false) ? false : true;
+  return { measured, files,
+    bytes: Math.round(2.054e12*scale), saved_bytes: Math.round(8.61e11*scale),
+    seconds: Math.round(486000*scale),
+    hours: (o.hours===null) ? null : +(46.2*scale).toFixed(1),
+    rate_from: (o.hours===null) ? '' : (o.rate_from!=null ? o.rate_from : 'your last run'),
+    top: rows };
+}
+// Open the review. `force` shows it even when nothing qualifies (the Settings
+// "Review candidates" button, where an empty answer is still an answer); the
+// automatic path stays silent rather than interrupting for nothing.
+function openModern(force){
+  MR.tries=0; MR.shown=8;
+  return modernFetch().then(r=>{
+    if(!r) return;
+    if(!force && !(r.files>0)) return;
+    MR.data=r;
+    // Start from the standing per-run budget, so the sheet opens on the setting
+    // the engine would otherwise use — and on "All" when that covers everything.
+    const budget = (typeof ADV.modernMax==='number') ? ADV.modernMax : 0;
+    MR.sel = (budget>0 && budget < r.files) ? budget : 0;
+    // Open far enough to show the cut line when the pick is small; a bigger pick
+    // keeps the short list and reveals the rest on "Show more".
+    MR.shown = (MR.sel>0 && MR.sel+2<=12) ? MR.sel+2 : 8;
+    mrAll();
+    openSheet('#modern-sheet');
+    mrPoll();
+  });
+}
+// Called after a scan (webapp.py's __vtcScanDone, beside maybeAskCompat) and
+// whenever Settings closes. Asked once per folder per rule-set, so changing the
+// codecs or the over-target bar asks again — the answer would be different.
+function maybeAskModern(){
+  if(!SRC || SRC.scanning) return;
+  if(!modernArmed()) return;
+  if(_modernAskedFor===modernKey()) return;
+  modernMarkAsked();
+  openModern(false);
+}
+window.maybeAskModern = maybeAskModern;
+window.openModern = openModern;
+$('#modern-more') && ($('#modern-more').onclick = ()=>{
+  const top=(MR.data&&MR.data.top)||[];
+  MR.shown = (MR.shown >= top.length) ? 8 : Math.min(top.length, MR.shown+40);
+  mrList();
+});
+// Continue writes the one answer. 0 means "all of them".
+$('#modern-go') && ($('#modern-go').onclick = ()=>{
+  const all=(MR.data&&MR.data.files)||0;
+  ADV.modernMax = (!MR.sel || MR.sel>=all) ? 0 : (MR.sel|0);
+  advPush(); mrStopPoll(); shutSheet('#modern-sheet');
+});
+// Having seen the hours, the honest way out is to disarm the whole thing rather
+// than to leave it on with a count of zero.
+$('#modern-skip') && ($('#modern-skip').onclick = ()=>{
+  ADV.reencodeModern = false;
+  if(typeof advToForm==='function' && $('#adv-modern-tog')) advToForm();
+  advPush(); mrStopPoll(); shutSheet('#modern-sheet');
+});
+$('#modern-sheet') && ($('#modern-sheet').onclick = e=>{
+  if(e.target===$('#modern-sheet')){ mrStopPoll(); shutSheet('#modern-sheet'); }
+});
 
 // ═══ live progress ═══════════════════════════════════════
 // Shared hooks: the pywebview bridge drives these from the real engine; the
@@ -5265,6 +5809,8 @@ function resetAll(){
                         // or the previews would keep encoding at the old frame size
   SRC=null; step=0; armed=null; window.pendingReconfirm=false;
   trashStatus=null; trashArmed=false;
+  if(typeof MR==='object'){ MR.data=null; MR.sel=0; }   // a new folder is a new question
+  if(typeof modernForget==='function') modernForget();
   $('#unit').classList.remove('on','dimmed'); $('#unit').classList.add('off');
   $('#gate').classList.remove('picking');
   $('#src-v').textContent='—';
@@ -5401,6 +5947,9 @@ function pickFolder(i){
   $('#unit').classList.remove('off');
   $('#unit').classList.add('on');
   render(); setTimeout(paintCorpse,80);
+  // The scan is where the modern review belongs — the real bridge calls this from
+  // __vtcScanDone, beside maybeAskCompat. Silent unless the option is armed.
+  if(window.maybeAskModern) maybeAskModern();
 }
 $('#picks').querySelectorAll('.pick').forEach(b=>{
   b.onclick=()=>pickFolder(+b.dataset.f);
@@ -6865,7 +7414,11 @@ window.setMode=setMode; window.U=U; window.W=W;
         if(typeof renderDestExtra==='function') renderDestExtra();
         if(typeof drawComb==='function') drawComb();
       } else if(shot==='settings'){
-        if(typeof openAdvSection==='function') openAdvSection('ignore');
+        // sec=… picks the section (default: the Ignore rules this shot was added for)
+        if(p.get('sec')==='modern'){ ADV.reencodeModern = p.get('on')!=='0';
+          if(p.get('av1')==='1' && (ADV.modernCodecs||[]).indexOf('av1')<0) ADV.modernCodecs.push('av1');
+          if(p.get('none')==='1') ADV.modernCodecs=[]; }
+        if(typeof openAdvSection==='function') openAdvSection(p.get('sec')||'ignore');
       } else if(shot==='report'){
         // Drive the run-complete report with a GUARANTEED non-zero "Needs a look"
         // so the warning-vs-selected treatment is visible. `tab` picks which tab/
@@ -6886,6 +7439,19 @@ window.setMode=setMode; window.U=U; window.W=W;
           if(typeof drawReport==='function') drawReport();
           if(typeof openSheet==='function') openSheet('#report-sheet');
         }catch(e){}
+      } else if(shot==='modern'){
+        // The bloated-modern review sheet. est=0 nulls the time estimate (the
+        // "we can't measure it yet" wording); measured=0 shows the counting state;
+        // sel=N preselects a count; over=N raises the over-target bar; av1=1 ticks AV1.
+        window.__vtcModernMockOpts = {};
+        if(p.get('est')==='0') window.__vtcModernMockOpts.hours = null;
+        if(p.get('measured')==='0') window.__vtcModernMockOpts.measured = false;
+        ADV.reencodeModern = true;
+        if(p.get('av1')==='1' && (ADV.modernCodecs||[]).indexOf('av1')<0) ADV.modernCodecs.push('av1');
+        if(p.get('over')) ADV.modernOver = parseFloat(p.get('over'));
+        ADV.modernMax = p.get('sel')!=null ? parseInt(p.get('sel'),10) : 25;
+        M.forEach(x=>{ answers[x.id]=answers[x.id]??0; });
+        if(typeof openModern==='function') openModern(true);
       } else if(shot==='toolbar'){
         // The gate/report aren't needed — just the brow. pickFolder above already
         // dropped the gate so the toolbar shows in its normal (source-chosen) state.

@@ -590,6 +590,8 @@ _BRIDGE_JS = r"""
     SRC.ignored = info.ignored || 0;                 // removed by the user's ignore rules
     drawEstimate();
     if(window.maybeAskCompat) maybeAskCompat();       // ask the non-MP4 policy, now that we know
+    if(window.maybeAskModern) maybeAskModern();       // …and how much of the bloated-modern
+                                                      // queue to take on, now that we can count it
   };
   document.querySelectorAll('#picks .pick').forEach(b=> b.onclick = ()=> pickFolder(+b.dataset.f));
 
