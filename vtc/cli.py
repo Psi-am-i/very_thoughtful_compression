@@ -54,6 +54,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"vtc {__version__}")
     p.add_argument("-i", "--interactive", action="store_true", help="ask for settings with prompts")
     p.add_argument("--dry-run", action="store_true", help="show what would happen; encode nothing")
+    p.add_argument("--benchmark", action="store_true",
+                   help="measure THIS machine on real files from the library and print "
+                        "what each encoder actually does — speed and size at the same "
+                        "quality tier. Encodes short samples; changes nothing")
+    p.add_argument("--benchmark-samples", type=int, default=2, metavar="N",
+                   help="how many files to sample for --benchmark (default: 2 — one can "
+                        "be a static interview or a confetti cannon)")
+    p.add_argument("--benchmark-seconds", type=int, default=30, metavar="S",
+                   help="length of each sample for --benchmark (default: 30)")
     q = p.add_argument_group("quality")
     q.add_argument("--codec", choices=["h265", "h264", "av1"], default="h265",
                    help="output codec (default: h265). av1 is the most efficient but the "
@@ -438,6 +447,42 @@ def _size_of(p: Path) -> int:
         return 0
 
 
+def _print_benchmark(cfg: RunConfig, samples: int, seconds: int) -> int:
+    """What this machine actually does, measured on the user's own files.
+
+    Prints both halves, because they point opposite ways and the choice needs
+    both: hardware is several times faster, software usually produces a much
+    smaller file at the same quality tier.
+    """
+    from . import bench
+    print(f"\n  Sampling {samples} file(s) x {seconds}s from {cfg.src}")
+    print("  Real files, not test patterns — synthetic clips reverse this comparison.\n")
+
+    def prog(done, total, label):
+        print(f"    [{done}/{total}] {label[:78]}", flush=True)
+
+    result = bench.run_benchmark(cfg, samples=samples, seconds=seconds, progress=prog)
+    rows = result.summary()
+    if not rows:
+        print("\n  Nothing could be measured — no usable video files found here.")
+        return 1
+    print(f"\n  Sampled: {', '.join(result.samples)}")
+    if result.skipped:
+        print(f"  Not available here: {', '.join(result.skipped)}")
+    print(f"\n  {'codec':6} {'path':9} {'encoder':20} {'speed@1080p':>12} "
+          f"{'of target':>10} {'SSIM':>8}")
+    print("  " + "─" * 70)
+    for r in rows:
+        ss = f"{r['ssim']:.4f}" if r["ssim"] else "—"
+        print(f"  {r['codec']:6} {r['path']:9} {r['encoder']:20} "
+              f"{r['at_1080p']:11.1f}x {r['of_target']*100:9.0f}% {ss:>8}")
+    print("\n  speed@1080p — x realtime for a 1080p30 frame, so the figure does not")
+    print("                depend on which files happened to be sampled")
+    print("  of target   — how much of the tier's bitrate allowance it actually spent;")
+    print("                software is often far under it at the same quality")
+    return 0
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
@@ -460,6 +505,8 @@ def main(argv: list[str] | None = None) -> int:
         n = pipeline.Ledger(dataclasses.replace(cfg, ledger_enabled=True)).clear()
         print(f"cleared processing history: {n} entr{'y' if n == 1 else 'ies'}")
 
+    if args.benchmark:
+        return _print_benchmark(cfg, args.benchmark_samples, args.benchmark_seconds)
     _print_header(cfg, dry=args.dry_run)
     if args.dry_run:
         return _print_dry_run(cfg)

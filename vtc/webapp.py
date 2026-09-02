@@ -17,6 +17,7 @@ The engine (pipeline/model/config) is untouched and UI-agnostic.
 
 from __future__ import annotations
 
+import datetime as _dt
 import hashlib
 import time as _time
 from dataclasses import replace
@@ -33,7 +34,7 @@ import subprocess
 import sys
 import tempfile
 
-from . import __version__, encode, netmove, pipeline
+from . import __version__, bench, encode, netmove, pipeline
 from .config import AudioPolicy, Container, Encoder, OutputMode, RunConfig, SourceAction
 from .ffprobe import probe
 from .model import OutCodec, Tier, capped_dims, target_kbps
@@ -976,7 +977,9 @@ def _save_settings(adv: dict) -> None:
 # wrong. A machine that has never encoded anything has no rate, and the app says
 # so plainly instead of inventing one.
 _RATES_KEY = "encodeRates"          # measured by real runs — trusted first
+_BENCH_KEY = "benchRates"           # measured by the benchmark, on real library files
 _SAMPLE_RATES_KEY = "sampleRates"   # measured by a 5s preview clip — rough, labelled
+_BENCH_META = "benchmark"           # when it ran, on what, and what it found
 
 
 def _rate_key(config: RunConfig, hw: bool) -> str:
@@ -990,6 +993,19 @@ def _rate_key(config: RunConfig, hw: bool) -> str:
     the concurrency it was taken at.
     """
     return f"{'hw' if hw else 'sw'}|{config.out_codec.value}|j{max(1, config.jobs)}"
+
+
+def _jobs_agnostic(key: str) -> str:
+    """The same rate key at one job at a time.
+
+    The benchmark runs its encodes sequentially, so everything it learns is filed
+    under j1. Someone who then runs four at a time would otherwise find nothing
+    and fall back to the shipped constants — worse than a real measurement of
+    their own machine taken at a different concurrency. Used only as a fallback,
+    after the exact key has been tried, and the in-run correction closes the rest
+    of the gap.
+    """
+    return re.sub(r"\|j\d+$", "|j1", key)
 
 
 def _observed_rate(results: list) -> float | None:
@@ -1041,6 +1057,7 @@ class Api:
         # bpp changes what the preview panels encode. Seeded from disk so the user's
         # settings survive quitting the app (and rebuilding it).
         self._adv: dict = _load_settings()
+        self._bench_stop = False           # set by stop_benchmark, polled between encodes
         self._scan_gen = 0
         self._probe_gen = 0
         self._preview_gen = 0              # bumped whenever previews are (re)requested;
@@ -1502,6 +1519,77 @@ class Api:
         review.pop("work", None)
         return review
 
+    def benchmark_state(self):
+        """Has this machine been benchmarked, and what did it find?
+
+        The first-run offer and the Settings section both key off this: an app
+        that has never measured anything should say so and offer to, rather than
+        quietly quoting a developer's constants as if they were the user's.
+        """
+        meta = self._adv.get(_BENCH_META) or {}
+        return {"done": bool(meta), "meta": meta,
+                "source": self._encode_rate(RunConfig(src=Path.cwd(), ffmpeg=FFMPEG))[1]}
+
+    def run_benchmark(self, src: str = "", samples: int = 2, seconds: int = 30,
+                      quality: bool = True):
+        """Measure this machine on the user's OWN library, and keep the result.
+
+        Runs in a worker so the UI stays alive, streaming progress back. Everything
+        downstream — the pre-run "about N hours", the countdown, the modern-review
+        estimate — reads the same rate store, so a finished benchmark silently
+        makes all three the user's own numbers instead of the shipped constants.
+        """
+        folder = Path(src) if src else self._src
+        if not folder or not Path(folder).is_dir():
+            return {"error": "no folder"}
+        self._bench_stop = False
+        threading.Thread(target=self._benchmark_worker,
+                         args=(Path(folder), int(samples), int(seconds), bool(quality)),
+                         daemon=True).start()
+        return {"started": True}
+
+    def stop_benchmark(self):
+        self._bench_stop = True
+        return {"stopped": True}
+
+    def _benchmark_worker(self, folder: Path, samples: int, seconds: int, quality: bool):
+        try:
+            cfg = build_config(folder, {"codec": 1, "quality": 2, "saving": 1,
+                                        "encoder": 0, "dest": 0,
+                                        "adv": self._adv or {}})
+        except Exception:                                  # noqa: BLE001
+            cfg = RunConfig(src=folder, ffmpeg=FFMPEG, ffprobe=FFPROBE)
+        cfg.ffmpeg, cfg.ffprobe = FFMPEG, FFPROBE
+        try:
+            def prog(done, total, label):
+                self._emit("__vtcBenchProgress",
+                           {"done": done, "total": total, "label": label})
+            result = bench.run_benchmark(cfg, samples=samples, seconds=seconds,
+                                         measure_quality=quality, progress=prog,
+                                         stop=lambda: self._bench_stop)
+            rows = result.summary()
+            # Store the RATE, not the readable × realtime: the rate is in output
+            # pixel-frames and so is independent of whichever files were drawn.
+            rates = dict(self._adv.get(_BENCH_KEY) or {})
+            for (codec, path), rate in result.rates().items():
+                rates[f"{'hw' if path == 'hardware' else 'sw'}|{codec}|j1"] = rate
+            self._adv[_BENCH_KEY] = rates
+            self._adv[_BENCH_META] = {
+                "at": _dt.datetime.now().isoformat(timespec="seconds"),
+                "folder": str(folder), "samples": result.samples,
+                "seconds": seconds, "skipped": result.skipped,
+                "rows": rows,
+            }
+            _save_settings(self._adv)
+            log.info("benchmark: %d path(s) measured from %d sample(s)",
+                     len(rows), len(result.samples))
+            self._emit("__vtcBenchDone", {"rows": rows, "samples": result.samples,
+                                          "skipped": result.skipped,
+                                          "stopped": self._bench_stop})
+        except Exception as e:                             # noqa: BLE001
+            log.exception("benchmark failed")
+            self._emit("__vtcBenchDone", {"error": str(e)[:200]})
+
     def _record_rate(self, config: RunConfig, results: list) -> None:
         """Learn this machine's encoding speed from the run that just finished.
 
@@ -1556,14 +1644,21 @@ class Api:
         """
         hw = bool(encode.select_hw_encoder(config))
         key = _rate_key(config, hw)
+        # In order of how much they are worth: a real run of this library beats a
+        # benchmark of it, which beats a five-second preview clip, which beats the
+        # shipped constants. Each is labelled so the UI can say where its number
+        # came from rather than presenting all four as equally solid.
         for store, label in ((_RATES_KEY, "your last run"),
+                             (_BENCH_KEY, "your benchmark"),
                              (_SAMPLE_RATES_KEY, "a sample encode")):
-            try:
-                v = float((self._adv.get(store) or {}).get(key) or 0)
-            except (TypeError, ValueError):
-                continue
-            if v > 0:
-                return v, label
+            src = self._adv.get(store) or {}
+            for k in (key, _jobs_agnostic(key)):
+                try:
+                    v = float(src.get(k) or 0)
+                except (TypeError, ValueError):
+                    continue
+                if v > 0:
+                    return v, label
         return None, ""
 
     # -- projected estimate (real plan arithmetic on probed files) --------------

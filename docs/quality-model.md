@@ -254,6 +254,49 @@ newer, Intel 11th-gen or newer, RDNA2 or newer, or a 2023-and-later TV. Anything
 either transcodes on the server or will not play at all — which for a Plex library is
 the opposite of the tool's usual promise that nothing downstream notices.
 
+### Benchmarking the user's own machine
+
+Everything above is a constant measured on one developer's Mac until the user's own
+machine has been measured, which is what `vtc/bench.py` is for — `--benchmark` on the
+CLI, offered on first run and repeatable from Settings in the app.
+
+It points at the library, draws files **at random** (a library is alphabetical, so the
+first N files are one show, shot one way), takes a stream-copied slice from the middle
+of each (titles and credits are not the content), and encodes it down **every path this
+machine actually has** — probed, so a listed-but-broken encoder never reaches an
+estimate. Two samples by default, because one can be a static interview or a confetti
+cannon and those differ by more than the thing being measured.
+
+It reports both halves of the choice, which point opposite ways:
+
+- **speed@1080p** — × realtime normalised to a 1080p30 frame, so the figure describes
+  the machine rather than whichever files were drawn.
+- **of target** — how much of the tier's bitrate allowance each path actually spent,
+  with SSIM beside it. Without the SSIM "smaller" is not a result: any codec can be
+  smaller by being worse.
+
+A representative run on real television:
+
+| codec | path | speed@1080p | of target | SSIM |
+|---|---|---|---|---|
+| H.264 | hardware | 5.1× | 103% | 0.9902 |
+| H.264 | software | 3.6× | **57%** | 0.9923 |
+| H.265 | hardware | 5.6× | 98% | 0.9896 |
+| H.265 | software | 1.5× | **58%** | 0.9908 |
+| AV1 | software | 1.1× | 83% | 0.9917 |
+
+Hardware spends its whole ABR allowance; software's capped CRF is satisfied at little
+over half of it, at slightly *better* SSIM. Hardware is several times faster, software
+usually produces a much smaller file at the same quality — neither is simply better,
+which is why the app measures rather than recommends.
+
+The rates it learns go into the same store everything else reads, ranked: a real run of
+the library beats a benchmark of it, which beats a five-second preview clip, which
+beats the shipped constants. Each is labelled, so the app can say where its number came
+from. Benchmarks run sequentially and file under `jobs=1`; a run at higher concurrency
+falls back to that measurement rather than to the constants, and the in-run correction
+closes the rest.
+
 ### Measured encoder speeds
 
 Real television, five-minute samples, the app's own arguments, × realtime:
