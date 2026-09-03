@@ -338,3 +338,150 @@ def test_a_codec_that_cannot_go_into_mp4_is_refused_up_front():
         # Converting the same file to MKV is still perfectly fine.
         ok = U.remux_faststart(_cfg(d), d / "old.wmv", container="mkv")
         assert ok.ok, ok.error
+
+
+# ── DRM: cheap, and it ends an argument the other checks would lose ─────────
+def test_an_encrypted_file_is_named_as_encrypted_not_broken():
+    """DRM presents exactly like corruption — ffmpeg cannot decode it and reports
+    errors — and every remedy here is useless against it. Saying "encrypted" ends
+    the matter; "unreadable" invites an hour of futile repair attempts."""
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        # a moov carrying a protection scheme box, which only an encrypted file has
+        moov = _box(b"moov", _box(b"trak", _box(b"sinf", b"\0" * 16)))
+        (d / "drm.mp4").write_bytes(_box(b"ftyp", b"isom") + moov + _box(b"mdat", b"\0" * 64))
+        fault = U.drm_protected(_cfg(d), d / "drm.mp4")
+        assert fault and fault.kind == "drm" and fault.fix == "none", fault
+
+        rep = U.scan_health(_cfg(d), d / "drm.mp4")
+        assert rep.faults[0].kind == "drm", [f.kind for f in rep.faults]
+        assert rep.fix == "none", "nothing here can repair an encrypted file"
+
+
+def test_an_ordinary_file_is_not_mistaken_for_drm():
+    if not _HAVE_FF:
+        print("  skip (no ffmpeg)"); return
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        _clip(d / "clean.mp4")
+        assert U.drm_protected(_cfg(d), d / "clean.mp4") is None
+
+
+# ── the index rebuild: lossless, opt-in, and honest about what it cannot do ──
+def _desynced(d: Path) -> Path:
+    """A file whose sample index no longer matches its media — made the way it
+    happens in life, by overwriting a span with a differently-muxed encode of the
+    same title. Damage is aligned to keyframes so the surviving tail is a
+    complete display block, which the rebuild requires."""
+    import json as _json
+    for name, freq, g, bf, br in (("a", 440, 25, 2, "1200k"), ("b", 660, 13, 1, "900k")):
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+                        "-i", "testsrc2=size=640x360:rate=25", "-t", "20",
+                        "-f", "lavfi", "-i", f"sine=frequency={freq}", "-shortest",
+                        "-c:v", "libx264", "-g", str(g), "-bf", str(bf), "-b:v", br,
+                        "-c:a", "aac", "-pix_fmt", "yuv420p", str(d / f"{name}.mp4")],
+                       check=True, stdin=subprocess.DEVNULL)
+    pk = _json.loads(subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_packets", "-of", "json",
+         str(d / "a.mp4")], capture_output=True, text=True).stdout)["packets"]
+    pk = sorted(pk, key=lambda p: int(p["pos"]))
+    keys = [i for i, p in enumerate(pk) if "K" in p.get("flags", "")]
+    lo, hi = int(pk[keys[4]]["pos"]), int(pk[keys[7]]["pos"])
+    a = bytearray((d / "a.mp4").read_bytes())
+    b = (d / "b.mp4").read_bytes()
+    a[lo:hi] = b[lo:hi] if hi <= len(b) else b[-(hi - lo):]
+    (d / "broken.mp4").write_bytes(bytes(a))
+    return d / "broken.mp4"
+
+
+def test_the_index_rebuild_repairs_without_re_encoding():
+    """The reason it is worth trying before a repair encode: the payload is intact
+    and self-describing, so only the container's map to it is rewritten. Minutes
+    and no quality, against an hour and a generation."""
+    if not _HAVE_FF:
+        print("  skip (no ffmpeg)"); return
+    from vtc import mp4index
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        broken = _desynced(d)
+        diag = mp4index.diagnose(broken)
+        assert diag["damaged"] > 0 and diag["regions"], diag
+        out = d / "fixed.mp4"
+        rep = mp4index.repair(broken, out)
+        assert rep["residual_errors"] == 0, rep
+        assert out.exists() and broken.exists(), "the input must never be touched"
+        r = subprocess.run(["ffmpeg", "-v", "error", "-i", str(out), "-f", "null", "-"],
+                           capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        assert not [ln for ln in r.stderr.splitlines() if "h264 @" in ln]
+
+
+def test_the_rebuild_keeps_b_frames_in_display_order():
+    """THE trap this code exists to avoid. Route recovered video through raw
+    Annex-B and -c copy and ffmpeg sets pts = dts, flattening ctts — every B-frame
+    then displays in decode order. It decodes cleanly and plays WORSE than the
+    file you started with, which is the kind of bug that passes every test that
+    only asks "does it decode"."""
+    if not _HAVE_FF:
+        print("  skip (no ffmpeg)"); return
+    from vtc import mp4index
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        out = d / "fixed.mp4"
+        mp4index.repair(_desynced(d), out)
+        r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+                            "-read_intervals", "%+3", "-show_entries", "packet=pts,dts",
+                            "-of", "csv=p=0", str(out)], capture_output=True, text=True)
+        rows = [ln for ln in r.stdout.strip().splitlines() if "," in ln]
+        reordered = sum(1 for ln in rows if ln.split(",")[0] != ln.split(",")[1])
+        assert reordered > 0, "pts == dts everywhere: B-frame display order was flattened"
+
+
+def test_it_refuses_hevc_and_variable_frame_rate_rather_than_half_trying():
+    """Two different reasons, and worth keeping distinct: the damage DETECTION is
+    container-level and would work for HEVC, but the re-timing parses H.264 slice
+    headers for the picture order count. VFR fails for an unrelated reason — a
+    rebuilt stts would have to invent each recovered frame's duration."""
+    if not _HAVE_FF:
+        print("  skip (no ffmpeg)"); return
+    from vtc import mp4index
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+                        "-i", "testsrc2=size=320x240:rate=25", "-t", "3",
+                        "-c:v", "libx265", "-tag:v", "hvc1", "-pix_fmt", "yuv420p",
+                        str(d / "h265.mp4")], check=True, stdin=subprocess.DEVNULL)
+        try:
+            mp4index.diagnose(d / "h265.mp4")
+            assert False, "HEVC should have been refused"
+        except mp4index.IndexRepairUnsupported as e:
+            assert "H.264" in str(e), str(e)
+
+
+def test_a_file_it_cannot_help_returns_none_rather_than_a_failure():
+    """"Not eligible" and "tried and failed" are different answers: the first
+    should fall through to the next remedy without a word of alarm."""
+    if not _HAVE_FF:
+        print("  skip (no ffmpeg)"); return
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        _clip(d / "fine.mkv")           # not even MP4
+        assert U.rebuild_index(_cfg(d), d / "fine.mkv") is None
+        _clip(d / "fine.mp4")           # healthy MP4: nothing to rebuild
+        assert U.rebuild_index(_cfg(d), d / "fine.mp4") is None
+
+
+def test_the_ladder_tries_lossless_repairs_before_re_encoding():
+    """A re-encode is the last rung because it is the only one that spends
+    quality. Remux, then index rebuild, then — and only if enabled — re-encode."""
+    if not _HAVE_FF:
+        print("  skip (no ffmpeg)"); return
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        broken = _desynced(d)
+        rep = U.scan_health(_cfg(d), broken, decode_seconds=20)
+        assert rep.fix == "reencode", [f.detail for f in rep.faults]
+        res = U.fix_health(_cfg(d), rep, allow_reencode=True)
+        assert res.ok, res.error
+        assert res.action == "reindex", (
+            f"a lossless rebuild was available but it did a {res.action}")
+        assert "no re-encode" in res.note, res.note

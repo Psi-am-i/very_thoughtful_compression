@@ -50,7 +50,9 @@ def build_parser() -> argparse.ArgumentParser:
         description="Very Thoughtful Compression — codec-aware, quality-density video re-encoder.",
         epilog="Run with no directory (or -i) for guided prompts. Use --dry-run to preview.",
     )
-    p.add_argument("src", type=Path, nargs="?", help="directory to scan (omit for interactive mode)")
+    p.add_argument("src", type=Path, nargs="?",
+                   help="directory to scan, or — with --faststart/--health — a single "
+                        "file to look at (omit for interactive mode)")
     p.add_argument("--version", action="version", version=f"vtc {__version__}")
     p.add_argument("-i", "--interactive", action="store_true", help="ask for settings with prompts")
     p.add_argument("--dry-run", action="store_true", help="show what would happen; encode nothing")
@@ -467,12 +469,17 @@ def _print_utility(cfg: RunConfig, tool: str, fix: bool, deep: bool) -> int:
     once, and one that starts by rewriting things is not one anybody can try out.
     """
     from . import utilities
-    files = list(pipeline.iter_video_files(cfg))
+    # A single file is a first-class target: when one episode misbehaves, being
+    # made to point at its folder and wait for a library scan is the wrong shape
+    # of tool entirely.
+    one = Path(cfg.src)
+    files = [one] if one.is_file() else list(pipeline.iter_video_files(cfg))
     if not files:
         print("  (no video files found)")
         return 0
     title = "Faststart" if tool == "faststart" else "File health"
-    print(f"\n  {title} — {len(files)} file(s) under {cfg.src}")
+    where = files[0].name if one.is_file() else f"{len(files)} file(s) under {cfg.src}"
+    print(f"\n  {title} — {where}")
     if tool == "health" and not deep:
         print("  Headers only. --deep also decodes each file to find bitstream damage.")
     print()
@@ -554,10 +561,18 @@ def main(argv: list[str] | None = None) -> int:
     else:
         cfg = config_from_args(args)
 
-    errs = cfg.validate()
+    # The Utilities take a single file as readily as a folder, so "src is not a
+    # directory" is only an error for the paths that actually scan a tree.
+    single_file = args.src is not None and Path(args.src).is_file()
+    errs = [e for e in cfg.validate()
+            if not (single_file and e.startswith("scan directory does not exist"))]
     if errs:
         for e in errs:
             print(f"error: {e}", file=sys.stderr)
+        return 2
+    if single_file and not (args.faststart or args.health):
+        print("error: that is a file, not a directory — only --faststart and --health "
+              "take a single file", file=sys.stderr)
         return 2
 
     if getattr(args, "clear_history", False):

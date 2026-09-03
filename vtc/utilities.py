@@ -19,16 +19,20 @@ from __future__ import annotations
 
 import json
 import re
+import logging
 import struct
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import mp4index
 from .config import RunConfig
 from .ffprobe import probe
 from .winproc import NO_WINDOW, TEXT_UTF8
 
 # Containers whose index position we can actually determine.
+log = logging.getLogger("vtc.utilities")
+
 _MP4_EXTS = {".mp4", ".m4v", ".mov", ".m4a"}
 _MKV_EXTS = {".mkv", ".mka", ".webm"}
 
@@ -61,14 +65,20 @@ def _read_mp4_top_level(fh, file_size: int):
         if len(head) < 8:
             return
         size, typ = struct.unpack(">I4s", head)
+        hs = 8
         if size == 1:                      # 64-bit largesize follows the header
             ext = fh.read(8)
             if len(ext) < 8:
                 return
             size = struct.unpack(">Q", ext)[0]
+            hs = 16
         elif size == 0:                    # this box runs to end of file
             size = file_size - pos
-        if size < 8:                       # nonsense: refuse to guess
+        # A declared size smaller than the header it just claimed is nonsense.
+        # Compared against the ACTUAL header length, not a flat 8: in the 64-bit
+        # form a size of 12 would pass a `< 8` test and then walk backwards into
+        # the middle of the box we are standing on.
+        if size < hs:
             return
         yield pos, size, typ.decode("latin-1")
         pos += size
@@ -105,27 +115,34 @@ def is_faststart(path: Path) -> bool | None:
 
 
 def _ebml_num(fh, keep_marker: bool):
-    """Read one EBML variable-length integer. Returns (value, byte_length)."""
+    """Read one EBML variable-length integer. Returns (value, byte_length, unknown).
+
+    `unknown` is the EBML "size not known yet" form — every data bit set, which
+    live and streamed muxers write. It has to be recognised at whatever width it
+    was encoded (a 1-byte 0xFF as much as an 8-byte one): treating it as a real
+    length walks a few bytes into the file and concludes nothing is there.
+    """
     first = fh.read(1)
     if not first:
-        return None, 0
+        return None, 0, False
     b = first[0]
     if b == 0:
-        return None, 0
+        return None, 0, False
     length = 1
     mask = 0x80
     while not (b & mask):
         mask >>= 1
         length += 1
         if length > 8:
-            return None, 0
+            return None, 0, False
     value = b if keep_marker else (b & (mask - 1))
     rest = fh.read(length - 1)
     if len(rest) < length - 1:
-        return None, 0
+        return None, 0, False
     for byte in rest:
         value = (value << 8) | byte
-    return value, length
+    unknown = (not keep_marker) and value == (1 << (7 * length)) - 1
+    return value, length, unknown
 
 
 # Matroska element IDs, read WITH their marker bits (the form they are written in).
@@ -146,35 +163,40 @@ def _mkv_cues_first(fh, file_size: int) -> bool | None:
     pos = 0
     while pos < file_size:
         fh.seek(pos)
-        eid, idlen = _ebml_num(fh, keep_marker=True)
+        eid, idlen, _ = _ebml_num(fh, keep_marker=True)
         if eid is None:
             return None
-        size, szlen = _ebml_num(fh, keep_marker=False)
+        size, szlen, unknown = _ebml_num(fh, keep_marker=False)
         if size is None:
             return None
         body = pos + idlen + szlen
         if eid == _EBML_SEGMENT:
-            end = file_size if size in (0, 0x00FFFFFFFFFFFFFF) else min(file_size, body + size)
+            # A Segment of unknown length runs to the end of the file, which is
+            # normal for anything muxed live rather than written in one pass.
+            end = file_size if unknown else min(file_size, body + size)
             child = body
             while child < end:
                 fh.seek(child)
-                cid, cidlen = _ebml_num(fh, keep_marker=True)
+                cid, cidlen, _ = _ebml_num(fh, keep_marker=True)
                 if cid is None:
                     return None
-                csize, cszlen = _ebml_num(fh, keep_marker=False)
+                csize, cszlen, cunknown = _ebml_num(fh, keep_marker=False)
                 if csize is None:
                     return None
                 if cid == _EBML_CUES:
                     return True
                 if cid == _EBML_CLUSTER:
                     return False
-                if csize == 0:
-                    return None            # unknown-length child: cannot walk past it
+                if cunknown:
+                    return None            # cannot walk past a child of unknown length
                 child += cidlen + cszlen + csize
+            # Walked the whole Segment without meeting either: there is no index
+            # at all. The remux would create one, but say "unknown" rather than
+            # claim we found an index sitting in the wrong place.
             return None
-        pos = body + (size if size else 0)
-        if size == 0:
+        if unknown:
             return None
+        pos = body + size
     return None
 
 
@@ -325,6 +347,44 @@ def decode_errors(config: RunConfig, path: Path, seconds: int = 0) -> Fault | No
     return None
 
 
+# Boxes that only appear in an encrypted MP4. `encv`/`enca` are the sample entries
+# for encrypted video/audio, `sinf` the protection scheme, `pssh` the DRM system
+# header, `senc` the per-sample initialisation vectors.
+_DRM_BOXES = (b"pssh", b"sinf", b"senc", b"encv", b"enca")
+
+
+def drm_protected(config: RunConfig, path: Path) -> Fault | None:
+    """Is this file encrypted?
+
+    Worth its own check because DRM presents exactly like corruption — ffmpeg
+    cannot decode it and reports errors — and every remedy this tool has is
+    useless against it. Telling someone "this is encrypted" ends the matter;
+    letting them run a repair, then a re-encode, wastes an hour to arrive at the
+    same place. Cheap: a header read, no decoding.
+    """
+    if path.suffix.lower() not in _MP4_EXTS:
+        return None
+    try:
+        size = path.stat().st_size
+        with path.open("rb") as fh:
+            for off, box_size, typ in _read_mp4_top_level(fh, size):
+                if typ != "moov":
+                    continue
+                # Read the moov and look for protection boxes anywhere inside it.
+                fh.seek(off)
+                blob = fh.read(min(box_size, 32 * 1024 * 1024))
+                hit = next((b for b in _DRM_BOXES if b in blob), None)
+                if hit:
+                    return Fault(
+                        kind="drm",
+                        detail="encrypted (DRM) — no repair or re-encode can read this",
+                        fix="none")
+                return None
+    except (OSError, struct.error, ValueError):
+        return None
+    return None
+
+
 def mp4_incompatible_codec(config: RunConfig, path: Path) -> Fault | None:
     """A video codec that cannot be copied into MP4 — only relevant when the user
     has asked to change container, which is why it is reported and not fixed."""
@@ -367,13 +427,16 @@ def scan_health(config: RunConfig, path: Path, decode_seconds: int = 0) -> FileR
         # Even an unprobeable file is worth a structural look: "the download
         # stopped 300 MB short" tells someone what to do about it, where
         # "unreadable" only tells them something is wrong.
-        truncated = container_truncated(config, path)
-        rep.faults.append(truncated or Fault(
-            kind="unreadable",
-            detail=_tidy(info.error or "") or "no video stream found",
-            fix="none"))
+        # DRM first: an encrypted file looks exactly like a corrupt one, and
+        # "encrypted" is an answer where "unreadable" only invites an hour of
+        # futile repair attempts.
+        rep.faults.append(drm_protected(config, path)
+                          or container_truncated(config, path)
+                          or Fault(kind="unreadable",
+                                   detail=_tidy(info.error or "") or "no video stream found",
+                                   fix="none"))
         return rep
-    for check in (container_truncated, chapters_past_duration):
+    for check in (drm_protected, container_truncated, chapters_past_duration):
         fault = check(config, path)
         if fault:
             rep.faults.append(fault)
@@ -566,10 +629,70 @@ def fix_health(config: RunConfig, report: FileReport, allow_reencode: bool = Fal
     if not allow_reencode:
         return FixResult(path=report.path, ok=False, action="",
                          error="needs a re-encode, which was not enabled")
-    # A remux is worth trying first even for decode errors: it is seconds against
-    # an hour, and a container-level fault can present as a decode error.
+    # Three rungs, cheapest and least destructive first. A re-encode is the last
+    # of them because it is the only one that spends quality.
+    #
+    # 1 · remux — seconds, lossless, and a container-level fault can present as a
+    #     decode error, so it is worth trying even when the symptom looks deeper.
     attempt = remux_faststart(config, report.path)
     if attempt.ok and decode_errors(config, attempt.path, seconds=20) is None:
         attempt.note = "repaired by remux — no re-encode needed"
         return attempt
-    return repair_reencode(config, attempt.path if attempt.ok else report.path)
+    target = attempt.path if attempt.ok else report.path
+    # 2 · rebuild the sample index — still no re-encode: the original sample bytes
+    #     are carried across and only the map to them is rewritten. Only H.264 CFR
+    #     MP4s qualify, and the module says so rather than half-trying.
+    rebuilt = rebuild_index(config, target)
+    if rebuilt is not None:
+        if rebuilt.ok:
+            return rebuilt
+        log.info("index rebuild did not take on %s: %s", target.name, rebuilt.error)
+    # 3 · re-encode at the file's own bitrate.
+    return repair_reencode(config, target)
+
+
+def rebuild_index(config: RunConfig, path: Path) -> FixResult | None:
+    """Rebuild a desynchronised sample index. None if this file cannot qualify.
+
+    Lossless: the payload is intact and self-describing, so only the container's
+    map to it is rewritten. Worth attempting before a repair re-encode for exactly
+    that reason — it costs minutes and no quality, where the re-encode costs an
+    hour and a generation.
+    """
+    if path.suffix.lower() not in _MP4_EXTS:
+        return None
+    res = FixResult(path=path, action="reindex")
+    try:
+        res.before = path.stat().st_size
+    except OSError:
+        pass
+    out = _temp_beside(path, "reindex", ".mp4")
+    try:
+        report = mp4index.repair(path, out, ffmpeg=config.ffmpeg, ffprobe=config.ffprobe)
+    except mp4index.IndexRepairUnsupported as e:
+        out.unlink(missing_ok=True)
+        return None                      # not a failure — this file was never eligible
+    except Exception as e:               # noqa: BLE001
+        out.unlink(missing_ok=True)
+        res.error = str(e)[:160]
+        return res
+    try:
+        if not out.exists() or out.stat().st_size == 0:
+            res.error = "the rebuild produced nothing"
+            return res
+        if report.get("residual_errors"):
+            res.error = (f"still {report['residual_errors']} decode error(s) after the "
+                         f"rebuild — the damage is deeper than the index")
+            return res
+        res.after = out.stat().st_size
+        dest = path.with_suffix(".mp4")
+        out.replace(dest)
+        if dest != path:
+            path.unlink(missing_ok=True)
+        res.path, res.ok = dest, True
+        res.note = (f"index rebuilt losslessly · {report['frames_out']} of "
+                    f"{report['frames_in']} frames kept, no re-encode")
+        return res
+    finally:
+        if out.exists() and not res.ok:
+            out.unlink(missing_ok=True)

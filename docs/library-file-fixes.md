@@ -406,6 +406,113 @@ VTC's own capped-CRF path).
 
 ---
 
+## 4a. THE INVENTORY — every check and every fix
+
+The complete list, so nobody has to read the source to find out what this does.
+
+### Tool 1 — Faststart
+
+| Check | How | Remedy |
+|---|---|---|
+| Index after the media (MP4) | Walk top-level boxes; first of `moov`/`mdat` wins | Stream-copy remux, `+faststart` |
+| Index after the media (MKV) | Walk the Segment's children; first of `Cues`/`Cluster` wins | Stream-copy remux, `-cues_to_front 1` |
+| Codec cannot enter MP4 | `wmv1/2/3`, `vc1`, `msmpeg4*` | **Refused before starting**, source untouched — MKV unaffected |
+
+An optional container change (keep / to MP4 / to MKV) rides along. Verified lossless
+by per-stream MD5 on a real 1,133 MB, 32-track episode.
+
+### Tool 2 — File health
+
+| Check | How | Remedy |
+|---|---|---|
+| **DRM / encrypted** | `pssh`/`sinf`/`senc`/`encv`/`enca` inside `moov` — a header read | **None**, and saying so is the point |
+| Chapters past the real end | `-show_chapters` vs duration, 1s slack | Remux |
+| Truncated container | Last top-level box ends past EOF | **None** — a half-downloaded file is gone, not broken |
+| Unreadable | Probe fails (DRM and truncation are checked first, so they answer instead) | None |
+| Bitstream damage / NAL errors | Decode census — **off by default**, bounded when on | The ladder below |
+
+### The repair ladder — least destructive first
+
+1. **Remux** — seconds, lossless. Tried even when the symptom looks deeper, because
+   a container-level fault often presents as a decode error.
+2. **Sample-index rebuild** (`vtc/mp4index.py`) — still **no re-encode**: the payload
+   is intact and self-describing, so only the container's map to it is rewritten.
+   Minutes and no quality, against an hour and a generation. Opt-in with the
+   re-encode option, and it runs *before* any re-encode is considered.
+3. **Re-encode** — last, because it is the only rung that spends quality. Capped-CRF
+   at **the file's own bitrate**, so a repair never doubles as a shrink.
+
+A fault with no automatic remedy says so rather than burning an hour proving it.
+
+### Why the index rebuild refuses some files
+
+Two refusals, two quite different causes — worth keeping distinct:
+
+- **HEVC / not H.264.** The damage *detection* (`chain_ok`) is container-level and
+  would work for any length-prefixed codec. The **re-timing** is what is
+  H.264-specific: recovered frames must be put back into display order, which means
+  parsing the slice header for the picture order count, and HEVC's NAL header, SPS
+  and slice syntax are a different language. It needs a second parser, not a flag.
+- **Variable frame rate.** The rebuild writes a fresh `stts`, and a recovered frame's
+  duration is not knowable from the elementary stream. At a constant rate every
+  sample is one tick and the table is exact; at a variable one we would be inventing
+  timings and calling it a repair.
+
+Also refused: `pic_order_cnt_type 1`, unusual NAL length size, negative composition
+offsets, a trailing segment that is not self-contained. Hard guard-rails on purpose —
+a repair that half-works on a file the user still has is worse than a clear refusal.
+
+**Verified:** on real index desync (a span overwritten by a differently-muxed encode
+of the same title) — **364 decode errors → 0**, 470 of 546 frames recovered, input
+untouched, and B-frames still in display order. That last one is the trap: routing
+recovered video through raw Annex-B and `-c copy` sets `pts = dts`, flattening
+`ctts`, so every B-frame displays in decode order. It decodes cleanly and plays
+*worse* than the file you started with — a bug that passes any test which only asks
+"does it decode".
+
+**One fix to the vendored original:** it searched for the `avcC` record in the first
+megabyte only. That works on a faststart file and fails on every other — and "index
+at the back" is exactly the population needing repair, so the limit bit precisely the
+wrong files. It now locates `moov` by walking the boxes and searches inside it.
+
+### Cross-checked against the sibling tool
+
+`everything_2_faststart_mp4.sh` had the same bug and has since been fixed the same
+way, and the two implementations were compared afterwards. They agree on the atom
+walk — same three box forms, same first-of-`moov`/`mdat` verdict — which is worth
+something: two independent fixes converging on the same shape is better evidence
+than either alone. Two differences were resolved in its favour and one against:
+
+- **Adopted:** the nonsense-size guard compares against the *actual* header length
+  (8 or 16) rather than a flat 8. In the 64-bit form a declared size of 12 would
+  pass a `< 8` test and then walk backwards into the box we are standing on.
+- **Adopted:** proper EBML unknown-size detection — all data bits set, at whatever
+  width it was encoded. Checking only the 8-byte form misses the 1-byte `0xFF` that
+  live and streamed muxers write, and the walk then covers 127 bytes and finds
+  nothing.
+- **Not adopted:** it treats "walked the file and found neither box" as *needs the
+  pass*. VTC returns **unknown** instead. Remuxing a container we could not parse is
+  the exact failure this whole exercise is about, and the safe default when we do
+  not understand a file is to leave it alone.
+
+### Targeting
+
+Both tools take **a single file** as readily as a folder. When one episode
+misbehaves, being made to point at its folder and wait out a library scan is the
+wrong shape of tool.
+
+### The honest limits
+
+- The decode census is the only check that reads the media rather than headers, so it
+  is off by default and bounded when on. **A bounded read can only find damage inside
+  the window it read** — a fault forty minutes into a file will not be seen by a
+  twenty-second census.
+- The index rebuild is H.264 + constant frame rate + MP4 only (above).
+- Nothing here repairs a truncated download or an encrypted file, and both say so
+  rather than offering a remedy that cannot work.
+
+---
+
 ## 4b. IMPLEMENTED — what actually shipped, and what was verified
 
 `vtc/utilities.py` (engine), `--faststart` / `--health` / `--fix` / `--deep` (CLI),
