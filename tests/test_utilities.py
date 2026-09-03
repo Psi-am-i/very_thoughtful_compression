@@ -523,3 +523,40 @@ def test_a_repairable_or_healthy_file_is_never_offered_to_the_bin():
         assert not healthy.beyond_repair
         assert not fixable.beyond_repair
         assert not damaged.beyond_repair, "it has a remedy — do not offer the bin instead"
+
+
+def test_a_remux_must_not_run_before_an_index_rebuild():
+    """The ordering bug a real file exposed, and the reason the ladder picks its
+    rung by FAULT rather than by cost.
+
+    The rebuild works by scanning the raw bytes of the damaged span for valid NAL
+    chains. A remux rewrites those samples according to the BROKEN index, so the
+    recoverable payload is scrambled on the way out. Measured on a real 1.67 GB
+    file: rebuilding the pristine file recovered 20,915 of 20,927 frames with 0
+    residual errors; rebuilding it after a remux recovered 18,493 with 21 — the
+    "harmless, lossless" first step had destroyed 2,400 intact frames.
+    """
+    if not _HAVE_FF:
+        print("  skip (no ffmpeg)"); return
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        broken = _desynced(d)
+        rep = U.scan_health(_cfg(d), broken)
+        assert any(f.kind == "nal" for f in rep.faults), [f.kind for f in rep.faults]
+
+        calls = []
+        real_remux = U.remux_faststart
+
+        def spy(config, path, container="keep"):
+            calls.append(path.name)
+            return real_remux(config, path, container)
+
+        try:
+            U.remux_faststart = spy
+            res = U.fix_health(_cfg(d), rep, allow_reencode=True)
+        finally:
+            U.remux_faststart = real_remux
+
+        assert res.ok, res.error
+        assert res.action == "reindex", f"expected a lossless rebuild, got {res.action}"
+        assert not calls, f"a remux ran before the rebuild and corrupted its input: {calls}"

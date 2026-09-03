@@ -723,25 +723,39 @@ def fix_health(config: RunConfig, report: FileReport, allow_reencode: bool = Fal
     if not allow_reencode:
         return FixResult(path=report.path, ok=False, action="",
                          error="needs a re-encode, which was not enabled")
-    # Three rungs, cheapest and least destructive first. A re-encode is the last
-    # of them because it is the only one that spends quality.
+    # The rung is chosen by the FAULT, not by cost alone — because trying the
+    # cheap one first can destroy the evidence the better one needs.
     #
-    # 1 · remux — seconds, lossless, and a container-level fault can present as a
-    #     decode error, so it is worth trying even when the symptom looks deeper.
+    # ⚠️ A REMUX MUST NOT PRECEDE AN INDEX REBUILD. The rebuild works by scanning
+    # the raw bytes of the damaged span for valid NAL chains. A remux rewrites
+    # those samples according to the BROKEN index, so the recoverable payload is
+    # scrambled on the way out. Measured on a real file: rebuilding the pristine
+    # file recovered 20,915 of 20,927 frames with 0 residual errors; rebuilding
+    # the same file after a remux recovered 18,493 with 21 — the remux had thrown
+    # away 2,400 frames that were sitting there intact.
+    index_fault = any(f.kind == "nal" for f in report.faults)
+    if index_fault:
+        rebuilt = rebuild_index(config, report.path,
+                                before_errors=report.decode_errors_before)
+        if rebuilt is not None and rebuilt.ok:
+            return rebuilt
+        if rebuilt is not None:
+            log.info("index rebuild did not take on %s: %s", report.path.name, rebuilt.error)
+
+    # A remux is the right first move for everything else: it is seconds and
+    # lossless, and a container-level fault often presents as a decode error.
     attempt = remux_faststart(config, report.path)
     if attempt.ok and _still_broken(config, attempt.path) is None:
         attempt.note = "repaired by remux — no re-encode needed"
         return attempt
     target = attempt.path if attempt.ok else report.path
-    # 2 · rebuild the sample index — still no re-encode: the original sample bytes
-    #     are carried across and only the map to them is rewritten. Only H.264 CFR
-    #     MP4s qualify, and the module says so rather than half-trying.
-    rebuilt = rebuild_index(config, target, before_errors=report.decode_errors_before)
-    if rebuilt is not None:
-        if rebuilt.ok:
+    if not index_fault:
+        # Not tried yet, and still worth a go before spending an hour and a
+        # generation of quality.
+        rebuilt = rebuild_index(config, target, before_errors=report.decode_errors_before)
+        if rebuilt is not None and rebuilt.ok:
             return rebuilt
-        log.info("index rebuild did not take on %s: %s", target.name, rebuilt.error)
-    # 3 · re-encode at the file's own bitrate.
+    # Last: re-encode at the file's own bitrate.
     return repair_reencode(config, target)
 
 

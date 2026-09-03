@@ -443,7 +443,17 @@ compromise; on a file already known to be damaged it is the wrong economy. The f
 count is also the only honest "before" figure — without it there is no way to judge
 whether a repair actually improved anything. On that same file: 10,954 decode errors.
 
-### The repair ladder — least destructive first
+### The repair ladder — chosen by the fault, not by cost
+
+⚠️ **A remux must not precede an index rebuild.** The rebuild scans the raw bytes of
+the damaged span for valid NAL chains; a remux rewrites those samples according to
+the *broken* index, scrambling the recoverable payload on the way out. Measured on a
+real 1.67 GB file: rebuilding the pristine file recovered **20,915 of 20,927 frames
+with 0 residual errors**; rebuilding the same file after a remux recovered **18,493
+with 21** — the "harmless, lossless" first step had destroyed 2,400 intact frames.
+So an index fault goes straight to the rebuild; everything else starts with a remux.
+
+### The rungs — least destructive first
 
 1. **Remux** — seconds, lossless. Tried even when the symptom looks deeper, because
    a container-level fault often presents as a decode error.
