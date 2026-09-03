@@ -224,6 +224,23 @@ class FileReport:
         return bool(self.faults)
 
     @property
+    def beyond_repair(self) -> bool:
+        """Is this file past saving — i.e. worth offering to throw away?
+
+        A deliberately narrow "yes": a half-downloaded file and one whose bytes
+        cannot be read are gone, and the only useful thing left to do is get rid
+        of them and fetch again.
+
+        DRM is explicitly NOT included, and that distinction is the whole point of
+        having this rather than just checking `fix == "none"`. An encrypted file
+        is perfectly intact — it plays in whatever app it belongs to; we simply
+        cannot open it. Offering to bin it because *we* had no luck would be
+        destroying something that works.
+        """
+        kinds = {f.kind for f in self.faults}
+        return bool(kinds & {"container", "unreadable"}) and "drm" not in kinds
+
+    @property
     def fix(self) -> str:
         """The strongest remedy any fault here calls for."""
         if any(f.fix == "reencode" for f in self.faults):

@@ -485,3 +485,41 @@ def test_the_ladder_tries_lossless_repairs_before_re_encoding():
         assert res.action == "reindex", (
             f"a lossless rebuild was available but it did a {res.action}")
         assert "no re-encode" in res.note, res.note
+
+
+# ── what is worth offering to throw away ────────────────────────────────────
+def test_only_files_that_are_past_saving_are_offered_to_the_bin():
+    """A narrow yes, on purpose. A truncated download and an unreadable file are
+    gone and the useful next step is to fetch them again."""
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        gone = U.FileReport(path=d / "a.mp4",
+                            faults=[U.Fault("container", "3 GB shorter than it claims", "none")])
+        unreadable = U.FileReport(path=d / "b.mp4",
+                                  faults=[U.Fault("unreadable", "no video stream found", "none")])
+        assert gone.beyond_repair and unreadable.beyond_repair
+
+
+def test_an_encrypted_file_is_never_offered_to_the_bin():
+    """THE distinction this property exists for, and why `fix == "none"` is not a
+    good enough test. A DRM file is perfectly intact — it plays in whatever app it
+    belongs to. Offering to bin it because WE could not open it would destroy
+    something that works."""
+    with tempfile.TemporaryDirectory() as d:
+        drm = U.FileReport(path=Path(d) / "x.mp4",
+                           faults=[U.Fault("drm", "encrypted (DRM)", "none")])
+        assert drm.fix == "none", "it genuinely has no remedy here…"
+        assert not drm.beyond_repair, "…but it is not broken, so never offer to delete it"
+
+
+def test_a_repairable_or_healthy_file_is_never_offered_to_the_bin():
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        healthy = U.FileReport(path=d / "ok.mp4")
+        fixable = U.FileReport(path=d / "ch.mp4",
+                               faults=[U.Fault("chapters", "2 markers past the end", "remux")])
+        damaged = U.FileReport(path=d / "nal.mp4",
+                               faults=[U.Fault("nal", "decode errors", "reencode")])
+        assert not healthy.beyond_repair
+        assert not fixable.beyond_repair
+        assert not damaged.beyond_repair, "it has a remedy — do not offer the bin instead"

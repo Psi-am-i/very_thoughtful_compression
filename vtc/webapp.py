@@ -1022,6 +1022,10 @@ def _utility_row(rep, tool: str) -> dict:
         "needs": rep.needs, "detail": detail,
         "kind": (rep.faults[0].kind if rep.faults else ""),
         "fix": fix,
+        # Only files that are genuinely past saving get offered to the bin. The UI
+        # hands these to the EXISTING move_to_trash flow, which is recoverable and
+        # already knows that a share with no Trash has to ask before deleting.
+        "beyondRepair": rep.beyond_repair,
         # Pre-arm only what can actually be repaired, so "fix everything" never
         # queues a file whose fault has no automatic remedy.
         "action": fix if fix != "none" else None,

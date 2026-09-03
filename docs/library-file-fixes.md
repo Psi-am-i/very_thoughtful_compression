@@ -495,6 +495,19 @@ than either alone. Two differences were resolved in its favour and one against:
   the exact failure this whole exercise is about, and the safe default when we do
   not understand a file is to leave it alone.
 
+### Files past saving
+
+A truncated download and an unreadable file have no remedy here, so the scan marks
+them `beyondRepair` and the UI offers them to the **existing** trash flow —
+`Api.move_to_trash`, which is recoverable, and which already knows that a share
+with no Trash (an SMB/NAS volume) has nowhere recoverable to put a file and must
+ask before deleting outright. None of that was rewritten for Utilities.
+
+**DRM is deliberately excluded**, and that is why this is its own property rather
+than a check for "has no remedy". An encrypted file is perfectly intact: it plays
+in whatever app it belongs to, and we simply cannot open it. Offering to bin it
+because *we* had no luck would destroy something that works.
+
 ### Targeting
 
 Both tools take **a single file** as readily as a folder. When one episode
