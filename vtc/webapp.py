@@ -1647,8 +1647,11 @@ class Api:
         out. Runs in a worker and streams rows back as they are found, because a
         library scan is long enough that a frozen window reads as a crash.
         """
+        # A single file is a first-class target here, the same as on the CLI: when
+        # one episode misbehaves, being made to point at its folder and wait out a
+        # library scan is the wrong shape of tool.
         folder = Path(src) if src else self._src
-        if not folder or not Path(folder).is_dir():
+        if not folder or not (Path(folder).is_dir() or Path(folder).is_file()):
             return {"error": "no folder"}
         self._util_stop = False
         threading.Thread(target=self._utility_scan_worker,
@@ -1658,9 +1661,11 @@ class Api:
 
     def _utility_scan_worker(self, tool: str, folder: Path, decode_seconds: int):
         try:
-            cfg = RunConfig(src=folder, ffmpeg=FFMPEG, ffprobe=FFPROBE)
+            one = folder if folder.is_file() else None
+            cfg = RunConfig(src=(folder.parent if one else folder),
+                            ffmpeg=FFMPEG, ffprobe=FFPROBE)
             _apply_advanced(cfg, self._adv or {})
-            files = list(pipeline.iter_video_files(cfg))
+            files = [one] if one else list(pipeline.iter_video_files(cfg))
             rows = []
             for n, f in enumerate(files):
                 if self._util_stop:

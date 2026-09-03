@@ -169,6 +169,25 @@ def test_the_first_run_benchmark_offer_asks_once():
 
 
 @pytest.mark.skipif(not _have_jsdom(), reason="node + jsdom not installed (see tests/ui/README)")
+def test_utilities_mode_refuses_what_it_must_refuse():
+    """Utilities driven end to end, on the mock that now speaks the engine's own
+    callbacks — so what passes here is what the real engine gets.
+
+    The load-bearing checks are the refusals. A file whose sample index has
+    desynchronised can never be armed for a remux (remuxing it destroys the frames
+    a repair could still recover, and reports success), a refusal has to read as a
+    refusal rather than a failure, and a DRM file — intact, and playable in
+    whatever app it belongs to — must never reach the trash flow.
+    """
+    r = subprocess.run(["node", "utils.js"], cwd=_UI, capture_output=True, text=True,
+                       stdin=subprocess.DEVNULL, timeout=180)
+    assert r.stdout.strip(), f"harness produced nothing:\n{r.stderr[:2000]}"
+    failed = [x for x in json.loads(r.stdout) if not x.get("ok")]
+    assert not failed, "Utilities behaving unsafely:\n" + "\n".join(
+        f"  {x.get('n')}: got {x.get('g')!r}, want {x.get('e')!r}" for x in failed)
+
+
+@pytest.mark.skipif(not _have_jsdom(), reason="node + jsdom not installed (see tests/ui/README)")
 def test_an_hours_figure_says_how_solid_it_is():
     """Four sources can price a night of encoding, and they are not equally solid.
 

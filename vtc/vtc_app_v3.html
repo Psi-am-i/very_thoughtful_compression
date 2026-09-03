@@ -602,6 +602,11 @@ body{
 /* ── mode switch + theme affordance in the brow ───────────────────────────── */
 /* A quiet milled segment, same idiom as the destination structure toggle: it reads
    as picking a tool, not flipping a setting. */
+/* "soon" on a mode that is designed but not yet wired: quiet, lower-case and in
+   the muted ink, so it reads as a note rather than a badge shouting for attention. */
+.mode-soon{font-size:9px;letter-spacing:.06em;text-transform:uppercase;opacity:.6;
+  margin-left:5px;padding:1px 4px;border:1px solid currentColor;border-radius:3px;
+  vertical-align:1px}
 .mode-seg{display:inline-flex;border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;
   background:linear-gradient(180deg,var(--paper-hi),var(--paper-4));
   box-shadow:0 1px 0 var(--hl) inset,0 1px 2px var(--sh)}
@@ -936,8 +941,14 @@ body{
   border:1px solid var(--rule);border-radius:var(--r);
   box-shadow:0 1px 0 var(--hl) inset;transition:color .15s,border-color .15s}
 .u-back:hover{color:var(--accent);border-color:var(--accent)}
-.u-res-title .q-title{font-size:26px}
-.u-res-sub{font-size:12.5px;color:var(--ink-3);letter-spacing:.02em;margin-top:3px}
+/* The head is back · title · controls on one line. File-health carries three
+   controls, which is enough to start squeezing the title into two words a line —
+   so the title and its readout never wrap: they ellipsise, and the controls (which
+   already wrap) take the second line if it comes to that. */
+.u-res-title{min-width:0}
+.u-res-title .q-title{font-size:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.u-res-sub{font-size:12.5px;color:var(--ink-3);letter-spacing:.02em;margin-top:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .u-res-tools{display:flex;align-items:center;gap:8px}
 /* the container choice for faststart, a small segmented control */
 .u-seg{display:inline-flex;border:1px solid var(--rule);border-radius:var(--r);overflow:hidden}
@@ -987,6 +998,62 @@ body{
 .u-act:disabled:hover{border-color:var(--rule);color:var(--ink-2)}
 .u-act.on:disabled:hover{border-color:var(--accent);color:#fff}
 .u-empty{padding:40px 10px;text-align:center;color:var(--ink-3);font-size:14px}
+/* ── the source folder, on the landing ──────────────────────────────────────
+   Both tools operate on a folder, and until this pass there was nowhere to say
+   which one. It sits ABOVE the two cards because it is the question that comes
+   first: a tool you cannot point anywhere is not a tool. */
+.u-src{display:flex;align-items:center;gap:12px;max-width:900px;padding:11px 14px;
+  border:1px solid var(--rule);border-radius:var(--r);background:var(--panel);
+  box-shadow:0 1px 2px var(--sh) inset}
+.u-src-l{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3);flex:none}
+.u-src-v{flex:1;min-width:0;font-size:13px;color:var(--ink);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.u-src-v.none{color:var(--ink-3)}
+.u-src-b{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;padding:6px 11px;cursor:pointer;color:var(--ink-2);flex:none;
+  background:linear-gradient(180deg,var(--paper-hi),var(--paper-4));
+  border:1px solid var(--rule);border-radius:var(--r);box-shadow:0 1px 0 var(--hl) inset;
+  transition:color .15s,border-color .15s}
+.u-src-b:hover{color:var(--accent);border-color:var(--accent)}
+/* A fault-class chip beside the file name. The real engine returns six kinds
+   where the mock showed three, and one sentence of prose made a truncated
+   download and a stray chapter marker look like the same severity of thing.
+   Three tones only: fixable (accent), needs care (amber), past saving (red). */
+.u-chip{display:inline-block;vertical-align:1px;margin-left:8px;
+  font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:600;letter-spacing:.09em;
+  text-transform:uppercase;padding:1px 6px;border-radius:3px;
+  border:1px solid var(--rule);color:var(--ink-3);background:var(--panel)}
+.u-chip.fix{border-color:var(--accent);color:var(--accent)}
+.u-chip.warn{border-color:var(--warn-line);color:var(--warn);background:var(--warn-soft)}
+.u-chip.gone{border-color:var(--danger);color:var(--danger)}
+/* ⚠️ The remux guard. A row whose sample index has desynchronised must NOT read
+   as one more file waiting for a remux — remuxing it destroys the frames a
+   repair could still recover (2,400 of them, measured, on a real file). So it
+   gets the amber left rule the report uses for "needs a look", and it carries
+   the reason in full rather than a chip and a shrug. */
+.u-row.guard{border-left:3px solid var(--warn-line);padding-left:8px;background:var(--warn-soft)}
+.u-row.guard .u-row-mark{background:var(--warn)}
+.u-row-w{font-size:12px;color:var(--ink-2);line-height:1.5;margin-top:5px;max-width:92ch}
+.u-row-w b{color:var(--warn)}
+/* A fault with no automatic remedy says so, in the row, instead of offering a
+   button that cannot work. Kept quiet — it is information, not an alarm. */
+.u-row-x{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);
+  margin-top:3px;letter-spacing:.01em}
+.u-row.gone .u-row-mark{background:var(--danger)}
+/* The scan is minutes on a real library — 3,700 files is a couple of minutes for
+   faststart and longer for health — so it counts, names the file it is on, and
+   can be stopped. A frozen window reads as a crash. */
+.u-scan{padding:26px 4px 4px}
+.u-scan-bar{height:4px;border-radius:2px;background:var(--rule);overflow:hidden;max-width:520px}
+.u-scan-f{height:100%;width:0;background:var(--accent);transition:width .25s linear}
+.u-scan-n{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-2);margin-top:10px}
+.u-scan-c{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-3);
+  margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px}
+/* A scan that could not start says why, in place, and changes nothing. */
+.u-err{margin:24px 0;padding:13px 15px;border:1px solid var(--danger);border-radius:var(--r);
+  font-size:13px;color:var(--ink);line-height:1.55;background:var(--panel);max-width:74ch}
+.u-err b{color:var(--danger)}
 .u-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;
   padding:14px 30px;border-top:1px solid var(--rule);background:var(--rail-bg)}
 .u-foot-n{font-size:12.5px;color:var(--ink-2)}
@@ -1790,7 +1857,13 @@ body{
         <div class="mode-seg" id="mode-seg" role="tablist" aria-label="Mode">
           <button class="mode-b on" data-mode="compress" role="tab" aria-selected="true">Compression</button>
           <button class="mode-b" data-mode="utils" role="tab" aria-selected="false">Utilities</button>
-          <button class="mode-b" data-mode="watch" role="tab" aria-selected="false">Folder Actions</button>
+          <!-- Folder Actions is designed but not yet wired to a real watcher, so it
+               says so instead of presenting a mode that cannot do anything. The
+               screens behind it are still reachable — they are worth looking at —
+               but nothing there runs. -->
+          <button class="mode-b" data-mode="watch" role="tab" aria-selected="false"
+                  title="Designed, not yet working — the screens are here to look at, but nothing runs yet."
+                  >Folder Actions <span class="mode-soon">soon</span></button>
         </div>
       </div>
 
@@ -1915,7 +1988,15 @@ body{
       <section class="u-land" id="u-land">
         <div class="u-lead">
           <h1 class="q-title">Utilities</h1>
-          <p class="q-sub">Fast fixes that are not a re-encode. Point at a folder and <b>scan</b> — then pick which files to fix and apply, or choose <b>Scan &amp; fix</b> to repair every applicable file automatically. By default nothing is changed until you say so.</p>
+          <p class="q-sub">Fast fixes that are not a re-encode. Point at a folder and <b>scan</b> — a library of a few thousand files takes a couple of minutes, and you can stop it whenever you like. Then pick which files to fix and apply, or choose <b>Scan &amp; fix</b> to repair every applicable file automatically. By default nothing is changed until you say so.</p>
+        </div>
+        <!-- Which folder. Both tools take one, and until this pass there was nowhere
+             to say which: the engine fell back to whatever the compression flow had
+             chosen, and with nothing chosen a scan simply answered "no folder". -->
+        <div class="u-src" id="u-src">
+          <span class="u-src-l">Folder</span>
+          <span class="u-src-v mono none" id="u-src-v">No folder chosen yet</span>
+          <button class="u-src-b" id="u-src-pick">Choose…</button>
         </div>
         <div class="u-tools">
           <button class="u-tool" data-tool="faststart">
@@ -1923,14 +2004,14 @@ body{
               <svg viewBox="0 0 34 34" aria-hidden="true"><rect x="5" y="9" width="24" height="16" rx="1.5" class="gl-cut"></rect><rect x="5" y="9" width="6" height="16" class="gl-hot"></rect><path d="M15 13 l5 4 -5 4" class="gl-hot-s"></path></svg>
             </span>
             <span class="u-tool-t">Faststart remux</span>
-            <span class="u-tool-d">Move the moov atom to the front so a file starts playing before it has fully downloaded. A stream copy — no re-encode, seconds not hours. Scan and pick, or Scan &amp; fix the lot; keep the container or change it on the way through.</span>
+            <span class="u-tool-d">Move the index to the front so a file starts playing before it has fully downloaded — the <i>moov</i> atom in an MP4, the Cues in an MKV. A stream copy: no re-encode, seconds not hours. Scan and pick, or Scan &amp; fix the lot; keep the container or change it on the way through. A file whose index has come adrift from its media is flagged and <b>never</b> remuxed — that one is not harmless.</span>
           </button>
           <button class="u-tool" data-tool="health">
             <span class="u-tool-g">
               <svg viewBox="0 0 34 34" aria-hidden="true"><path d="M17 28 C 6 20 6 11 12 9 C 15 8 17 11 17 11 C 17 11 19 8 22 9 C 28 11 28 20 17 28 Z" class="gl-cut"></path><path d="M11 17 h4 l1.5 -4 l2 8 l1.5 -4 h3" class="gl-hot-s"></path></svg>
             </span>
             <span class="u-tool-t">File-health scan</span>
-            <span class="u-tool-d">Look for the faults that break players: chapter markers past the real end of a file, NAL-unit errors (ffmpeg exit 69), broken containers. Scan and pick, or Scan &amp; remux the lot; optionally re-encode a file a remux can’t save, at its own BPP.</span>
+            <span class="u-tool-d">Look for the faults that break players: chapter markers past the real end, a sample index that no longer matches the media, decode errors, a download that stopped short, a file nothing can read. It repairs the least destructive way it can — a remux first, then a <b>lossless</b> index rebuild, and a re-encode at the file’s own bitrate only if you allow one. Encrypted files are named, never touched.</span>
           </button>
         </div>
       </section>
@@ -6653,7 +6734,12 @@ function drawReport(){
         // two-state: first click arms just that one button, second click moves the
         // file. The row's own click still reveals the file, so the button stops the
         // event from bubbling.
-        const canTrash = !!(rTab==='fail' && window.__vtcTrash && r.path);
+        // `noTrash` is set by rows that are NOT past saving. A compression run sets
+        // it on nothing, so its Needs-a-look tab behaves exactly as before; a
+        // Utilities report sets it on everything except a truncated or unreadable
+        // file, so the bin is never offered for a file that merely wants a remux —
+        // and never, ever for an encrypted one, which is intact.
+        const canTrash = !!(rTab==='fail' && window.__vtcTrash && r.path && !r.noTrash);
         const tbtn = canTrash
           ? `<button class="r-tbtn" data-path="${esc(r.path)}" title="Move this file somewhere recoverable">Trash</button>`
           : '';
@@ -6712,7 +6798,7 @@ function drawReport(){
   const tb=$('#r-trash');
   if(tb){
     const trashable = (rTab==='fail' && window.__vtcTrash)
-      ? R.rows.filter(r=>r.t==='fail' && r.path) : [];
+      ? R.rows.filter(r=>r.t==='fail' && r.path && !r.noTrash) : [];
     tb.hidden = !trashable.length;
     if(!trashable.length){ tb.classList.remove('armed'); trashArmed=false; }
     else {
@@ -6819,7 +6905,7 @@ $('#r-trash').onclick=async()=>{
   if(!trashArmed){ trashArmed=true; drawReport(); return; }
   trashArmed=false;
   const tb=$('#r-trash'); if(tb){ tb.disabled=true; tb.textContent='Moving…'; }
-  await doTrash(RUN.rows.filter(r=>r.t==='fail' && r.path).map(r=>r.path));
+  await doTrash(RUN.rows.filter(r=>r.t==='fail' && r.path && !r.noTrash).map(r=>r.path));
   if(tb) tb.disabled=false;
 };
 $('#r-log').onclick=()=>{
@@ -7679,10 +7765,29 @@ pvPlaceholder(); render(); pvLoop();
 // ═══ Utilities mode ══════════════════════════════════════════════════════════
 // A second interface. The brow mode switch flips .utils on the unit (CSS hides the
 // guided flow and shows #utils-main). Two tools — Faststart remux and File-health
-// scan — each: land -> scan (mock) -> per-file actions -> hand off to the SHARED
-// #progress-sheet while running and #report-sheet when done. All on fabricated
-// data, the same way the compression flow mocks its numbers; the real app would
-// fill U.rows from a bridge call and drive the same pgStart/pgDone1/pgFinish.
+// scan — each: pick a folder -> scan -> per-file actions -> hand off to the SHARED
+// #progress-sheet while running and #report-sheet when done.
+//
+// It drives the REAL engine when one is there and the mock when it is not, on one
+// code path: `api.utility_scan` / `utility_fix` / `stop_utility` start a worker,
+// and Python streams results back through __vtcUtilProgress / __vtcUtilScanDone /
+// __vtcUtilFixed / __vtcUtilFixDone. Standalone (no pywebview) the mock at the
+// bottom of this block calls those same four callbacks, so everything downstream
+// — the list, the arming rules, the guard, the report — is identical either way.
+//
+// Three things here are not cosmetic, and the copy carries all three:
+//   ⚠️ A REMUX IS NOT ALWAYS HARMLESS. A file whose sample index has desynchronised
+//      from its media loses the frames a repair could still recover if it is
+//      remuxed — 2,400 of them, measured, reported as a success. Such a row can
+//      never be armed for a remux; it is routed to File-health, whose ladder
+//      rebuilds the index losslessly. See docs/library-file-fixes.md §0.
+//   ⛔ A DRM FILE IS NOT BROKEN. It is intact and plays in whatever app it belongs
+//      to; we simply cannot open it. It is never offered to the bin.
+//   • FILES PAST SAVING (a truncated download, an unreadable file) go to the app's
+//     EXISTING trash flow in #report-sheet — move_to_trash / delete_permanently,
+//     recoverable, and already able to ask when a share has no Trash. Nothing new
+//     was written for it; `noTrash` on every other row is what keeps it honest.
+//
 // BOTH tools share the same two-mode model, so the user is in control by default:
 //   • 'scan' (DEFAULT) — scan, present findings, let the user SELECT which files to
 //     fix, then apply with "Fix selected". We deliberately stop after the scan.
@@ -7691,61 +7796,110 @@ pvPlaceholder(); render(); pvLoop();
 // For File-health the fix path is a remux; a conditional sub-option (reencode) also
 // re-encodes — at the file's own existing BPP — any file a remux can't repair.
 const U = { tool:null, rows:[], scanning:false, container:'keep',
-  mode:'scan', reencode:false };
+  mode:'scan', reencode:false,
+  // The folder both tools operate on. Held in memory, exactly like the
+  // benchmark's — it is a thing you point at once, not a saved preference.
+  folder:'',
+  // How deep the health scan reads: 0 = headers only (default), N = an N-second
+  // decode census, -1 = the whole file. Maps straight to utility_scan's
+  // decode_seconds; damage found by any other check escalates on its own.
+  decode:0,
+  // live scan state
+  scanned:0, total:0, cur:'', err:'', stopped:false, stopping:false,
+  // live fix state — path -> the engine's row for that file
+  fixing:false, fixed:{}, chosen:[],
+  // mock only
+  mockStop:false, mockTimer:null };
+// The bridge, feature-detected exactly like benchApi: absent standalone, in
+// which case every path below falls through to the mock at the bottom.
+function uApi(){
+  try{
+    const a = window.pywebview && window.pywebview.api;
+    return (a && a.utility_scan && a.utility_fix) ? a : null;
+  }catch(e){ return null; }
+}
+const uEsc = s => String(s==null?'':s).replace(/[&<>"]/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const uMB = n => (n>=1000 ? (n/1000).toFixed(2)+' GB' : Math.round(n)+' MB');
+const uNum = n => (+n||0).toLocaleString();
 // deterministic-ish mock file lists, believable names, one per tool.
 const U_NAMES=['Blade Runner (1982)','Heat (1995)','Sicario (2015)','Dune (2021)',
   'The Batman (2022)','No Country for Old Men','Interstellar','Prisoners (2013)',
   'Arrival (2016)','1917 (2019)','Whiplash (2014)','Drive (2011)','Nightcrawler',
   'Enemy (2013)','Mad Max Fury Road','Oldboy (2003)','Memories of Murder'];
-function uMockFaststart(){
-  // A believable mix: most already faststart, a chunk that need the moov moved.
-  const rows=[]; let seed=97;
-  const rnd=()=>((seed=seed*16807%2147483647)/2147483647);
-  for(let i=0;i<14;i++){
-    const ext=['mp4','mov','mkv'][((rnd()*3)|0)];
-    const size=(400+rnd()*6000)|0;
-    const needs = rnd()<0.55;
-    rows.push({ f:`${U_NAMES[i%U_NAMES.length]}.${ext}`, path:`/Volumes/NAS/Movies/${U_NAMES[i%U_NAMES.length]}.${ext}`,
-      size, ext, needs,
-      detail: needs ? 'moov atom at the end · needs faststart' : 'already faststart',
-      action: needs ? 'fix' : null });   // default: fix the ones that need it
-  }
-  return rows;
+
+// Every fault kind the engine returns, and how each one reads. The mock only
+// ever produced three of these; a scan of a real library produces all seven —
+// and they are not the same KIND of news. "Chapter markers overshoot" is a
+// tidy-up; "the download stopped 312 MB short" is a funeral. One sentence of
+// prose made them look alike, so each carries its class as a chip.
+const U_KIND = {
+  faststart : { chip:'index at back',  tone:'fix'  },
+  chapters  : { chip:'chapters',       tone:'fix'  },
+  nal       : { chip:'index/bitstream',tone:'fix'  },
+  container : { chip:'truncated',      tone:'gone' },
+  unreadable: { chip:'unreadable',     tone:'gone' },
+  drm       : { chip:'encrypted',      tone:'none' },
+  codec     : { chip:'codec',          tone:'none' }
+};
+// ⚠️ THE REMUX GUARD. A faststart scan can return a file whose sample index has
+// desynchronised from its media. Remuxing that file copies its samples out
+// THROUGH the broken map, so the payload — which is intact and recoverable — is
+// written out scrambled as the new truth: measured at 2,400 frames destroyed on
+// a real 1.67 GB file, and reported as a success, because the result still
+// decodes cleanly at the head. The engine refuses such a file; the UI must never
+// arm one for a remux, and must say why rather than showing a generic failure.
+const U_GUARD_RE = /before remuxing|index does not match the media|destroy what a repair/i;
+// Only the FASTSTART tool guards. File-health meets the same fault and is the
+// right answer to it — its ladder rebuilds the index losslessly and never remuxes
+// first — so flagging it there would be telling the user not to use the tool that
+// fixes it. `repair this before remuxing` is scan_faststart's own wording.
+const uIsGuard = r => !!r && !!r.needs && U.tool==='faststart' &&
+  (r.kind==='nal' || /before remuxing/i.test(r.detail||''));
+
+// ── the folder both tools point at ───────────────────────────────────────────
+// The engine falls back to whatever the compression flow chose; with nothing
+// chosen it answers "no folder", which is a dead end. So Utilities asks.
+function uFolder(){ return U.folder || (SRC && SRC.k) || ''; }
+// The readout sits beside the counts and must never be the thing that pushes them
+// off the end, so it shows the last two segments and keeps the whole path in the
+// tooltip. "…/NAS/Movies" is enough to know where you are; "· /V…" is not.
+function uFolderShort(){
+  const f=uFolder(); if(!f) return '';
+  const bits=f.replace(/[\\/]+$/,'').split(/[\\/]/).filter(Boolean);
+  return bits.length>2 ? '…/'+bits.slice(-2).join('/') : f;
 }
-function uMockHealth(){
-  const rows=[]; let seed=241;
-  const rnd=()=>((seed=seed*16807%2147483647)/2147483647);
-  const ISSUES=[
-    ['chapters','chapter markers run 42s past the real end','remux'],
-    ['nal','NAL-unit errors on decode · ffmpeg exit 69','reencode'],
-    ['container','container index broken · seeks fail','remux'],
-    ['chapters','3 markers beyond the file duration','remux'],
-    ['nal','stream truncated mid-GOP','reencode'],
-  ];
-  for(let i=0;i<12;i++){
-    const size=(600+rnd()*7000)|0;
-    const bad = rnd()<0.5;
-    if(bad){ const is=ISSUES[(rnd()*ISSUES.length)|0];
-      rows.push({ f:`${U_NAMES[(i+3)%U_NAMES.length]}.mkv`, path:`/Volumes/NAS/TV/${U_NAMES[(i+3)%U_NAMES.length]}.mkv`,
-        size, needs:true, kind:is[0], detail:is[1], fix:is[2], action:is[2] }); }
-    else rows.push({ f:`${U_NAMES[(i+3)%U_NAMES.length]}.mkv`, path:`/Volumes/NAS/TV/${U_NAMES[(i+3)%U_NAMES.length]}.mkv`,
-        size, needs:false, detail:'no faults found', action:null });
-  }
-  return rows;
+function uLandFolder(){
+  const v=$('#u-src-v'); if(!v) return;
+  const f=uFolder();
+  v.textContent = f || 'No folder chosen yet';
+  v.classList.toggle('none', !f);
+  v.title = f || '';
+  const b=$('#u-src-pick'); if(b) b.textContent = f ? 'Change…' : 'Choose…';
 }
+// The same native directory chooser the benchmark folder uses. Standalone it
+// hands back a plausible path so the whole flow can still be reviewed.
+async function uPickFolder(){
+  const a = window.pywebview && window.pywebview.api;
+  if(!(a && a.pick_output_folder)){ U.folder='/Volumes/RAID/TV'; uLandFolder(); return uFolder(); }
+  try{ const d = await a.pick_output_folder(); if(d && d.dir) U.folder=d.dir; }catch(e){}
+  uLandFolder(); return uFolder();
+}
+
 // enter/leave a tool. Every tool opens in SCAN mode (the user stays in control).
-function uOpen(tool){
-  U.tool=tool; U.container='keep'; U.mode='scan'; U.reencode=false;
+async function uOpen(tool){
+  // A tool with nowhere to point is a dead end: ask for the folder first rather
+  // than opening a results view whose only possible answer is "no folder".
+  if(!uFolder()){ await uPickFolder(); if(!uFolder()) return; }
+  U.tool=tool; U.container='keep'; U.mode='scan'; U.reencode=false; U.decode=0;
   $('#u-land').hidden=true; $('#u-results').hidden=false;
-  const title = tool==='faststart' ? 'Faststart remux' : 'File-health scan';
-  $('#u-res-h').textContent=title;
+  $('#u-res-h').textContent = tool==='faststart' ? 'Faststart remux' : 'File-health scan';
   uRenderMode();
   uScan();
 }
 // The run-mode controls, shared by BOTH tools: a two-way segment.
 //   Faststart:  Scan · Scan & fix        (fix = remux; a container choice rides along)
-//   File-health: Scan · Scan & remux     (fix = remux; + a conditional re-encode sub-option)
+//   File-health: Scan · Scan & remux     (fix = the repair ladder)
 // "Scan" leaves the user to select and press "Fix selected"; "Scan & fix" auto-applies
 // to every applicable file and goes straight to the report. Faststart also carries the
 // container choice (Keep / To MP4 / To MKV) inline. Re-arms per-file actions on change.
@@ -7766,104 +7920,281 @@ function uRenderMode(){
       + `<button data-v="mp4" class="${U.container==='mp4'?'on':''}">To MP4</button>`
       + `<button data-v="mkv" class="${U.container==='mkv'?'on':''}">To MKV</button></span>`;
   } else {
-    // File-health: a conditional re-encode sub-option, only meaningful (and enabled)
-    // under the fix path. Greyed/dashed under Scan so the parent/child bond is visible.
-    html += `<label class="u-subopt${m==='fix'?'':' off'}" id="u-reopt" title="Only files that still error after a remux are re-encoded, at their own existing BPP.">`
-      +   `<input type="checkbox" id="u-rechk" ${U.reencode?'checked':''} ${m==='fix'?'':'disabled'}>`
-      +   `<span class="u-subopt-t">Also re-encode if remux still errors <span class="u-subopt-n">· at the file\u2019s existing BPP</span></span>`
+    // How deep the SCAN reads. Everything else the health scan does is a header
+    // read; this is the one check that reads the media, so it is off by default
+    // and bounded when on — and a bounded read can only find damage inside the
+    // window it read, which the tooltip says rather than hides.
+    const dTitle = 'The only check that reads the media rather than the file’s headers, '
+      + 'so it is off unless you ask. A bounded read can only find damage inside the window '
+      + 'it read — a fault forty minutes in will not be seen by a twenty-second census. '
+      + 'Damage found by any other check escalates to a full count on its own. Changing this re-scans.';
+    html += `<span class="u-seg-l" title="${uEsc(dTitle)}">Decode</span>`
+      + `<span class="u-seg" id="u-deep" title="${uEsc(dTitle)}">`
+      + [['0','Headers'],['20','+20s'],['-1','Whole file']].map(([v,l])=>
+          `<button data-v="${v}" class="${String(U.decode)===v?'on':''}"${U.scanning?' disabled':''}>${l}</button>`).join('')
+      + `</span>`;
+    // The deep repair, opt-in. It is a SCAN-mode control as much as a fix-mode
+    // one now: a file whose fault only the ladder can reach has no armable
+    // action at all until this is on, so gating it to "Scan & remux" (as the
+    // mock did) left those rows permanently unfixable from the Scan list.
+    const rTitle = 'Off, a file whose index or bitstream is damaged is reported and left alone. '
+      + 'On, the ladder rebuilds the sample index LOSSLESSLY first — no re-encode — and only '
+      + 'spends a re-encode, at the file’s own bitrate, if that rebuild cannot take. '
+      + 'A repair never doubles as a shrink.';
+    html += `<label class="u-subopt" id="u-reopt" title="${uEsc(rTitle)}">`
+      +   `<input type="checkbox" id="u-rechk" ${U.reencode?'checked':''}>`
+      +   `<span class="u-subopt-t">Deep repair <span class="u-subopt-n">· lossless rebuild first</span></span>`
       + `</label>`;
   }
   el.innerHTML = html;
   const seg=$('#u-mode');
   if(seg) seg.querySelectorAll('button').forEach(b=>b.onclick=()=>{
     U.mode=b.dataset.v;
-    if(U.mode!=='fix') U.reencode=false;   // sub-option can't outlive its parent
     uRenderMode();                          // reflect enabled/disabled state
     uRenderList();                          // re-arm per-file actions for the new mode
   });
   const cont=$('#u-cont');
   if(cont) cont.querySelectorAll('button').forEach(b=>b.onclick=()=>{
     U.container=b.dataset.v; cont.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); uFoot(); });
+  const deep=$('#u-deep');
+  if(deep) deep.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    if(U.scanning) return;
+    U.decode=parseInt(b.dataset.v,10);
+    uRenderMode(); uScan();                 // it is a scan parameter: it has to re-scan
+  });
   const chk=$('#u-rechk');
   if(chk) chk.onchange=()=>{ U.reencode=chk.checked; uRenderList(); };
 }
-function uBack(){ $('#u-results').hidden=true; $('#u-land').hidden=false; U.tool=null; U.rows=[]; }
-// the scan: shows a working state, then fills the list (mock delay)
-function uScan(){
-  U.scanning=true; U.rows=[];
-  $('#u-empty').hidden=true;
-  $('#u-list').innerHTML=`<div class="u-row"><span></span><div class="u-row-main"><span class="u-scanning">scanning the folder…</span></div><span></span></div>`;
-  $('#u-res-sub').textContent='scanning…';
-  $('#u-run').disabled=true; $('#u-foot-n').textContent='';
-  setTimeout(()=>{
-    U.rows = U.tool==='faststart' ? uMockFaststart() : uMockHealth();
-    U.scanning=false; uRenderList();
-  }, 650);
+function uBack(){
+  if(U.scanning) uStop();
+  clearTimeout(U.mockTimer);
+  $('#u-results').hidden=true; $('#u-land').hidden=false;
+  U.tool=null; U.rows=[]; U.scanning=false; U.stopping=false; U.err='';
+  uLandFolder();
 }
-// The per-file action set for one row, given the tool and (for health) the
-// re-encode sub-option. Clean files carry no actions. The set is the SAME in Scan
-// and Scan & fix — what differs is whether the user arms them (Scan) or they are
-// armed automatically (Scan & fix); that arming lives in uArm().
+
+// ── the scan ─────────────────────────────────────────────────────────────────
+// Real: utility_scan starts a worker and streams progress back through
+// __vtcUtilProgress, finishing on __vtcUtilScanDone. Standalone: the mock below
+// drives exactly the same two callbacks, so there is one code path afterwards.
+function uScan(){
+  U.scanning=true; U.stopping=false; U.stopped=false;
+  U.rows=[]; U.err=''; U.fixed={};
+  U.scanned=0; U.total=0; U.cur='';
+  $('#u-empty').hidden=true;
+  uScanUI();
+  const api=uApi();
+  if(!api){ uMockScan(); return; }
+  try{
+    Promise.resolve(api.utility_scan(U.tool, uFolder(), U.tool==='health' ? U.decode : 0))
+      .then(r=>{ if(r && r.error) uScanFailed(r.error); })
+      .catch(e=>uScanFailed(String(e && e.message || e)));
+  }catch(e){ uScanFailed(String(e && e.message || e)); }
+}
+const U_ERR = { 'no folder':'That folder could not be read, so there was nothing to look at.',
+                'nothing selected':'No file was selected, so there was nothing to do.' };
+function uScanFailed(msg){
+  U.scanning=false; U.stopping=false;
+  U.err = '<b>That could not run.</b> ' + uEsc(U_ERR[msg] || msg || '')
+        + ' Nothing was changed — every file is exactly as it was.';
+  uRenderList();
+}
+function uStop(){
+  const api=uApi();
+  if(api){ try{ api.stop_utility(); }catch(e){} } else { U.mockStop=true; }
+  U.stopping=true;
+  if(U.scanning) uScanUI();
+}
+// The scanning state. A faststart pass over ~3,700 files is a couple of minutes
+// and a health scan is slower still, so it counts, names the file it is on, and
+// can be stopped — a window that just sits there reads as a crash.
+function uScanUI(){
+  const pct = U.total ? Math.round(100*U.scanned/U.total) : 0;
+  $('#u-list').innerHTML =
+      `<div class="u-scan">`
+    +   `<div class="u-scan-bar"><div class="u-scan-f" style="width:${pct}%"></div></div>`
+    +   `<div class="u-scan-n">` + (U.total
+          ? `Scanned <b>${uNum(U.scanned)}</b> of ${uNum(U.total)}`
+          : `<span class="u-scanning">looking at the folder…</span>`) + `</div>`
+    +   `<div class="u-scan-c">${uEsc(U.cur)}</div>`
+    + `</div>`;
+  $('#u-res-sub').textContent = 'scanning… · ' + uFolderShort();
+  $('#u-res-sub').title = uFolder();
+  const run=$('#u-run');
+  if(run){
+    run.disabled = U.stopping;
+    run.textContent = U.stopping ? 'Stopping…' : 'Stop';
+  }
+  $('#u-foot-n').innerHTML = 'A scan changes nothing. Stop it whenever you like — '
+    + 'what has been scanned by then is kept.';
+  uDeepEnabled(false);   // changing the depth mid-scan would restart it
+}
+// The decode-depth segment is a SCAN parameter, so it is dead while one runs.
+function uDeepEnabled(on){
+  const deep=$('#u-deep'); if(!deep) return;
+  deep.querySelectorAll('button').forEach(b=>{ b.disabled = !on; });
+}
+// One scanned file, in the shape the list renders, whichever side it came from.
+// The engine's pre-armed `action` is deliberately dropped: uArm() decides arming
+// from the CURRENT mode and options, and a value armed before the user turned
+// the deep repair on would otherwise survive into a state that cannot apply it.
+function uNormalise(r){
+  r = Object.assign({}, r||{});
+  r.size = +r.size || 0;
+  r.kind = r.kind || '';
+  r.fix  = r.fix || (r.needs ? 'remux' : 'none');
+  r.detail = r.detail || (r.needs ? 'needs attention'
+             : (U.tool==='faststart' ? 'already faststart' : 'no faults found'));
+  r.beyondRepair = !!r.beyondRepair;
+  r.ext = r.ext || (String(r.f||'').split('.').pop()||'');
+  delete r.action;
+  return r;
+}
+// Driven by Python during a real scan, and by the mock standalone. Same functions.
+window.__vtcUtilProgress = (p)=>{
+  p=p||{};
+  U.scanning=true;
+  U.scanned=p.done||0; U.total=p.total||0; U.cur=p.name||'';
+  uScanUI();
+};
+window.__vtcUtilScanDone = (r)=>{
+  r=r||{};
+  U.scanning=false; U.stopping=false;
+  if(r.error){ uScanFailed(r.error); return; }
+  U.rows = (r.rows||[]).map(uNormalise);
+  U.stopped = !!r.stopped;
+  uRenderList();
+};
+
+// ── what each row can be asked to do ─────────────────────────────────────────
+// Three rules the mock never had to obey, all of them about not offering a
+// button that cannot work:
+//   • a fault with no automatic remedy — encrypted, truncated, unreadable, a
+//     codec MP4 cannot hold — gets NO action at all;
+//   • the remux guard gets a route to File-health and never a remux;
+//   • a health fault only the deep ladder can reach appears only once the deep
+//     repair is allowed, because that is the only way it could be applied.
 function uActionsFor(r){
-  if(!r.needs) return [];                       // clean files carry no actions
-  if(U.tool==='faststart') return [['fix','Remux']];
-  // File-health: a remux repairs a container fault; a decode/NAL fault (fix==='reencode')
-  // needs a re-encode, offered only when the re-encode sub-option is on (fix path).
-  const stillErrorsAfterRemux = (r.fix==='reencode');   // a container remux won't fix a broken bitstream
-  if(stillErrorsAfterRemux && U.reencode)
-    return [['reencode','Re-encode'],['delete','Delete']];
-  return [['remux','Remux'],['delete','Delete']];
+  if(!r.needs) return [];
+  if(uIsGuard(r)) return [['health','Fix in File-health']];
+  if(r.fix==='none') return [];
+  if(U.tool==='faststart') return [['remux','Remux']];
+  if(r.fix==='reencode') return U.reencode ? [['repair','Repair']] : [];
+  return [['remux','Remux']];
 }
 // The DEFAULT fix a row would get, used both to pre-arm the obvious candidates in
 // Scan (a convenience the user can change) and to auto-apply everything in Scan & fix.
+// "Fix in File-health" is navigation, not a fix, so it is never a default.
 function uDefaultAction(r){
   if(!r.needs) return null;
-  const avail=uActionsFor(r).map(a=>a[0]);
-  return avail.length ? avail[0] : null;        // first (non-delete) action = the repair
+  const avail=uActionsFor(r).map(a=>a[0]).filter(a=>a!=='health');
+  return avail.length ? avail[0] : null;
 }
-// Reconcile each row's armed action with the current mode:
+// Reconcile each row's armed action with the current mode and options:
 //   • Scan & fix — every applicable file is armed with its default repair (the point
-//     of the mode is that nothing is left to the user); delete is never auto-armed.
+//     of the mode is that nothing is left to the user).
 //   • Scan       — the obvious candidates are pre-armed with their default so the
-//     user sees a sensible starting selection, but they are free to change or clear
-//     any of them. A stale action (from a mode change) is snapped back to something valid.
+//     user sees a sensible starting selection, and they are free to change or clear
+//     any of them; `touched` is what makes that choice stick.
+// A row the user has NOT touched follows the options, which is what makes turning
+// the deep repair on do something: those rows had no applicable action a moment
+// ago, and re-arming them is the whole reason the switch was flipped. (A sentinel
+// of `action === undefined` could not tell "never offered one" from "cleared it".)
 function uArm(){
   U.rows.forEach(r=>{
     if(!r.needs){ r.action=null; return; }
-    const avail=uActionsFor(r).map(a=>a[0]);
-    if(U.mode==='fix'){ r.action = uDefaultAction(r); return; }   // auto-apply the repair
-    // Scan: keep a valid armed action; default-arm one that was never touched.
-    if(r.action && !avail.includes(r.action)) r.action = (r.action==='delete' && avail.includes('delete')) ? 'delete' : uDefaultAction(r);
-    if(r.action===undefined) r.action = uDefaultAction(r);        // first sight → pre-arm the default
+    const avail=uActionsFor(r).map(a=>a[0]).filter(a=>a!=='health');
+    if(U.mode==='fix' || !r.touched){ r.action = uDefaultAction(r); return; }
+    // The user's own choice stands — unless the options moved under it, in which
+    // case it is snapped back to something that can actually be applied.
+    if(r.action && !avail.includes(r.action)) r.action = uDefaultAction(r);
   });
 }
+// A fault with no automatic remedy says so IN the row, rather than leaving a
+// blank space where a button would be and letting the user wonder.
+function uNoRemedy(r){
+  if(r.kind==='drm')
+    return 'nothing here can read an encrypted file — and it is not broken: it plays perfectly '
+         + 'in whatever app it belongs to';
+  if(r.beyondRepair)
+    return 'past saving · the report can move it somewhere recoverable';
+  if(r.kind==='codec')
+    return 'the file is fine as it is — this codec simply cannot be stream-copied into MP4';
+  if(r.fix==='reencode')
+    return 'only the deep repair can reach this · turn on “Allow the deep repair” above';
+  return 'no automatic remedy';
+}
 function uRenderList(){
-  const list=$('#u-list');
+  const list=$('#u-list'); if(!list) return;
+  if(U.err){
+    list.innerHTML = `<div class="u-err">${U.err}</div>`;
+    $('#u-empty').hidden=true;
+    $('#u-res-sub').textContent = uFolder();
+    $('#u-res-sub').title = uFolder();
+    uDeepEnabled(true);
+    uFoot(); return;
+  }
+  uDeepEnabled(true);
   const needs=U.rows.filter(r=>r.needs).length;
-  $('#u-res-sub').textContent = `${U.rows.length} files scanned · ${needs} need attention`;
+  // Counts first, folder last: the readout ellipsises when the folder is a deep
+  // path, and losing the tail of a path costs less than losing the numbers.
+  const sub = uNum(U.rows.length) + ' file' + (U.rows.length===1?'':'s') + ' scanned · '
+    + uNum(needs) + ' need' + (needs===1?'s':'') + ' attention'
+    + (U.stopped ? ' · stopped early' : '') + ' · ' + uFolderShort();
+  $('#u-res-sub').textContent = sub;
+  $('#u-res-sub').title = sub.replace(uFolderShort(), uFolder());
   if(!U.rows.length){ list.innerHTML=''; $('#u-empty').hidden=false; }
   else {
-    $('#u-empty').hidden = needs>0 ? true : false;
+    $('#u-empty').hidden = needs>0;
     uArm();
     const locked = U.mode==='fix';   // in Scan & fix the selection is automatic — rows read-only
     list.innerHTML = U.rows.map((r,i)=>{
-      const acts=uActionsFor(r);
-      const cls = r.needs ? 'needs' : 'clean';
+      const guard = uIsGuard(r);
+      const acts = uActionsFor(r);
+      const k = U_KIND[r.kind];
+      const cls = r.needs
+        ? 'needs' + (guard?' guard':'') + (r.beyondRepair?' gone':'')
+        : 'clean';
+      const chip = r.needs
+        ? `<span class="u-chip ${guard?'warn':(k?k.tone:'fix')}">${uEsc(guard?'index desync':(k?k.chip:'needs a fix'))}</span>`
+        : '';
       const actsHtml = acts.map(([a,lab])=>{
-        const danger = a==='delete' ? ' r-danger' : '';
-        const on = r.action===a ? ' on' : '';
-        const dis = locked ? ' disabled' : '';
-        return `<button class="u-act${danger}${on}${dis}" data-i="${i}" data-a="${a}"${locked?' disabled':''}>${lab}</button>`;
+        // "Fix in File-health" is a route, not an armed action: it is never
+        // locked by Scan & fix and never shows as selected.
+        const nav = a==='health';
+        const on = (!nav && r.action===a) ? ' on' : '';
+        const dis = (!nav && locked) ? ' disabled' : '';
+        const ttl = nav
+          ? 'Open the File-health tool on this folder — its ladder rebuilds a desynchronised index losslessly. (It re-scans.)'
+          : '';
+        return `<button class="u-act${on}${dis}" data-i="${i}" data-a="${a}"`
+             + `${(!nav && locked)?' disabled':''} title="${uEsc(ttl)}">${uEsc(lab)}</button>`;
       }).join('');
+      // ⚠️ The guard's reason, in full and in the row. This is the difference
+      // between "this file didn't work" and "doing that would have damaged it",
+      // and it is not something to learn afterwards from a log.
+      const warn = guard
+        ? `<div class="u-row-w"><b>Not a remux.</b> This file’s sample index no longer matches its `
+          + `media, so a remux would copy the wrong bytes out as the new truth and the frames a `
+          + `repair could still recover would be gone — 2,400 of them on a real file, reported as a `
+          + `success. File-health rebuilds the index instead, losslessly.</div>`
+        : '';
+      const none = (r.needs && !guard && !acts.length)
+        ? `<div class="u-row-x">${uEsc(uNoRemedy(r))}</div>` : '';
       return `<div class="u-row ${cls}" data-i="${i}">`
         + `<span class="u-row-mark"></span>`
-        + `<div class="u-row-main"><div class="u-row-n" title="${r.path}">${r.f}</div>`
-        + `<div class="u-row-d ${r.needs?'':'ok'}">${r.detail} · ${uMB(r.size)}</div></div>`
+        + `<div class="u-row-main"><div class="u-row-n" title="${uEsc(r.path)}">${uEsc(r.f)}${chip}</div>`
+        + `<div class="u-row-d ${r.needs?'':'ok'}">${uEsc(r.detail)} · ${uMB(r.size)}</div>`
+        + warn + none + `</div>`
         + `<div class="u-row-acts">${actsHtml}</div></div>`;
     }).join('');
-    if(!locked) list.querySelectorAll('.u-act').forEach(b=>b.onclick=()=>{
+    list.querySelectorAll('.u-act').forEach(b=>b.onclick=()=>{
       const i=+b.dataset.i, a=b.dataset.a;
-      // toggle: click the chosen action to arm it, click again to clear
+      if(a==='health'){ uOpen('health'); return; }      // a route, not an action
+      if(locked) return;
+      // toggle: click the chosen action to arm it, click again to clear. Either way
+      // the row is now the user's, and stops following the options.
+      U.rows[i].touched = true;
       U.rows[i].action = (U.rows[i].action===a) ? null : a;
       uRenderList();
     });
@@ -7871,94 +8202,308 @@ function uRenderList(){
   uFoot();
 }
 function uFoot(){
-  const run=$('#u-run');
-  const chosen = U.rows.filter(r=>r.action);
-  const del = chosen.filter(r=>r.action==='delete').length;
-  const remux = chosen.filter(r=>r.action==='remux'||r.action==='fix').length;
-  const reenc = chosen.filter(r=>r.action==='reencode').length;
-  const cont = U.tool==='faststart' && U.container!=='keep' ? ` · ${U.container==='mp4'?'to MP4':'to MKV'}` : '';
-  let bits=[];
-  if(remux) bits.push(`<b>${remux}</b> to remux`);
-  if(reenc) bits.push(`<b>${reenc}</b> to re-encode`);
-  if(del)   bits.push(`<b>${del}</b> to delete`);
+  const run=$('#u-run'); if(!run) return;
+  if(U.scanning) return;                       // uScanUI owns the footer mid-scan
+  const chosen = U.rows.filter(r=>r.action && r.action!=='health');
+  const remux = chosen.filter(r=>r.action==='remux').length;
+  const rep   = chosen.filter(r=>r.action==='repair').length;
+  // Files past saving are never armed here. They are carried into the report,
+  // where the app's EXISTING Trash flow removes them recoverably — and already
+  // knows that a share with no Trash has to ask before deleting for good.
+  const gone  = U.rows.filter(r=>r.beyondRepair).length;
+  const cont = U.tool==='faststart' && U.container!=='keep'
+    ? ` · ${U.container==='mp4'?'to MP4':'to MKV'}` : '';
+  const bits=[];
+  if(remux) bits.push(`<b>${uNum(remux)}</b> to remux`);
+  if(rep)   bits.push(`<b>${uNum(rep)}</b> to repair`);
+  const goneBit = gone
+    ? `<b>${uNum(gone)}</b> past saving — the report offers ${gone>1?'them':'it'} to the Trash`
+    : '';
+  const join = (a,b) => [a,b].filter(Boolean).join(' · ');
   if(U.mode==='fix'){
     // Scan & fix: the selection is automatic and the run goes straight to the report.
     $('#u-foot-n').innerHTML = chosen.length
-      ? bits.join(' · ')+cont+' · applied automatically'
-      : 'Nothing to fix — every file scanned clean.';
-    run.disabled = U.scanning;
+      ? join(bits.join(' · ')+cont+' · applied automatically', goneBit)
+      : join('Nothing to fix — every file scanned clean.', goneBit);
+    run.disabled = false;
     run.textContent = chosen.length ? (U.tool==='faststart'?'Scan & fix':'Scan & remux') : 'View report';
     return;
   }
   // Scan: the user picks, then applies "Fix selected".
   $('#u-foot-n').innerHTML = chosen.length
-    ? bits.join(' · ')+cont
-    : 'Nothing selected — pick an action on the files you want to fix, or nothing changes.';
-  run.disabled = chosen.length===0;
-  run.textContent = 'Fix selected';
+    ? join(bits.join(' · ')+cont, goneBit)
+    : join('Nothing selected — pick an action on the files you want to fix, or nothing changes.', goneBit);
+  run.disabled = !chosen.length && !U.rows.length;
+  run.textContent = chosen.length ? 'Fix selected' : 'View report';
 }
-// Run: hand off to the SHARED progress sheet, then the SHARED report sheet — no
-// bespoke progress/report chrome. Builds a report-shaped RUN object so drawReport
-// (already written for compression) renders it unchanged.
+
+// ── running the fix ──────────────────────────────────────────────────────────
+// Hand off to the SHARED progress sheet, then the SHARED report sheet — no
+// bespoke progress/report chrome. Real: utility_fix streams a row back per file
+// through __vtcUtilFixed and finishes on __vtcUtilFixDone. Standalone: the mock
+// drives the same two callbacks, refusals included.
 function uRun(){
-  const chosen = U.rows.filter(r=>r.action);
-  // Nothing to apply (Scan & fix on an all-clean folder): go straight to a report so
-  // the user still gets a clear "here's what the scan found — nothing to do" summary.
-  if(!chosen.length){
-    RUN=uModelReport([]); trashStatus=null; trashArmed=false;
-    rTab = U.rows.some(r=>r.needs) ? 'fail' : 'ok'; drawReport(); openSheet('#report-sheet');
-    return;
-  }
-  // Both Scan (Fix selected) and Scan & fix (auto) end the same way: run the shared
-  // progress sheet over the chosen files, then the shared report sheet.
-  const total = chosen.length;
-  pgStart(total, total*8, chosen.map(r=>r.f));       // remux is fast: ~8s/file
-  let idx=0;
-  const tick=()=>{
-    if(idx<total){
-      const r=chosen[idx];
-      pgFile(r.f, Math.random()*0.9+0.05, {fps:'', bitrate:'', speed:(6+Math.random()*20).toFixed(0)+'×'});
-      setTimeout(()=>{ pgDone1({f:r.f, t:'ok'}); idx++; setTimeout(tick, 90); }, 120);
-    } else {
-      setTimeout(()=>{ pgFinish(); RUN=uModelReport(chosen); trashStatus=null; trashArmed=false;
-        rTab='ok'; drawReport(); openSheet('#report-sheet'); }, 300);
-    }
-  };
-  setTimeout(tick, 250);
+  if(U.scanning){ uStop(); return; }
+  const chosen = U.rows.filter(r=>r.action && r.action!=='health');
+  // Nothing to apply: go straight to a report so the user still gets a clear
+  // "here's what the scan found" summary — and, for anything past saving, the
+  // Trash flow that lives there.
+  if(!chosen.length){ uReport([], U.stopped); return; }
+  U.chosen=chosen; U.fixed={}; U.fixing=true;
+  pgStart(chosen.length, chosen.length*8, chosen.map(r=>r.f));   // a remux is fast: ~8s/file
+  uPgBorrow();
+  uPgInFlight(chosen[0]);
+  const api=uApi();
+  if(!api){ uMockFix(chosen); return; }
+  try{
+    Promise.resolve(api.utility_fix(U.tool, chosen.map(r=>r.path), U.container, U.reencode))
+      .then(r=>{ if(r && r.error){ uPgReturn(); pgFinish(); uScanFailed(r.error); } })
+      .catch(e=>{ uPgReturn(); pgFinish(); uScanFailed(String(e && e.message || e)); });
+  }catch(e){ uPgReturn(); pgFinish(); uScanFailed(String(e && e.message || e)); }
 }
-function uModelReport(chosen){
+// The shared progress sheet is written for an encode: its Stop calls the run's
+// abort, and "Stop now" discards the encoding done so far. A remux has nothing
+// to discard, and Stop has to reach stop_utility — so borrow the button for the
+// duration and give it back afterwards.
+let uHeldStop=null;
+function uPgBorrow(){
+  const ab=$('#pg-abort'); if(ab) ab.style.display='none';
+  const st=$('#pg-stop'); if(st){ st.disabled=false; st.textContent='Stop after this file'; }
+  uHeldStop = { v: window.__vtcStop };
+  window.__vtcStop = ()=>{ uStop(); };
+}
+function uPgReturn(){
+  U.fixing=false;
+  const ab=$('#pg-abort'); if(ab) ab.style.display='';
+  if(uHeldStop){ window.__vtcStop = uHeldStop.v; uHeldStop=null; }
+}
+const U_ACTION_VERB = {
+  remux   : 'remuxed — a stream copy, nothing re-encoded',
+  reindex : 'sample index rebuilt losslessly — no re-encode',
+  reencode: 're-encoded at the file’s own bitrate — a repair, not a shrink' };
+const uFixVerb = fx => U_ACTION_VERB[(fx&&fx.action)||''] || 'repaired';
+// A stream copy barely moves the size, so "7.02 GB → 7.01 GB" reads as a bug
+// rather than as a success. Only a re-encode gets the before/after pair.
+function uSizeLine(sb, ob, fx){
+  const act=(fx&&fx.action)||'';
+  if(act==='reencode' && sb && ob) return `${uMB(sb/1e6)} → ${uMB(ob/1e6)}`;
+  if(act==='reindex') return 'index rebuilt';
+  return (fx && fx.note && /→/.test(fx.note)) ? fx.note : 'remuxed';
+}
+window.__vtcUtilFixed = (p)=>{
+  p=p||{};
+  const row=p.row||{};
+  if(row.path) U.fixed[row.path]=row;
+  const name=row.name||row.newName||'';
+  pgDone1({ f:name,
+    t: row.ok ? 'ok' : 'fail',
+    sev: row.ok ? '' : (U_GUARD_RE.test(row.error||'') ? 'warn' : 'err'),
+    detail: row.ok ? (row.note || uFixVerb(row)) : (row.error||'') });
+  // The engine reports once per FILE, not per frame, so without this nothing would
+  // ever appear as "processing" in the flight strip — every file would jump
+  // straight from queued to done. `null` for the fraction is deliberate: we have
+  // no intra-file progress here and inventing one would be a lie.
+  uPgInFlight((U.chosen||[])[p.done||0]);
+};
+function uPgInFlight(r){
+  if(!r) return;
+  pgFile(r.f, null, {});      // sets the sheet's headline to "Working…"
+  // ...then drop it back OUT of the flight map. The flight strip prints a
+  // percentage for anything in there, and a stream copy that reports nothing
+  // until it is finished would sit at "processing · 0%" looking stuck. Without
+  // an entry the strip still pins the right row (it falls back to the queue
+  // position) and prints a plain "processing", which is all we actually know.
+  if(PG && PG.flight) delete PG.flight[r.f];
+  pgRenderList();
+}
+window.__vtcUtilFixDone = (r)=>{
+  r=r||{};
+  (r.rows||[]).forEach(row=>{ if(row && row.path) U.fixed[row.path]=row; });
+  uPgReturn();
+  setTimeout(()=>{ pgFinish(); uReport(U.chosen||[], !!r.stopped); }, 260);
+};
+function uReport(chosen, stopped){
+  RUN = uModelReport(chosen||[], !!stopped);
+  trashStatus=null; trashArmed=false;
+  rTab = (chosen && chosen.length) ? 'ok' : (RUN.fail ? 'fail' : 'ok');
+  drawReport(); openSheet('#report-sheet');
+}
+// Build a report-shaped RUN so drawReport (already written for compression)
+// renders it unchanged. The one thing this must get right is WHICH rows the
+// report's Trash flow is allowed to offer: `noTrash` marks every row that is not
+// past saving, so the bulk "Move N to Trash" cannot sweep up a perfectly good
+// file that merely needs a remux — and, above all, cannot sweep up a DRM file,
+// which is intact and plays fine in the app it belongs to.
+function uModelReport(chosen, stopped){
   const rows=[]; let saved=0;
-  const fixVerb = U.tool==='faststart' ? 'remuxed (faststart)' : null;
   U.rows.forEach(r=>{
-    if(r.action==='delete'){
-      rows.push({ f:r.f, path:r.path, t:'fail', sev:'note', problem:true,
-        detail:'deleted at your request', d:'deleted' });
-    } else if(r.action){
-      // a remux barely changes size (faststart) or shrinks a bit (health re-encode)
-      const sb=r.size*1024*1024, ob = r.action==='reencode' ? sb*(0.45+Math.random()*0.25) : sb*(0.995);
+    const fx = U.fixed[r.path];
+    if(fx && fx.ok){
+      const sb = (+fx.before||0) || r.size*1e6;
+      const ob = (+fx.after||0) || sb;
       saved += (sb-ob);
-      const what = r.action==='reencode' ? 're-encoded to repair' : (fixVerb||'remuxed to repair');
-      rows.push({ f:r.f, path:r.path, t:'ok', sbytes:sb, obytes:ob, detail:what,
-        d:`${uMB(r.size)} → ${uMB(ob/1048576)}` });
-    } else if(r.needs){
-      // A file that needs attention but has no armed action (Scan, deselected, or an
-      // all-clean Scan & fix that found nothing to do) is a FINDING, not a repair.
-      rows.push({ f:r.f, path:r.path, t:'fail', sev:'note', problem:true,
-        detail:r.detail, d:'needs a look' });
-    } else {
-      rows.push({ f:r.f, path:r.path, t:'skip',
-        detail: r.needs ? 'left as it is' : (U.tool==='faststart'?'already faststart':'no faults found'),
-        d:'left alone' });
+      rows.push({ f: fx.newName||r.f, path: fx.newPath||r.path, t:'ok', noTrash:true,
+        sbytes:sb, obytes:ob, detail: fx.note || uFixVerb(fx), d: uSizeLine(sb, ob, fx) });
+      return;
     }
+    if(fx && !fx.ok){
+      // ⚠️ A REFUSAL IS NOT A FAILURE. When the engine declines to remux a file
+      // whose index has desynchronised it has just PREVENTED permanent damage.
+      // Reporting that as "didn't work" invites the user to go and do it by hand.
+      const guarded = U_GUARD_RE.test(fx.error||'');
+      rows.push({ f:r.f, path:r.path, t:'fail', sev: guarded?'warn':'err', problem:true, noTrash:true,
+        detail: guarded
+          ? 'left alone on purpose — its sample index does not match the media, so a remux would '
+            + 'have destroyed the frames a repair can still recover. Run File-health on this one: '
+            + 'it rebuilds the index losslessly.'
+          : (fx.error || 'the fix did not take'),
+        d: guarded ? 'not remuxed' : 'not changed' });
+      return;
+    }
+    if(r.beyondRepair){
+      // The ONLY rows the report's Trash flow may offer: a half-downloaded file
+      // and one whose bytes cannot be read are gone, and getting rid of them and
+      // fetching again is the only useful thing left to do.
+      rows.push({ f:r.f, path:r.path, t:'fail', sev:'note', problem:true,
+        detail: r.detail + ' — nothing here can repair this', d:'past saving' });
+      return;
+    }
+    if(r.kind==='drm'){
+      // ⛔ NEVER offered to the bin, and not filed as a problem either. An
+      // encrypted file is perfectly intact — it plays in whatever app it belongs
+      // to; we simply cannot open it. Offering to bin it because WE had no luck
+      // would destroy something that works.
+      rows.push({ f:r.f, path:r.path, t:'skip', noTrash:true,
+        detail:'encrypted (DRM) — intact, and nothing here can read it', d:'left alone' });
+      return;
+    }
+    if(r.needs){
+      rows.push({ f:r.f, path:r.path, t:'fail', sev:'note', problem:true, noTrash:true,
+        detail:r.detail, d: uIsGuard(r) ? 'repair before remuxing' : 'needs a look' });
+      return;
+    }
+    rows.push({ f:r.f, path:r.path, t:'skip', noTrash:true,
+      detail: U.tool==='faststart' ? 'already faststart' : 'no faults found', d:'left alone' });
   });
-  const done=rows.filter(r=>r.t==='ok').length, skip=rows.filter(r=>r.t==='skip').length, fail=rows.filter(r=>r.t==='fail').length;
-  return { rows, done, skip, fail, failedRetryable:0,
-    tb:saved/1e12, mins:Math.max(1,Math.round(chosen.length*0.15)), utility:true };
+  const done=rows.filter(r=>r.t==='ok').length,
+        skip=rows.filter(r=>r.t==='skip').length,
+        fail=rows.filter(r=>r.t==='fail').length;
+  return { rows, done, skip, fail, failedRetryable:0, stopped:!!stopped,
+    tb:saved/1e12, mins:Math.max(1,Math.round((chosen.length||0)*0.15)), utility:true };
 }
-// wire the landing cards, back, run
+
+// ── the mock (standalone, no pywebview) ──────────────────────────────────────
+// It drives the SAME callbacks as the engine, so there is one code path after
+// the data arrives — and it covers what the old mock did not: every fault kind,
+// files past saving, a DRM file that must never be offered to the bin, a
+// progressive stoppable scan, and a refused remux. Those last two are exactly
+// the cases nobody should meet for the first time on their own library.
+function uMockScan(){
+  const rows = U.tool==='faststart' ? uMockFaststart() : uMockHealth();
+  U.mockStop=false;
+  let i=0;
+  const step=()=>{
+    if(U.mockStop){ window.__vtcUtilScanDone({tool:U.tool, rows:rows.slice(0,i), stopped:true}); return; }
+    i++;
+    window.__vtcUtilProgress({done:i, total:rows.length, name:rows[i-1].f});
+    U.mockTimer = (i<rows.length)
+      ? setTimeout(step, 90)
+      : setTimeout(()=>window.__vtcUtilScanDone({tool:U.tool, rows, stopped:false}), 240);
+  };
+  U.mockTimer=setTimeout(step, 240);
+}
+function uMockFaststart(){
+  // A believable mix: most already faststart, a chunk that need the index moved.
+  const rows=[]; let seed=97;
+  const rnd=()=>((seed=seed*16807%2147483647)/2147483647);
+  for(let i=0;i<14;i++){
+    const ext=['mp4','mov','mkv'][((rnd()*3)|0)];
+    const size=(400+rnd()*6000)|0;
+    const needs = rnd()<0.55;
+    const nm=`${U_NAMES[i%U_NAMES.length]}.${ext}`;
+    rows.push({ f:nm, path:`/Volumes/NAS/Movies/${nm}`, size, ext, needs,
+      kind: needs?'faststart':'', fix: needs?'remux':'none', beyondRepair:false,
+      detail: needs ? 'index sits after the media · needs the pass' : 'already faststart' });
+  }
+  // ⚠️ ...and one whose sample index has desynchronised, which the real scan flags
+  // up front so a batch does not stop halfway. It must be visible standalone: the
+  // guard is the single most consequential thing in this whole interface.
+  rows.splice(4, 0, { f:'Prisoners (2013).mp4', path:'/Volumes/NAS/Movies/Prisoners (2013).mp4',
+    size:1712, ext:'mp4', needs:true, kind:'nal', fix:'reencode', beyondRepair:false,
+    detail:'sample index does not match the media · 2,445 of 20,927 samples bad — repair this '
+         + 'before remuxing, or the recoverable frames are lost' });
+  return rows;
+}
+function uMockHealth(){
+  const rows=[]; let seed=241;
+  const rnd=()=>((seed=seed*16807%2147483647)/2147483647);
+  // Every kind the engine can return — including the two with no remedy at all,
+  // and the one that must never be offered to the bin.
+  //   kind, detail, fix, beyondRepair, the mock fix refuses it
+  const ISSUES=[
+    ['chapters','3 chapter markers past the real end','remux',false,false],
+    ['nal','sample index does not match the media · 2,445 of 20,927 samples bad','reencode',false,false],
+    ['container','container is 312 MB shorter than it claims — the download stopped short','none',true,false],
+    ['drm','encrypted (DRM) — no repair or re-encode can read this','none',false,false],
+    ['nal','decode errors in the stream · Invalid NAL unit size (1917467621 > 77054)','reencode',false,false],
+    ['unreadable','moov atom not found · nothing here can read this file','none',true,false],
+    ['codec','wmv3 cannot be copied into MP4 · it would have to be re-encoded','none',false,false],
+    ['chapters','chapter markers run 42s past the real end','remux',false,true]
+  ];
+  let k=0;
+  for(let i=0;i<18;i++){
+    const size=(600+rnd()*7000)|0;
+    const ext = (i%5===0) ? 'mp4' : 'mkv';
+    const nm=`${U_NAMES[i%U_NAMES.length]}.${ext}`;
+    const base={ f:nm, path:`/Volumes/NAS/TV/${nm}`, size, ext };
+    if(i%2===1 && k<ISSUES.length){
+      const [kind,detail,fix,gone,refuse]=ISSUES[k++];
+      rows.push(Object.assign(base,{ needs:true, kind, detail, fix,
+        beyondRepair:gone, mockRefuse:refuse }));
+    } else {
+      rows.push(Object.assign(base,{ needs:false, kind:'', detail:'no faults found',
+        fix:'none', beyondRepair:false }));
+    }
+  }
+  return rows;
+}
+// The mock fix has to be able to REFUSE, because a refusal is the outcome the
+// user most needs to have seen before it happens on their own files.
+function uMockFix(chosen){
+  U.mockStop=false;
+  let i=0;
+  const step=()=>{
+    if(U.mockStop || i>=chosen.length){
+      window.__vtcUtilFixDone({rows:[], stopped: U.mockStop && i<chosen.length});
+      return;
+    }
+    const r=chosen[i++];
+    const before=r.size*1e6;
+    const deep = (r.action==='repair');
+    const rebuilt = deep && r.kind==='nal';
+    const row = (r.mockRefuse || uIsGuard(r))
+      ? { path:r.path, name:r.f, ok:false, action:'', before, after:0, note:'',
+          error:'the sample index does not match the media — remuxing would destroy what a '
+              + 'repair could still recover. Run the file-health repair on it first' }
+      : { path:r.path, name:r.f, ok:true,
+          action: rebuilt ? 'reindex' : (deep ? 'reencode' : 'remux'),
+          before, after: rebuilt ? before : (deep ? before*0.98 : Math.round(before*0.999)),
+          note: rebuilt
+            ? 'index rebuilt losslessly · 20,915 of 20,927 frames kept, 10,954 decode errors → 21'
+            : (U.tool==='faststart' && U.container!=='keep' ? `${r.ext} → ${U.container}` : ''),
+          error:'', newPath:r.path, newName:r.f };
+    window.__vtcUtilFixed({done:i, total:chosen.length, row});
+    U.mockTimer=setTimeout(step, 140);
+  };
+  U.mockTimer=setTimeout(step, 240);
+}
+
+// wire the landing folder, the cards, back, run
 document.querySelectorAll('#u-land .u-tool').forEach(c=>c.onclick=()=>uOpen(c.dataset.tool));
 { const b=$('#u-back'); if(b) b.onclick=uBack; }
 { const r=$('#u-run'); if(r) r.onclick=uRun; }
+{ const p=$('#u-src-pick'); if(p) p.onclick=()=>uPickFolder(); }
+uLandFolder();
 
 // ═══ Folder Actions ═══════════════════════════════════════════════════════════
 // A folder action IS the whole rule — one named pipeline: watch a folder → run a
@@ -8334,6 +8879,9 @@ window.setMode=setMode; window.U=U; window.W=W;
   const go=()=>{
     try{
       const sp=$('#splash'); if(sp) sp.hidden=true;
+      // The first-run benchmark offer fires off the scan, so it has to be recorded
+      // as asked BEFORE the folder is picked or it lands on top of the shot.
+      if(shot==='utils' && window.ADV) ADV.benchAsked=true;
       if(typeof pickFolder==='function') pickFolder(-1);   // demo folder + scan
       if(shot==='ignore'){
         const rules = p.get('rules')==='1';
@@ -8454,6 +9002,34 @@ window.setMode=setMode; window.U=U; window.W=W;
           if(p.get('scroll')==='1') setTimeout(()=>{
             const pane=$('#adv-pane'); if(pane) pane.scrollTop = pane.scrollHeight;
           }, 1400);
+        }
+      } else if(shot==='utils'){
+        // Utilities against the mock engine, which now covers every fault kind the
+        // real one returns. `at` picks the surface; the scan is progressive, so
+        // the shots that want a finished list wait for it.
+        //   at=land     the landing + folder row (default)
+        //   at=fast     the Faststart list, guard row and all
+        //   at=health   the File-health list
+        //   at=scanning the scan in progress (caught mid-count)
+        //   at=fixing   the shared progress sheet driving a fix
+        //   at=report   the report a scan-only run hands off to
+        //   deep=1      File-health with the deep repair allowed
+        //   mode=fix    the Scan & fix run mode
+        if(typeof setMode==='function') setMode('utils');
+        const uat=p.get('at')||'land';
+        if(uat!=='land'){
+          if(p.get('folder')) U.folder=p.get('folder');   // else it follows SRC
+          uOpen(uat==='fast' ? 'faststart' : 'health');
+          // The splash is still fading over the first couple of seconds, so a shot of
+          // the scan has to catch a LATER one: re-run it once the page is settled.
+          if(uat==='scanning'){ setTimeout(()=>uScan(), 3000); }
+          else setTimeout(()=>{
+            if(p.get('deep')==='1'){ U.reencode=true; uRenderMode(); }
+            if(p.get('mode')==='fix'){ U.mode='fix'; uRenderMode(); }
+            uRenderList();
+            if(uat==='report' && typeof uReport==='function') uReport([], false);
+            if(uat==='fixing' && typeof uRun==='function') uRun();
+          }, 2600);
         }
       } else if(shot==='toolbar'){
         // The gate/report aren't needed — just the brow. pickFolder above already
