@@ -220,3 +220,26 @@ def _run_all():
 
 if __name__ == "__main__":
     _run_all()
+
+
+def test_the_interface_can_report_its_own_failures():
+    """A JavaScript exception used to be invisible: the window stopped responding,
+    the log ended mid-sentence with nothing wrong in it, and the only evidence was
+    someone saying "it froze". Most of this app's behaviour lives in the page, so
+    that was the largest blind spot in the whole diagnostic story.
+
+    Checks the Python end — which must never itself throw, whatever it is handed —
+    and that the bridge installs the three handlers covering what actually goes
+    wrong: thrown errors, rejected promises, and console.error.
+    """
+    from vtc import webapp
+    api = webapp.Api.__new__(webapp.Api)
+    assert api.log_ui("error", "boom", "stack") == {"ok": True}
+    for bad in (None, 12345, {"not": "a string"}, "x" * 50_000):
+        assert api.log_ui("error", bad, bad) == {"ok": True}
+    assert api.log_ui("nonsense-level", "still fine") == {"ok": True}
+
+    js = webapp._BRIDGE_JS
+    for handler in ("addEventListener('error'", "addEventListener('unhandledrejection'",
+                    "console.error =", "api.log_ui("):
+        assert handler in js, f"the bridge does not install {handler}"

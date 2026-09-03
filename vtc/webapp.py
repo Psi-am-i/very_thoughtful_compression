@@ -27,6 +27,7 @@ import threading
 from pathlib import Path
 
 import logging
+import logging.handlers
 import os
 import platform
 import shutil
@@ -74,7 +75,12 @@ def _setup_logging() -> Path:
     if not log.handlers:
         log.setLevel(logging.DEBUG)
         try:
-            fh = logging.FileHandler(path, encoding="utf-8")
+            # Rotating, because this log is the first thing anyone asks for when
+            # something goes wrong and it must not have grown into something
+            # nobody can open. Three generations keeps the run before last, which
+            # is usually where the interesting bit is.
+            fh = logging.handlers.RotatingFileHandler(
+                path, maxBytes=4_000_000, backupCount=3, encoding="utf-8")
             fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)-5s %(message)s"))
             log.addHandler(fh)
         except OSError:
@@ -517,6 +523,43 @@ _BRIDGE_JS = r"""
 (function(){
   if(!window.pywebview || !window.pywebview.api){ return; }   // standalone file: keep mock
   const api = window.pywebview.api;
+
+  // ── the interface reports its own failures ────────────────────────────────
+  // Before this, a JavaScript exception was invisible: the window stopped
+  // responding, the log ended mid-sentence with nothing wrong in it, and the only
+  // evidence was someone saying "it froze". Most of this app's behaviour now
+  // lives in the page, so that was the biggest blind spot in the whole
+  // diagnostic story. Everything here is defensive — a reporting path that can
+  // itself throw would be worse than none.
+  const uiLog = (level, msg, detail) => {
+    try { api.log_ui(level, String(msg||''), String(detail||'')); } catch(e){}
+  };
+  window.addEventListener('error', (e)=>{
+    try {
+      const where = e.filename ? ` (${String(e.filename).split('/').pop()}:${e.lineno}:${e.colno})` : '';
+      uiLog('error', (e.message||'script error') + where,
+            e.error && e.error.stack ? e.error.stack : '');
+    } catch(_){}
+  });
+  // A rejected promise that nobody catches is the shape most of the async work
+  // here fails in — a scan, a fix, a benchmark — and it never reaches onerror.
+  window.addEventListener('unhandledrejection', (e)=>{
+    try {
+      const r = e.reason;
+      uiLog('error', 'unhandled promise rejection: ' + ((r && r.message) || r),
+            (r && r.stack) || '');
+    } catch(_){}
+  });
+  // console.error too: the page uses it for conditions it has already handled but
+  // that are still worth seeing in a log when someone reports odd behaviour.
+  try {
+    const ce = console.error.bind(console);
+    console.error = function(){
+      try { uiLog('warn', Array.from(arguments).map(String).join(' ')); } catch(_){}
+      return ce.apply(console, arguments);
+    };
+  } catch(e){}
+  uiLog('info', 'interface ready');
 
   // Restore the user's saved Advanced settings on launch (they persist to disk, so
   // they survive quitting the app and reinstalling it).
@@ -1715,6 +1758,28 @@ class Api:
             done.append(row)
             self._emit("__vtcUtilFixed", {"done": n + 1, "total": len(paths), "row": row})
         self._emit("__vtcUtilFixDone", {"rows": done, "stopped": self._util_stop})
+
+    def log_ui(self, level: str, message: str, detail: str = ""):
+        """Let the interface put its own failures in the log.
+
+        Without this a JavaScript exception is completely invisible: the window
+        simply stops responding, the log ends mid-sentence with nothing wrong in
+        it, and the only evidence is a user saying "it froze". Since most of this
+        app's behaviour now lives in the page — the walkthrough, Utilities, the
+        benchmark — that was the largest blind spot in the whole diagnostic story.
+
+        Deliberately tolerant of whatever it is handed: a logging path that can
+        itself throw is worse than no logging path.
+        """
+        try:
+            text = str(message)[:2000]
+            if detail:
+                text += "\n" + str(detail)[:4000]
+            fn = {"error": log.error, "warn": log.warning}.get(str(level), log.info)
+            fn("UI: %s", text)
+        except Exception:                                   # noqa: BLE001
+            pass
+        return {"ok": True}
 
     def stop_utility(self):
         self._util_stop = True
