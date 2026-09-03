@@ -981,6 +981,14 @@ _BENCH_KEY = "benchRates"           # measured by the benchmark, on real library
 _SAMPLE_RATES_KEY = "sampleRates"   # measured by a 5s preview clip — rough, labelled
 _BENCH_META = "benchmark"           # when it ran, on what, and what it found
 
+# Keys the ENGINE owns. They live in the same settings file as the user's
+# preferences, but they are MEASUREMENTS, not settings: the UI displays them and
+# never edits them. They are therefore taken from our own state on every save and
+# never from the incoming payload — otherwise a UI that simply doesn't know about
+# them (an older build, a partial push) silently deletes an hour of benchmarking
+# the first time someone nudges a checkbox.
+_ENGINE_OWNED = (_RATES_KEY, _BENCH_KEY, _SAMPLE_RATES_KEY, _BENCH_META)
+
 
 def _rate_key(config: RunConfig, hw: bool) -> str:
     """Rates are per hardware/software path, per codec, AND per parallelism.
@@ -1090,7 +1098,16 @@ class Api:
         parts of it that invalidate work already done: the ignore rules (which
         change what the library even contains) and the tier densities (which
         change what the preview panels are showing)."""
-        old, self._adv = self._adv, dict(adv or {})
+        incoming = dict(adv or {})
+        # Whatever the UI sends, the engine's own measurements are carried across
+        # from here rather than from the payload. See _ENGINE_OWNED: these are
+        # things we measured, not things the user set, and the UI has no business
+        # being their source of truth.
+        for key in _ENGINE_OWNED:
+            incoming.pop(key, None)
+            if key in self._adv:
+                incoming[key] = self._adv[key]
+        old, self._adv = self._adv, incoming
         _save_settings(self._adv)                 # persist every change, folder or not
         if self._src is None:
             return {"ok": True}

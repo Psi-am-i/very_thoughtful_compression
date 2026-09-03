@@ -184,3 +184,31 @@ def test_the_app_knows_whether_it_has_ever_been_benchmarked(monkeypatch, tmp_pat
     assert api.benchmark_state()["done"] is False
     api._adv[webapp._BENCH_META] = {"at": "2026-09-03T00:00:00", "rows": []}
     assert api.benchmark_state()["done"] is True
+
+
+def test_measurements_survive_the_user_touching_a_setting(monkeypatch, tmp_path):
+    """The engine's measurements live in the settings file but are NOT settings.
+
+    set_adv replaces the whole object with what the UI sent, so the moment
+    anything I measured went in there, an hour of benchmarking was one checkbox
+    away from being deleted — by a UI that simply didn't know the keys existed.
+    They are now carried across from the engine's own state, and a payload that
+    tries to set them is ignored rather than trusted.
+    """
+    monkeypatch.setattr(webapp, "_settings_path", lambda: tmp_path / "s.json")
+    api = webapp.Api.__new__(webapp.Api)
+    api._src = None
+    api._adv = {webapp._RATES_KEY: {"hw|h265|j1": 4.5e8},
+                webapp._BENCH_KEY: {"hw|h265|j1": 4.2e8},
+                webapp._SAMPLE_RATES_KEY: {"hw|h265|j1": 1.0e8},
+                webapp._BENCH_META: {"at": "2026-09-03"},
+                "jobs": 1}
+
+    api.set_adv({"jobs": 2})                       # a UI that knows nothing of them
+    for key in webapp._ENGINE_OWNED:
+        assert key in api._adv, f"{key} was deleted by a settings change"
+    assert api._adv["jobs"] == 2, "the actual setting must still be applied"
+
+    api.set_adv({"jobs": 3, webapp._RATES_KEY: {"hw|h265|j1": 1.0}})
+    assert api._adv[webapp._RATES_KEY]["hw|h265|j1"] == 4.5e8, (
+        "a UI payload must not be able to overwrite a measurement")

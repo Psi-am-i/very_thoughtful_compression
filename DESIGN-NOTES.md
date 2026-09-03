@@ -945,3 +945,52 @@ Shot harness: `#__shot=av1&at=codec|encoder|sheet&hw=mac|gpu|none&theme=…`.
   oversight: `regenerate_previews()` maps anything that is not `h264` to H.265,
   so an "AV1" button would silently produce H.265 panels labelled AV1 — exactly
   the kind of untruth item 2 exists to remove. The caveat says so instead.
+
+---
+
+## Benchmark round (2026-09-03) — "This machine"
+
+Simon's idea, and the one that retires the last place the app quoted a stranger's
+number as if it were the user's: *"a section for the user to benchmark their own
+machine… point to a library, app picks some files randomly… then present results and
+use them from then on"*, and *"on very first start it should be an option — with a
+section in settings to redo the benchmark."*
+
+**Settings → App → This machine.** States two things that are deliberately kept apart:
+whether the machine has been benchmarked, and where the timing figures actually in use
+come from. Those are not the same — a real run of the library outranks a benchmark of
+it, so the copy says so rather than implying the benchmark is always in charge. With
+nothing measured it names the shipped defaults and whose Mac they came from. Controls:
+folder, **samples (1/2/3/5, default 2)** — Simon asked explicitly for this to be the
+user's call — and sample length (15/30/60s). Running swaps the button for progress and
+a Stop; it is disabled during a real run, saying why, since benchmarking a busy machine
+produces a number that is wrong for both.
+
+**`#bench-sheet`, the first-run offer.** Offered, never imposed. Shown once, only when
+nothing has measured this machine (a five-second preview clip does not count as
+measurement), riding the post-scan moment because it needs a folder to sample, and
+**queued behind** the non-MP4 and bloated-modern sheets rather than stacked on them.
+"Not now", Escape and click-away all record the dismissal, so it cannot nag.
+
+**Presenting it.** The two columns point in opposite directions and the value is seeing
+both at once: hardware is several times faster; software's capped CRF is satisfied at
+little over half the tier's bitrate allowance, at slightly *better* SSIM. The summary
+sentence is derived from the rows rather than written in advance, and it compares like
+with like — averaging every hardware row against every software row would put AV1,
+which has no hardware row on a Mac, on one side of the scales only, and its very
+different spend would then read as a hardware/software difference. It names no winner:
+the app measures, it does not recommend. SSIM gets one plain-English gloss, once, and
+skipped paths are stated as part of the result rather than quietly omitted.
+
+**A latent data-loss bug this surfaced.** The engine's measurements (`encodeRates`,
+`benchRates`, `sampleRates`, `benchmark`) live in the same settings object as the
+user's preferences, and `set_adv` replaced that object wholesale with whatever the UI
+sent. An hour of benchmarking was one checkbox away from deletion — by a UI that simply
+did not know the keys existed. Fixed at the root in Python: those keys are now
+`_ENGINE_OWNED`, carried across from the engine's own state on every save, and a
+payload that tries to set them is ignored rather than trusted. They are measurements,
+not settings, and the UI has no business being their source of truth.
+
+New ADV keys: `benchAsked`, `benchSamples`, `benchSeconds`. The chosen folder is
+session-only. Harnesses `tests/ui/bench.js` (33 checks) and `tests/ui/benchoffer.js`
+(30) are registered in `tests/test_ui.py`. 218 tests pass.

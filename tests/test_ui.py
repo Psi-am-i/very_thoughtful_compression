@@ -141,6 +141,33 @@ def test_av1_ui_tells_the_truth_about_this_machine():
         f"  {x.get('n')}: got {x.get('g')!r}, want {x.get('e')!r}" for x in failed)
 
 
+@pytest.mark.skipif(not _have_jsdom(), reason="node + jsdom not installed (see tests/ui/README)")
+def test_benchmark_section_and_settings_passthrough():
+    """The "This machine" section, and the thing it must never do: lose what the
+    engine measured. Rates live in the same object as the user's preferences, so a
+    save that dropped unknown keys would delete an hour of benchmarking. Python is
+    now authoritative for those keys, and this pins the UI half."""
+    r = subprocess.run(["node", "bench.js"], cwd=_UI, capture_output=True, text=True,
+                       stdin=subprocess.DEVNULL, timeout=120)
+    assert r.stdout.strip(), f"harness produced nothing:\n{r.stderr[:2000]}"
+    failed = [x for x in json.loads(r.stdout) if not x.get("ok")]
+    assert not failed, "benchmark section broken:\n" + "\n".join(
+        f"  {x.get('n')}: got {x.get('g')!r}, want {x.get('e')!r}" for x in failed)
+
+
+@pytest.mark.skipif(not _have_jsdom(), reason="node + jsdom not installed (see tests/ui/README)")
+def test_the_first_run_benchmark_offer_asks_once():
+    """Offered, never imposed: shown only when nothing has measured this machine,
+    suppressed by a real run or an existing benchmark, queued behind the other
+    up-front sheets, and recorded on every route out so it cannot nag."""
+    r = subprocess.run(["node", "benchoffer.js"], cwd=_UI, capture_output=True, text=True,
+                       stdin=subprocess.DEVNULL, timeout=120)
+    assert r.stdout.strip(), f"harness produced nothing:\n{r.stderr[:2000]}"
+    failed = [x for x in json.loads(r.stdout) if not x.get("ok")]
+    assert not failed, "first-run offer broken:\n" + "\n".join(
+        f"  {x.get('n')}: got {x.get('g')!r}, want {x.get('e')!r}" for x in failed)
+
+
 def _run_all():
     # Ask the question directly. When pytest IS installed the decorator is
     # pytest's own and leaves no attribute behind, so relying on the marker ran

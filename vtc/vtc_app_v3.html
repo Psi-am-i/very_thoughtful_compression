@@ -800,6 +800,45 @@ body{
   color:var(--ink);width:170px}
 /* An input whose rule is off reads as off rather than as an empty mystery. */
 .adv-ctrl input.off{color:var(--ink-3)}
+/* ── This machine (the benchmark) ───────────────────────────────────────────
+   The result is TWO columns that point opposite ways: hardware is several
+   times faster, software is satisfied at a little over half the bitrate
+   allowance at much the same measured quality. Neither may be styled as the
+   answer, so every number is neutral and the one derived reading sits under
+   the table where it can be read as a whole rather than as a verdict. */
+.bm-state{font-size:13px;line-height:1.6;color:var(--ink-2);margin:0 0 16px;
+  padding-left:12px;border-left:2px solid var(--rule);max-width:66ch}
+.bm-state b{color:var(--ink);font-weight:600}
+.bm-state.bm-lit{border-left-color:var(--accent)}
+.bm-when{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.05em;
+  color:var(--ink-3);margin:0 0 4px}
+.bm-files{font-size:12.5px;color:var(--ink-2);line-height:1.5;margin:0 0 11px;max-width:66ch}
+.bm-files b{color:var(--ink);font-weight:500}
+.bm-tbl{margin:0}
+.bm-note{font-size:12px;color:var(--ink-3);line-height:1.55;margin:9px 0 0;max-width:70ch}
+.bm-note b{color:var(--ink-2);font-weight:600}
+.bm-read{font-size:13px;color:var(--ink-2);line-height:1.6;margin:13px 0 0;max-width:70ch;
+  padding-left:12px;border-left:2px solid var(--accent)}
+.bm-read b{color:var(--ink);font-weight:600}
+.bm-act{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px}
+.bm-est{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-3);
+  line-height:1.55;max-width:46ch}
+/* Progress replaces the button in place, so starting a run doesn't reflow the
+   section out from under whatever the user was reading. */
+.bm-prog[hidden],.bm-act[hidden],.bm-results[hidden]{display:none}
+.bm-prog{margin-top:18px;max-width:70ch}
+.bm-prog-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:6px}
+.bm-prog-l{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bm-prog-n{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-3);flex:0 0 auto}
+/* An error is worth the accent rule and nothing louder: a benchmark that fails
+   costs nothing and changes nothing. */
+.bm-fail{font-size:12.5px;color:var(--ink-2);line-height:1.55;margin:12px 0 0;max-width:66ch;
+  padding-left:12px;border-left:2px solid var(--warn-line)}
+.bm-fail b{color:var(--ink);font-weight:600}
+/* The folder row borrows the Destination step's path/button idiom so choosing a
+   folder looks the same wherever it happens. */
+.bm-folder{margin-top:7px}
 /* a section that's not wired yet: visible so the shape is real, but inert */
 .adv-soon{opacity:.6;pointer-events:none}
 .adv-soon-tag{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;
@@ -2445,6 +2484,32 @@ body{
   </div>
 </div>
 
+<!-- The first-run offer. An OFFER, not a step: it is shown once, only when this
+     machine has never been measured, and "Not now" leaves the app completely
+     usable — the estimates still work, they just describe the developer's Mac.
+     Modelled on #compat-sheet and #av1-sheet: state the facts, say what it costs,
+     ask one question, and make both answers real. The dismissal is recorded in
+     ADV.benchAsked so it can never ask twice. -->
+<div class="sheet" id="bench-sheet">
+  <div class="sheet-c">
+    <div class="sheet-h">
+      <div class="sheet-e mono">First run · optional</div>
+      <h2 class="sheet-t">Shall we measure this machine?</h2>
+    </div>
+    <div class="sheet-b">
+      <p class="compat-lead mono">Nothing on this computer has been timed yet, so whenever this app tells you how long something will take, it is quoting a developer's Mac.</p>
+      <p class="mr-note" id="bench-offer-what"></p>
+      <p class="mr-note" id="bench-offer-how"></p>
+      <p class="sheet-w" style="border-left-color:var(--rule)"><b>It changes nothing on disk.</b> The slices are cut into a temporary folder and deleted when it finishes. Your library is only ever read from — no file is opened for writing, and nothing is re-encoded in place.</p>
+      <p class="mr-note"><b>Not now</b> is a perfectly good answer. Every estimate still works; it simply describes someone else's machine until you say otherwise. This lives in <b>Settings → This machine</b> whenever you want it, and a real run of your library measures the same thing as it goes.</p>
+    </div>
+    <div class="sheet-f">
+      <button class="btn-ghost" id="bench-offer-no">Not now</button>
+      <button class="btn-run" id="bench-offer-yes" style="width:auto;margin:0;padding:11px 26px">Measure this machine</button>
+    </div>
+  </div>
+</div>
+
 <!-- Advanced Settings: the tunables the guided flow deliberately hides, plus the
      format & subtitle policy that later steps will make live. Opened by the gear. -->
 <div class="sheet" id="adv-sheet">
@@ -2468,6 +2533,7 @@ body{
         <button class="adv-nav" data-sec="modern">Bloated modern files</button>
         <button class="adv-nav" data-sec="run">Parallel jobs</button>
         <div class="adv-rail-grp">App</div>
+        <button class="adv-nav" data-sec="machine">This machine</button>
         <button class="adv-nav" data-sec="appearance">Appearance</button>
       </nav>
       <div class="adv-pane" id="adv-pane">
@@ -2778,6 +2844,74 @@ body{
             <div class="adv-ctrl"><input type="number" id="adv-jobs" min="1" max="16" step="1"></div>
           </div>
         </div>
+      </section>
+
+      <!-- This machine. Not a setting for a run — a fact about the computer, which
+           is why it lives in App beside Appearance rather than under Processing.
+           Everything this app says about TIME rests on an encoding rate, and until
+           this section has been used that rate is a constant measured on one
+           developer's Mac. The section's whole job is to say so plainly and to
+           offer to replace it with a measurement of the user's own machine, taken
+           on the user's own library. -->
+      <section class="adv-sec" data-sec="machine">
+        <h3>This machine</h3>
+        <p class="adv-intro">Every estimate here — the “about nine hours” before a run, the countdown during one, the cost of re-encoding your bloated files — is built from how fast this machine actually encodes. The app ships with figures measured on the developer's Mac. Measure your own and those are replaced everywhere, for good.</p>
+        <p class="bm-state" id="bench-state"></p>
+
+        <div class="bm-results" id="bench-results" hidden="">
+          <div class="adv-subhead">What it found</div>
+          <div class="bm-when" id="bench-when"></div>
+          <div class="bm-files" id="bench-files"></div>
+          <div class="bm-tbl">
+            <table class="tbl">
+              <thead><tr><th>Codec</th><th>Path</th><th class="num">Speed @1080p</th><th class="num">Of target</th><th class="num">SSIM</th><th>Encoder</th></tr></thead>
+              <tbody id="bench-rows"></tbody>
+            </table>
+          </div>
+          <div class="bm-note" id="bench-legend"></div>
+          <div class="bm-read" id="bench-read"></div>
+        </div>
+
+        <div class="adv-subhead">Measure it</div>
+        <div class="adv-grid one">
+          <div class="adv-row adv-row-col">
+            <div class="adv-lab"><b>Library to sample</b><span>Files are drawn at <b>random</b> from this folder. A library is alphabetical, so the first few files would all be one show, shot one way.</span></div>
+            <div class="de-row bm-folder">
+              <span class="de-path unset" id="bench-dir">No folder chosen yet</span>
+              <button class="de-btn" id="bench-pick">Choose…</button>
+            </div>
+          </div>
+          <div class="adv-row">
+            <div class="adv-lab"><b>Samples</b><span>Different files, not repeats of one — one file can be a static interview or a confetti cannon, and those differ by more than the machine does. Each sample is encoded down every path.</span></div>
+            <div class="adv-ctrl adv-seg" id="bench-samples">
+              <button data-v="1">1</button><button data-v="2" class="on">2</button><button data-v="3">3</button><button data-v="5">5</button>
+            </div>
+          </div>
+          <div class="adv-row">
+            <div class="adv-lab"><b>Sample length</b><span>How much of each file to encode, taken from the middle — titles and credits are not the content. Longer is steadier and slower.</span></div>
+            <div class="adv-ctrl adv-seg" id="bench-seconds">
+              <button data-v="15">15s</button><button data-v="30" class="on">30s</button><button data-v="60">60s</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bm-act" id="bench-act">
+          <button class="btn-run" id="bench-run" style="width:auto;margin:0;padding:10px 22px">Run benchmark</button>
+          <span class="bm-est" id="bench-est"></span>
+        </div>
+        <!-- Running: the button becomes the progress it caused, in place. -->
+        <div class="bm-prog" id="bench-prog" hidden="">
+          <div class="bm-prog-top">
+            <span class="bm-prog-l" id="bench-prog-l">Starting…</span>
+            <span class="bm-prog-n" id="bench-prog-n"></span>
+          </div>
+          <div class="pg-bar sm"><div class="pg-bar-f" id="bench-prog-f" style="width:0"></div></div>
+          <div class="bm-act">
+            <button class="btn-ghost" id="bench-stop">Stop</button>
+            <span class="bm-est">Short clips, encoded into a temporary folder. Nothing in your library is opened for writing, and nothing is left behind.</span>
+          </div>
+        </div>
+        <p class="bm-fail" id="bench-fail" hidden=""></p>
       </section>
 
       <!-- Appearance: the fuller theme picker (the brow button is the one-tap version).
@@ -4406,6 +4540,11 @@ const openSheet=id=>$(id).classList.add('on');
 const shutSheet=id=>{
   $(id).classList.remove('on');
   if(id==='#confirm-sheet') $('#unit').classList.remove('dimmed');
+  // The benchmark offer waits behind the non-MP4 and bloated-modern questions —
+  // three sheets stacked on a first run would be an interrogation. It takes its
+  // turn as the sheet in front of it closes, and only then.
+  if(window.__benchQueued && id!=='#bench-sheet' && typeof maybeOfferBench==='function')
+    setTimeout(maybeOfferBench, 260);
 };
 
 // ═══ Advanced settings ═══════════════════════════════════
@@ -4476,7 +4615,13 @@ const ADV_DEFAULTS = { format:'convert', subKinds:['normal','forced','hoh'], sub
   // eligible source list (AV1 deliberately absent — see Settings for why);
   // modernOver is how many times over its tier target a file must be; modernMax
   // caps how many run at once, worst-first, and 0 means "all of them".
-  reencodeModern:false, modernCodecs:['hevc','vp9'], modernOver:2.0, modernMax:0 };
+  reencodeModern:false, modernCodecs:['hevc','vp9'], modernOver:2.0, modernMax:0,
+  // "This machine" (the benchmark). benchAsked records that the first-run OFFER
+  // has been MADE — either answer sets it — so the app can never ask twice;
+  // whether it was ever RUN is the engine's benchmark_state(), not a UI flag.
+  // The other two remember the shape of the last run, because re-running it is
+  // only a comparison if it is the same shape.
+  benchAsked:false, benchSamples:2, benchSeconds:30 };
 // A plain Object.assign would share the one bpp object between ADV and the
 // defaults, so editing a tier would quietly rewrite what "Reset" restores.
 const advDefaults = ()=> Object.assign({}, ADV_DEFAULTS, {
@@ -4485,13 +4630,22 @@ const advDefaults = ()=> Object.assign({}, ADV_DEFAULTS, {
   modernCodecs:ADV_DEFAULTS.modernCodecs.slice() });
 const ADV = advDefaults();
 window.ADV = ADV;
+// The engine keeps its OWN measurements in the same persisted settings object the
+// UI edits: the rates a real run learned, the benchmark's rates, and the benchmark's
+// meta. None of those keys are part of ADV, and set_adv REPLACES the stored object
+// wholesale — so pushing a bare ADV would quietly delete this machine's own
+// measurements (the benchmark included) the first time anybody touched a setting.
+// Keep the strangers aside when they arrive and hand them back untouched on every
+// push. The UI never reads them; it only refuses to lose them.
+let ADV_KEEP = {};
+const advPayload = ()=> Object.assign({}, ADV_KEEP, JSON.parse(JSON.stringify(ADV)));
 // Push the settings to the engine whenever they change: the ignore rules decide
 // what a scan even counts, and the tier bpp decides what the preview panels
 // encode, so neither can wait until Start. A no-op in the standalone mock.
 function advPush(){
   try {
     if(!(window.pywebview && window.pywebview.api.set_adv)) return;
-    Promise.resolve(window.pywebview.api.set_adv(JSON.parse(JSON.stringify(ADV)))).then(r=>{
+    Promise.resolve(window.pywebview.api.set_adv(advPayload())).then(r=>{
       // A rules change re-walks the folder, so the totals on screen are stale
       // until it lands: show the scanning state rather than a number we know is wrong.
       if(r && r.rescanned && SRC){ SRC.scanning = true; drawEstimate(); }
@@ -4505,7 +4659,11 @@ window.__vtcApplySavedAdv = (saved)=>{
   if(!saved || typeof saved!=='object') return;
   try{
     const b = saved.bpp;
-    Object.keys(saved).forEach(k=>{ if(k!=='bpp' && (k in ADV)) ADV[k]=saved[k]; });
+    Object.keys(saved).forEach(k=>{
+      if(k==='bpp') return;
+      if(k in ADV) ADV[k]=saved[k];
+      else ADV_KEEP[k]=saved[k];      // the engine's own stores — see ADV_KEEP above
+    });
     if(b && typeof b==='object') Object.keys(b).forEach(k=>{ if(k in ADV.bpp) ADV.bpp[k]=+b[k]||ADV.bpp[k]; });
     if(ADV.outputDir) window.__outputDir = ADV.outputDir;   // remember last new-folder target
     if(typeof advToForm==='function') advToForm();
@@ -4698,6 +4856,7 @@ function advToForm(){                                  // ADV -> controls
   advFormatLabels();
   advApplyAudioContext();
   if(typeof advThemeForm==='function') advThemeForm();   // light the current theme
+  if(typeof benchToForm==='function') benchToForm();     // "This machine": state + results
 }
 // Reflect ADV.archiveDir into the Destination section: which radio is lit, whether the
 // pick row shows, and the chosen path.
@@ -5410,7 +5569,18 @@ function maybeAskModern(){
   modernMarkAsked();
   openModern(false);
 }
-window.maybeAskModern = maybeAskModern;
+// The bridge calls this after every scan (webapp.py's __vtcScanDone) and the mock
+// calls it from pickFolder, which makes it the one moment both paths agree the
+// library is known. The first-run benchmark offer needs exactly that moment: it
+// samples a folder, so it cannot be offered before there is one.
+// The original has to be captured FIRST: a top-level `function` declaration in a
+// classic script IS window.<name>, so assigning the wrapper over it would make the
+// wrapper call itself for ever. A `const` is not a window property, so it is safe.
+const _askModern = maybeAskModern;
+window.maybeAskModern = ()=>{
+  _askModern();
+  if(typeof maybeOfferBench==='function') maybeOfferBench();
+};
 window.openModern = openModern;
 $('#modern-more') && ($('#modern-more').onclick = ()=>{
   const top=(MR.data&&MR.data.top)||[];
@@ -5433,6 +5603,477 @@ $('#modern-skip') && ($('#modern-skip').onclick = ()=>{
 $('#modern-sheet') && ($('#modern-sheet').onclick = e=>{
   if(e.target===$('#modern-sheet')){ mrStopPoll(); shutSheet('#modern-sheet'); }
 });
+
+// ═══ this machine: the benchmark ═════════════════════════
+// Every "about nine hours" this app prints rests on an encoding rate, and until
+// this machine has been measured that rate is a constant taken on one developer's
+// Mac. The app is required to say so rather than pass it off as the user's own
+// (docs/quality-model.md — estimates are measured or absent). This is the surface
+// that replaces it: a section in Settings → App, and a once-only offer on the
+// first run.
+//
+// The engine side already exists on the bridge — benchmark_state / run_benchmark /
+// stop_benchmark, calling __vtcBenchProgress and __vtcBenchDone back into the page.
+// Standalone (no pywebview) all of it runs on the mock at the bottom, INCLUDING a
+// real progressive run, so what gets reviewed is the shipped code path rather than
+// a picture of it.
+const BM = { state:null, running:false, stopping:false, done:0, total:0,
+             label:'', folder:'', err:'', mockStop:false, mockTimer:null };
+const BM_CODEC = { h264:'H.264', h265:'H.265', av1:'AV1' };
+const BM_SW_ENC = ['libx264','libx265','libsvtav1'];
+const bmEsc = s => String(s==null?'':s).replace(/[&<>"]/g,
+  c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const bmX    = v => ((+v>=10) ? (+v).toFixed(0) : (+v).toFixed(1)) + '×';
+const bmPct  = v => Math.round((+v||0)*100) + '%';
+const bmSsim = v => (v==null ? '—' : (+v).toFixed(4));
+// A clip length read as a length of video, not as a count of seconds.
+const bmClip = s => s < 60 ? s+'s'
+  : (s % 60 ? Math.floor(s/60)+'m'+String(s%60).padStart(2,'0')+'s'
+            : (s/60)+' minute'+(s===60?'':'s'));
+const bmMins = s => s < 90 ? 'well under two minutes'
+  : (s < 3600 ? 'roughly '+Math.round(s/60)+' minutes' : 'roughly '+swHuman(s));
+function bmWhen(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(isNaN(d.getTime())) return '';
+  try{
+    return 'on '+d.toLocaleDateString(undefined,{day:'numeric',month:'long',year:'numeric'})
+         + ' at '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+  }catch(e){ return 'on '+String(iso).slice(0,10); }
+}
+// The bridge, feature-detected exactly like modern_review: absent standalone.
+function benchApi(){
+  try{
+    const a = window.pywebview && window.pywebview.api;
+    return (a && a.benchmark_state && a.run_benchmark) ? a : null;
+  }catch(e){ return null; }
+}
+// Which paths a benchmark will actually try HERE — the same set the engine probes:
+// a hardware path only where this machine has that encoder, software for all three
+// unless the ffmpeg build has no SVT-AV1. Each carries the shipped x realtime,
+// which is all the "roughly N minutes" guess can be built from — and is precisely
+// the guess the benchmark exists to replace, which the copy says out loud.
+function benchPaths(){
+  const out = [];
+  [0,1,2].forEach(ci=>{
+    const hw = hwFor(ci), codec = ['h264','h265','av1'][ci];
+    if(hw.enc)  out.push({codec, path:'hardware', enc:hw.enc,        rt:CODEC_SPEED[ci].hw});
+    if(hw.soft) out.push({codec, path:'software', enc:BM_SW_ENC[ci], rt:CODEC_SPEED[ci].sw});
+  });
+  return out;
+}
+// Encoding time is the sum over paths of (sample length / that path's x realtime).
+// The rest is stream-copying the slice out and the SSIM pass over each encode,
+// which is decode-bound: about half as much again, plus a few seconds of process
+// start-up per sample. Rough by construction, and quoted as "roughly".
+function benchSecs(samples, seconds){
+  const enc = benchPaths().reduce((s,p)=> s + seconds/(p.rt||1), 0);
+  return Math.round(samples * (enc*1.5 + 8));
+}
+// The folder to sample: an explicit choice first, then the folder the app is
+// pointed at (which is the library the estimates are about), then wherever the
+// last benchmark ran.
+function benchFolder(){
+  const meta = (BM.state && BM.state.meta) || {};
+  return BM.folder || (SRC && SRC.k) || meta.folder || '';   // SRC is lexical, not window.SRC
+}
+
+// ── what the app is currently quoting, and where it got it ──────────────────
+// Two separate facts, and the section has to state both: whether this machine has
+// been benchmarked, and where the timing figures in use actually come from. They
+// are not the same — a real run of the library outranks a benchmark of it.
+function benchStateHTML(){
+  const st = BM.state || {}, src = st.source || '';
+  if(!st.done){
+    if(src === 'your last run')
+      return '<b>This machine has not been benchmarked</b> — but a real run of your '
+        + 'library has measured it, and of the two that is the better measurement. '
+        + 'Estimates come from <b>your last run</b>. A benchmark would only add the '
+        + 'encoder paths that run did not use.';
+    if(src === 'a sample encode')
+      return '<b>This machine has not been benchmarked.</b> Estimates come from '
+        + '<b>a sample encode</b> — the five-second preview clip — which is rough: '
+        + 'at that length a good deal of what gets timed is the encoder starting up.';
+    return '<b>This machine has not been measured.</b> Estimates are using the figures '
+      + 'shipped with the app, taken on the developer’s Mac. They are an opening '
+      + 'guess and nothing more — a machine can be several times quicker or slower '
+      + 'than the one this was written on.';
+  }
+  const head = '<b>Benchmarked'+(bmWhen(st.meta && st.meta.at) ? ' '+bmWhen(st.meta.at) : '')+'.</b> ';
+  if(src === 'your last run')
+    return head + 'A real run of your library has measured it since, and a real run '
+      + 'beats a benchmark of one — so estimates are using <b>your last run</b>, '
+      + 'falling back to these numbers for anything that run never touched.';
+  if(src === 'your benchmark')
+    return head + 'Every estimate in this app now uses these numbers instead of the '
+      + 'shipped ones.';
+  return head + 'Estimates are using ' + (src ? '<b>'+bmEsc(src)+'</b>' : 'the shipped figures') + '.';
+}
+
+// ── the result ──────────────────────────────────────────────────────────────
+// The two number columns point OPPOSITE ways and the whole value is seeing both
+// at once, so the table shows them side by side, the legend says what each one
+// means, and the reading underneath is DERIVED FROM THESE ROWS rather than
+// written in advance — on a machine where the trade falls out differently, the
+// sentence has to fall out differently too. It never names a winner.
+function benchReadHTML(rows){
+  // Compare LIKE WITH LIKE. Averaging every hardware row against every software row
+  // would put AV1 — which on a Mac has no hardware row at all — on one side of the
+  // scales only, and its very different spend would then read as a hardware/software
+  // difference. So only the codecs this machine can do BOTH ways are averaged, and
+  // if that leaves anything out the sentence says so.
+  const both = ['h264','h265','av1'].filter(c=>
+    rows.some(r=>r.codec===c && r.path==='hardware') &&
+    rows.some(r=>r.codec===c && r.path==='software'));
+  if(!both.length) return '';
+  const pick = (p)=> rows.filter(r=>r.path===p && both.indexOf(r.codec)>=0);
+  const hw = pick('hardware'), sw = pick('software');
+  const avg = (a,k)=> a.reduce((s,r)=>s+(+r[k]||0),0)/a.length;
+  const sHw = avg(hw,'of_target'), sSw = avg(sw,'of_target');
+  const fast = avg(sw,'at_1080p') ? avg(hw,'at_1080p')/avg(sw,'at_1080p') : 0;
+  const qH = hw.filter(r=>r.ssim!=null), qS = sw.filter(r=>r.ssim!=null);
+  const named = both.length === 3 ? ''
+    : ' (on '+both.map(c=>BM_CODEC[c]||c).join(' and ')+', the '
+      + (both.length===1?'only codec':'only codecs')+' this machine encodes both ways)';
+  let out = 'On this machine the hardware paths ran about <b>'+fast.toFixed(1)+'× faster</b>'
+    + ' than the software ones'+named+', and spent <b>'+bmPct(sHw)+'</b> of the tier’s '
+    + 'bitrate allowance against software’s <b>'+bmPct(sSw)+'</b>';
+  if(qH.length && qS.length)
+    out += ', at an average SSIM of <b>'+avg(qH,'ssim').toFixed(4)+'</b> against <b>'
+        +  avg(qS,'ssim').toFixed(4)+'</b>';
+  out += '. ';
+  out += (sSw < sHw*0.95)
+    ? 'Speed, or a smaller file at much the same measured quality: that is the trade, '
+      + 'and which half of it you want is yours to pick.'
+    : 'The two spent much the same allowance here, so on this machine the difference '
+      + 'between them is mostly speed.';
+  return out + ' This measures; it does not recommend.';
+}
+const BM_LEGEND = '<b>Speed @1080p</b> is × realtime normalised to a 1080p30 frame, so it '
+  + 'describes the machine rather than whichever files happened to be drawn. '
+  + '<b>Of target</b> is how much of the tier’s bitrate allowance that path actually '
+  + 'spent. <b>SSIM</b> compares each encoded frame against the original one, where '
+  + '1.0000 would be identical and anything above about 0.99 is very hard to tell apart '
+  + 'by eye — without it “smaller” would not be a result at all, since any encoder '
+  + 'can be smaller by being worse.';
+function benchResults(){
+  const box = $('#bench-results'); if(!box) return;
+  const meta = (BM.state && BM.state.meta) || {};
+  const rows = meta.rows || [];
+  if(!(BM.state && BM.state.done) || !rows.length){ box.hidden = true; return; }
+  box.hidden = false;
+  const n = (meta.samples || []).length, secs = meta.seconds || 0;
+  const when = $('#bench-when');
+  if(when) when.textContent = ('Run '+bmWhen(meta.at)).trim()
+    + (n ? ' · '+n+' sample'+(n===1?'':'s') : '')
+    + (secs ? ' × '+secs+'s' : '')
+    + (meta.folder ? ' · '+meta.folder : '');
+  const files = $('#bench-files');
+  if(files) files.innerHTML = (meta.samples||[]).length
+    ? 'Sampled: ' + (meta.samples||[]).map(f=>'<b>'+bmEsc(f)+'</b>').join(', ')
+    : '';
+  const body = $('#bench-rows');
+  if(body) body.innerHTML = rows.map(r=>
+      '<tr><td>'+bmEsc(BM_CODEC[r.codec]||r.codec)+'</td>'
+    + '<td>'+bmEsc(r.path)+'</td>'
+    + '<td class="num">'+bmX(r.at_1080p)+' realtime</td>'
+    + '<td class="num">'+bmPct(r.of_target)+'</td>'
+    + '<td class="num">'+bmSsim(r.ssim)+'</td>'
+    + '<td>'+bmEsc(hwName(r.encoder))+'</td></tr>').join('');
+  // A path missing from the table is not a hole in the result — it is part of it.
+  const skipped = meta.skipped || [];
+  const gone = skipped.filter(s=>/ hardware$/.test(String(s)))
+                      .map(s=>(BM_CODEC[String(s).split(' ')[0]]||String(s).split(' ')[0]));
+  const bad  = skipped.filter(s=>/^could not sample /i.test(String(s)))
+                      .map(s=>String(s).replace(/^could not sample /i,''));
+  const legend = $('#bench-legend');
+  if(legend) legend.innerHTML = BM_LEGEND
+    + (gone.length ? ' <br><br>Not in the table: <b>hardware '+gone.join(', hardware ')
+        + '</b>. This machine hasn’t got '+(gone.length===1?'that encoder':'those encoders')
+        + ', so '+(gone.length===1?'it':'they')+' cannot be timed — and will never be used '
+        + 'by a run either.' : '')
+    + (bad.length ? ' <br><br>Left out: no sample could be taken from <b>'
+        + bad.map(bmEsc).join('</b>, <b>')+'</b>.' : '');
+  const read = $('#bench-read');
+  if(read){ const t = benchReadHTML(rows); read.innerHTML = t; read.hidden = !t; }
+}
+
+// ── the controls, and the button that becomes progress ──────────────────────
+const bmSegSet = (sel,v)=>{ const s=$(sel); if(s) s.querySelectorAll('button')
+  .forEach(b=>b.classList.toggle('on', +b.dataset.v === +v)); };
+function benchShapeHTML(){
+  const n = +ADV.benchSamples||2, s = +ADV.benchSeconds||30, paths = benchPaths().length;
+  return n+' sample'+(n===1?'':'s')+' × '+paths+' path'+(paths===1?'':'s')+' × '+s+'s'
+    + ' = '+bmClip(n*paths*s)+' of video to encode · '+bmMins(benchSecs(n,s))+' here'
+    + ((BM.state && BM.state.done) ? '' : ', on the shipped figures this replaces');
+}
+function benchRunUI(){
+  const act = $('#bench-act'), pr = $('#bench-prog');
+  if(!act || !pr) return;
+  act.hidden = BM.running; pr.hidden = !BM.running;
+  const fail = $('#bench-fail');
+  if(fail){ fail.hidden = !BM.err; if(BM.err) fail.innerHTML = BM.err; }
+  if(BM.running){
+    const f = $('#bench-prog-f');
+    if(f) f.style.width = (BM.total ? Math.round(BM.done/BM.total*100) : 0)+'%';
+    const l = $('#bench-prog-l');
+    if(l) l.textContent = BM.label || 'Taking the first sample…';
+    const c = $('#bench-prog-n');
+    if(c) c.textContent = BM.total ? BM.done+' / '+BM.total : '';
+    const stop = $('#bench-stop');
+    if(stop){ stop.disabled = BM.stopping;
+              stop.textContent = BM.stopping ? 'Stopping…' : 'Stop'; }
+    return;
+  }
+  const btn = $('#bench-run'); if(!btn) return;
+  // Benchmarking during a run would be timing a busy machine, and the number would
+  // then be wrong for every estimate afterwards. Say why rather than just dimming.
+  const busy = !!($('#progress-sheet') && $('#progress-sheet').classList.contains('on'));
+  const dir  = benchFolder();
+  btn.disabled = busy || !dir;
+  btn.textContent = (BM.state && BM.state.done) ? 'Run it again' : 'Run benchmark';
+  const est = $('#bench-est'); if(!est) return;
+  if(busy) est.textContent = 'Not while a run is going — it would be timing a busy '
+    + 'machine, and the answer would be wrong for both.';
+  else if(!dir) est.textContent = 'Choose a folder of real video first: the samples come '
+    + 'out of your own library, never a test pattern.';
+  else est.innerHTML = benchShapeHTML();
+}
+// ADV -> the whole section. Called from advToForm, so opening Settings always
+// shows the current truth rather than whatever was there last time.
+function benchToForm(){
+  if(BM.state === null){ BM.state = {done:false, meta:{}, source:''}; benchRefresh(); }
+  const dir = benchFolder(), el = $('#bench-dir');
+  if(el){ el.textContent = dir || 'No folder chosen yet';
+          el.classList.toggle('unset', !dir); el.title = dir || ''; }
+  const pick = $('#bench-pick'); if(pick) pick.textContent = dir ? 'Change…' : 'Choose…';
+  bmSegSet('#bench-samples', ADV.benchSamples);
+  bmSegSet('#bench-seconds', ADV.benchSeconds);
+  const st = $('#bench-state'); if(st) st.innerHTML = benchStateHTML();
+  benchResults();
+  benchRunUI();
+}
+// Re-read the engine's answer. Also re-reads the SETTINGS, because a finished
+// benchmark is written by Python into the same persisted object set_adv replaces:
+// without this the next settings change would push a stale ADV_KEEP straight over
+// the measurements that were just taken.
+function benchRefresh(){
+  const api = benchApi();
+  if(!api){ BM.state = benchMockState(); benchToForm(); return Promise.resolve(BM.state); }
+  return Promise.resolve(api.benchmark_state()).then(st=>{
+    BM.state = st || {done:false, meta:{}, source:''};
+    try{
+      if(api.saved_adv) Promise.resolve(api.saved_adv()).then(sv=>{
+        if(sv) Object.keys(sv).forEach(k=>{ if(k!=='bpp' && !(k in ADV)) ADV_KEEP[k]=sv[k]; });
+      }).catch(()=>{});
+    }catch(e){}
+    benchToForm();
+    return BM.state;
+  }).catch(()=>BM.state);
+}
+window.benchRefresh = benchRefresh;
+
+// ── running it ──────────────────────────────────────────────────────────────
+const BM_ERR = { 'no folder':'That folder could not be read, so no files could be sampled.' };
+function benchFailed(msg){
+  BM.running = false; BM.stopping = false;
+  BM.err = '<b>The benchmark could not run.</b> ' + bmEsc(BM_ERR[msg] || msg || '')
+    + ' Nothing has changed — the app carries on with the figures it already had.';
+  benchRunUI();
+}
+function benchStart(){
+  const dir = benchFolder(); if(!dir) return;
+  BM.running = true; BM.stopping = false; BM.done = 0; BM.total = 0;
+  BM.label = ''; BM.err = '';
+  benchRunUI();
+  const n = +ADV.benchSamples||2, s = +ADV.benchSeconds||30, api = benchApi();
+  if(!api){ benchMockRun(dir, n, s); return; }
+  try{
+    Promise.resolve(api.run_benchmark(dir, n, s, true))
+      .then(r=>{ if(r && r.error) benchFailed(r.error); })
+      .catch(e=>benchFailed(String(e && e.message || e)));
+  }catch(e){ benchFailed(String(e && e.message || e)); }
+}
+window.benchStart = benchStart;
+// "<file> · h265 software" -> the codec named the way the rest of the app names it.
+function benchLabel(s){
+  s = String(s||'');
+  const i = s.lastIndexOf(' · ');
+  if(i < 0) return s;
+  const bits = s.slice(i+3).split(' ');
+  return s.slice(0,i)+' · '+((BM_CODEC[bits[0]]||bits[0])+' '+(bits[1]||'')).trim();
+}
+// Driven by Python during a real run, and by the mock standalone. Same function.
+window.__vtcBenchProgress = (p)=>{
+  p = p || {};
+  BM.running = true; BM.err = '';
+  BM.done = p.done||0; BM.total = p.total||0; BM.label = benchLabel(p.label);
+  benchRunUI();
+};
+window.__vtcBenchDone = (r)=>{
+  r = r || {};
+  BM.running = false; BM.stopping = false;
+  if(r.error){ benchFailed(r.error); return; }
+  if(r.stopped && !((r.rows||[]).length))
+    BM.err = '<b>Stopped.</b> Nothing finished measuring, so the estimates are exactly '
+      + 'as they were.';
+  benchRefresh();
+  benchRunUI();
+};
+
+// ── wiring ──────────────────────────────────────────────────────────────────
+$('#bench-run') && ($('#bench-run').onclick = benchStart);
+$('#bench-stop') && ($('#bench-stop').onclick = ()=>{
+  BM.stopping = true; benchRunUI();
+  const api = benchApi();
+  if(api){ try{ api.stop_benchmark(); }catch(e){} } else { BM.mockStop = true; }
+});
+$('#bench-pick') && ($('#bench-pick').onclick = async ()=>{
+  // Same native picker the archive folder uses; standalone hands back a plausible
+  // path so the row can still be reviewed.
+  if(!(window.pywebview && window.pywebview.api && window.pywebview.api.pick_output_folder)){
+    BM.folder = '/Volumes/RAID/TV'; benchToForm(); return;
+  }
+  try{
+    const d = await window.pywebview.api.pick_output_folder();
+    if(d && d.dir){ BM.folder = d.dir; benchToForm(); }
+  }catch(e){}
+});
+[['#bench-samples','benchSamples'], ['#bench-seconds','benchSeconds']].forEach(([sel,key])=>{
+  const seg = $(sel); if(!seg) return;
+  seg.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    ADV[key] = +b.dataset.v; advPush(); benchToForm();
+  });
+});
+
+// ── the first-run offer ─────────────────────────────────────────────────────
+// An OFFER. It is shown once ever, only when nothing has measured this machine,
+// and "Not now" leaves the app completely usable — the estimates still work, they
+// simply describe someone else's Mac. It cannot come before a folder is chosen,
+// because it samples one, so it rides the same post-scan moment the non-MP4 and
+// bloated-modern questions do — behind them in the queue, never stacked on top.
+const BM_QUEUE = ['#compat-sheet','#modern-sheet','#av1-sheet','#adv-sheet',
+                  '#confirm-sheet','#progress-sheet','#report-sheet','#about-sheet'];
+function benchOfferFill(){
+  const n = +ADV.benchSamples||2, s = +ADV.benchSeconds||30;
+  const paths = benchPaths().length, dir = benchFolder();
+  const what = $('#bench-offer-what');
+  if(what) what.innerHTML = '<b>What it does</b> — picks <b>'+n+'</b> file'+(n===1?'':'s')
+    + ' at random from '+(dir ? '<b>'+bmEsc(dir)+'</b>' : 'your library')+', takes a '+s
+    + '-second slice from the middle of each, and encodes '+(n===1?'it':'those')+' down '
+    + (paths===1 ? 'the one encoder path' : 'every one of the <b>'+paths+'</b> encoder paths')
+    + ' this machine has. From then on every estimate is your machine’s own number '
+    + 'rather than a stranger’s.';
+  const how = $('#bench-offer-how');
+  if(how) how.innerHTML = '<b>How long</b> — '+n+' × '+paths+' × '+s+'s is '
+    + bmClip(n*paths*s)+' of video to encode, which should take '+bmMins(benchSecs(n,s))
+    + ' here. That last figure is itself one of the shipped guesses this is meant to '
+    + 'replace, so treat it as the ballpark it is.';
+}
+// Either answer counts as asked: a question that comes back because it was
+// dismissed the wrong way is a nag, and this one is allowed to ask exactly once.
+function benchOfferDone(){
+  ADV.benchAsked = true; advPush();
+  window.__benchQueued = false;
+  shutSheet('#bench-sheet');
+}
+function maybeOfferBench(){
+  if(!SRC) return;                            // nothing to sample yet (SRC is lexical)
+  if(ADV.benchAsked) return;                  // asked once, ever
+  const sheet = $('#bench-sheet');
+  if(!sheet || sheet.classList.contains('on')) return;
+  if(BM_QUEUE.some(id=>{ const el=$(id); return el && el.classList.contains('on'); })){
+    window.__benchQueued = true; return;      // wait for the sheet in front to close
+  }
+  window.__benchQueued = true;
+  benchRefresh().then(st=>{
+    st = st || {};
+    // Only when NOTHING has measured this machine. A real run of the library did
+    // the same job better, and a benchmark already done needs no offer; a
+    // five-second preview clip does not count, being barely a measurement.
+    if(ADV.benchAsked || st.done || (st.source && st.source !== 'a sample encode')){
+      window.__benchQueued = false; return;
+    }
+    window.__benchQueued = false;
+    benchOfferFill();
+    openSheet('#bench-sheet');
+  });
+}
+window.maybeOfferBench = maybeOfferBench;
+$('#bench-offer-no') && ($('#bench-offer-no').onclick = benchOfferDone);
+$('#bench-offer-yes') && ($('#bench-offer-yes').onclick = ()=>{
+  benchOfferDone();
+  // Straight into the section that owns it, so the progress has a home and the
+  // controls that shaped the run are visible beside it.
+  if(typeof openAdvSection==='function') openAdvSection('machine');
+  benchStart();
+});
+$('#bench-sheet') && ($('#bench-sheet').onclick = e=>{
+  if(e.target===$('#bench-sheet')) benchOfferDone();
+});
+
+// ── standalone mock ─────────────────────────────────────────────────────────
+// Shapes taken from the representative run in docs/quality-model.md, on real
+// television. The hardware-AV1 row is the one figure never measured (no such card
+// here) and is set level with the other hardware paths — the same caveat
+// CODEC_SPEED carries, and it only ever appears under the review harness's gpu case.
+const BM_MOCK_FILES = ['The Crown S01E03.mkv','Stath Lets Flats S02E01.mkv',
+  'Clarkson’s Farm S02E04.mkv','Detectorists S03E02.mkv','Taskmaster S14E07.mkv'];
+const BM_MOCK_ROWS = {
+  'h264|hardware':{at_1080p:5.1, of_target:1.03, ssim:0.9902, target_kbps:2530},
+  'h264|software':{at_1080p:3.6, of_target:0.57, ssim:0.9923, target_kbps:2530},
+  'h265|hardware':{at_1080p:5.6, of_target:0.98, ssim:0.9896, target_kbps:1518},
+  'h265|software':{at_1080p:1.5, of_target:0.58, ssim:0.9908, target_kbps:1518},
+  'av1|hardware' :{at_1080p:5.4, of_target:0.99, ssim:0.9881, target_kbps:1139},
+  'av1|software' :{at_1080p:1.1, of_target:0.83, ssim:0.9917, target_kbps:1139},
+};
+let BM_MOCK = { done:false, meta:{}, source:'' };
+function benchMockState(){ return JSON.parse(JSON.stringify(BM_MOCK)); }
+function benchMockRows(paths){
+  return paths.map(p=>{
+    const m = BM_MOCK_ROWS[p.codec+'|'+p.path]
+           || {at_1080p:2, of_target:0.8, ssim:0.99, target_kbps:2000};
+    return { codec:p.codec, path:p.path, encoder:p.enc,
+             at_1080p:m.at_1080p, of_target:m.of_target, ssim:m.ssim,
+             rate: Math.round(m.at_1080p*1920*1080*30),
+             kbps: Math.round(m.target_kbps*m.of_target), target_kbps:m.target_kbps };
+  });
+}
+function benchMockSkipped(){
+  const out = [];
+  [0,1,2].forEach(ci=>{ if(!hwFor(ci).enc) out.push(['h264','h265','av1'][ci]+' hardware'); });
+  return out;
+}
+function benchMockRun(dir, samples, seconds){
+  const paths = benchPaths();
+  const files = BM_MOCK_FILES.slice(0, Math.max(1, samples));
+  const total = files.length * paths.length;
+  let i = 0;
+  BM.mockStop = false;
+  const tick = ()=>{
+    if(BM.mockStop){ benchMockFinish(dir, files, paths, seconds, i, true); return; }
+    i++;
+    const f = files[Math.floor((i-1)/paths.length)], p = paths[(i-1)%paths.length];
+    window.__vtcBenchProgress({done:i, total, label:f+' · '+p.codec+' '+p.path});
+    if(i >= total){ BM.mockTimer = setTimeout(
+      ()=>benchMockFinish(dir, files, paths, seconds, i, false), 520); return; }
+    BM.mockTimer = setTimeout(tick, 520);
+  };
+  BM.mockTimer = setTimeout(tick, 380);
+}
+function benchMockFinish(dir, files, paths, seconds, doneCount, stopped){
+  if(BM.mockTimer){ clearTimeout(BM.mockTimer); BM.mockTimer = null; }
+  // A stopped benchmark keeps whatever finished, exactly as the engine does — a
+  // run cut short still measured something, and that measurement is just as good.
+  const kept = stopped ? paths.slice(0, Math.min(paths.length, doneCount)) : paths;
+  const rows = benchMockRows(kept);
+  const skipped = benchMockSkipped();
+  const used = files.slice(0, Math.max(1, Math.ceil(doneCount/Math.max(1,paths.length))));
+  if(rows.length) BM_MOCK = { done:true, source:'your benchmark',
+    meta:{ at:new Date().toISOString().slice(0,19), folder:dir, samples:used,
+           seconds:seconds, skipped:skipped, rows:rows } };
+  window.__vtcBenchDone({rows, samples:used, skipped, stopped:!!stopped});
+}
 
 // ═══ live progress ═══════════════════════════════════════
 // Shared hooks: the pywebview bridge drives these from the real engine; the
@@ -6194,6 +6835,10 @@ addEventListener('keydown',e=>{
   // Escape on the AV1 sheet means "carry on with what I chose" — the same as
   // clicking away — but it still has to release whatever was waiting behind it.
   if($('#av1-sheet').classList.contains('on')){ shutSheet('#av1-sheet'); av1Done(); }
+  // Escape on the benchmark offer is "Not now", and it has to be RECORDED as such:
+  // an offer that reappears because it was dismissed the wrong way is a nag.
+  if($('#bench-sheet') && $('#bench-sheet').classList.contains('on')
+     && typeof benchOfferDone==='function') benchOfferDone();
 });
 
 // ═══ gate ════════════════════════════════════════════════
@@ -7761,6 +8406,36 @@ window.setMode=setMode; window.U=U; window.W=W;
           if(at==='sheet' && typeof openAV1==='function') openAV1();
         }
         if(typeof drawComb==='function') drawComb();
+      } else if(shot==='bench'){
+        // "This machine" in its states, plus the first-run offer. `hw` fakes the
+        // probe (the same cases as the av1 shot) because the list of encoder paths
+        // — and so the table, the shape line and the time guess — is a fact about
+        // the machine, which cannot be seen from one machine.
+        //   at=settings  the Settings section (default)  ·  at=offer  the sheet
+        //   state=none   never measured (default)  ·  state=done  a finished run
+        //   state=run    a benchmark in progress
+        const bhw=p.get('hw')||'mac';
+        if(bhw==='gpu') window.__vtcHW={h264:'h264_nvenc',h265:'hevc_nvenc',av1:'av1_nvenc',av1_software:true,available:true};
+        else if(bhw==='none') window.__vtcHW={h264:null,h265:null,av1:null,av1_software:true,available:false};
+        const bat=p.get('at')||'settings', bstate=p.get('state')||'none';
+        if(bstate==='done'){
+          BM_MOCK={done:true, source:'your benchmark',
+            meta:{at:'2026-09-03T14:22:07', folder:'/Volumes/RAID/TV',
+                  samples:BM_MOCK_FILES.slice(0,2), seconds:30,
+                  skipped:benchMockSkipped(), rows:benchMockRows(benchPaths())}};
+        }
+        if(bat==='offer'){ ADV.benchAsked=false; benchOfferFill(); openSheet('#bench-sheet'); }
+        else {
+          ADV.benchAsked=true;              // the offer must not intrude on the section
+          if(typeof openAdvSection==='function') openAdvSection('machine');
+          BM.state=benchMockState(); benchToForm();
+          if(bstate==='run') benchStart();
+          // scroll=1 drops the pane to the bottom, where the controls and the
+          // progress live once a result is filling the top of the section.
+          if(p.get('scroll')==='1') setTimeout(()=>{
+            const pane=$('#adv-pane'); if(pane) pane.scrollTop = pane.scrollHeight;
+          }, 1400);
+        }
       } else if(shot==='toolbar'){
         // The gate/report aren't needed — just the brow. pickFolder above already
         // dropped the gate so the toolbar shows in its normal (source-chosen) state.
