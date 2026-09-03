@@ -51,6 +51,17 @@ exactly one match). An agent once used Write on it and then `git checkout`, dest
 Commit a checkpoint after every pass, and never run `git checkout`/`restore`/`stash`/
 `reset` to "undo" something here.
 
+**⚠️ A remux is not always harmless — check the index first.** Everyone treats a
+stream-copy remux as free, and for a healthy file it is. For one whose sample index
+has desynchronised from its media it is destructive: a remux copies samples out
+*according to the index*, so a broken index means the wrong bytes are written out as
+the new truth and the recoverable frames are gone. Measured on a real file:
+rebuilding the index recovered 20,915 of 20,927 frames with no errors; doing the same
+after "just a remux" recovered 18,493 with 21. The remuxed file still decodes cleanly
+at the head, so the obvious check agrees it worked. `utilities.remux_faststart()`
+refuses a desynchronised file for this reason, and anything new that rewrites a
+container must do the same — see `docs/library-file-fixes.md` §0.
+
 **The app is deliberately network-free.** Fonts are bundled as base64; there is no
 CDN, no icon font, no telemetry. Don't add a dependency to solve a small problem.
 

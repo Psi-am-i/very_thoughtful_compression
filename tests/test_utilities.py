@@ -560,3 +560,72 @@ def test_a_remux_must_not_run_before_an_index_rebuild():
         assert res.ok, res.error
         assert res.action == "reindex", f"expected a lossless rebuild, got {res.action}"
         assert not calls, f"a remux ran before the rebuild and corrupted its input: {calls}"
+
+
+def test_a_remux_refuses_a_file_whose_index_is_desynchronised():
+    """The guard that matters most, because it protects a file the user never
+    asked to repair.
+
+    Running the Faststart tool across a library would otherwise meet a damaged
+    file, remux it because its index sits at the back, and destroy the recoverable
+    frames on the way — a lossless-sounding operation doing permanent damage to
+    something nobody was trying to fix.
+    """
+    if not _HAVE_FF:
+        print("  skip (no ffmpeg)"); return
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        broken = _desynced(d)
+        before = broken.read_bytes()
+        res = U.remux_faststart(_cfg(d), broken)
+        assert not res.ok
+        assert "destroy what a repair could still recover" in res.error, res.error
+        assert broken.read_bytes() == before, "the file must be left exactly as it was"
+        assert not list(d.glob(".*part*"))
+
+
+def test_the_faststart_scan_warns_before_the_batch_starts():
+    """Better to know at scan time than to have one file refuse mid-run."""
+    if not _HAVE_FF:
+        print("  skip (no ffmpeg)"); return
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        broken = _desynced(d)
+        rep = U.scan_faststart(_cfg(d), broken)
+        assert rep.faststart is False, "the premise: this file would be remuxed"
+        assert any(f.kind == "nal" for f in rep.faults), [f.kind for f in rep.faults]
+        assert "repair this before remuxing" in " ".join(f.detail for f in rep.faults)
+
+
+def test_a_healthy_file_is_still_remuxed_without_fuss():
+    """The guard must not turn into a tax on every good file."""
+    if not _HAVE_FF:
+        print("  skip (no ffmpeg)"); return
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        _clip(d / "fine.mp4", secs=4)
+        res = U.remux_faststart(_cfg(d), d / "fine.mp4")
+        assert res.ok, res.error
+        assert U.is_faststart(res.path) is True
+
+
+def test_the_main_compression_pipeline_is_not_exposed_to_this():
+    """Worth pinning rather than assuming. The engine only ever chooses REMUX for
+    a source that is NOT already MP4, and a desynchronised sample index is an MP4
+    phenomenon (stsz/stco against mdat) — so the compression path cannot walk into
+    this trap. If that condition ever changes, this test should fail and the guard
+    should follow it there."""
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        (d / "x.mkv").write_bytes(b"\0" * 64)
+        assert U.index_desync(_cfg(d), d / "x.mkv") is None
+
+        from vtc.ffprobe import MediaInfo
+        from vtc.result import Mode as _M
+        cfg = RunConfig(src=d)
+        # an already-MP4 modern file is skipped or shrunk, never remuxed
+        info = MediaInfo(path=d / "a.mp4", ok=True, vcodec="hevc", width=1920, height=1080,
+                         fps=24.0, bit_rate=3_000_000, duration=60.0)
+        from vtc import pipeline as _p
+        mode, _outcome, _t = _p.decide(cfg, info)
+        assert mode is not _M.REMUX, "an MP4 source reached the remux path"

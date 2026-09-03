@@ -33,6 +33,51 @@ established by the source, it says so.
 
 ---
 
+## 0. ⚠️ A REMUX IS NOT ALWAYS HARMLESS
+
+Everyone treats a stream-copy remux as free. It rewrites the container, touches no
+pixels, and the output is byte-identical stream for stream — so it gets used as a
+casual first move: fix faststart, change container, "try a remux and see". That
+reasoning is sound for a healthy file and **wrong for a damaged one**, in a way that
+is silent, permanent, and easy to cause by accident.
+
+A remux copies samples out **according to the index**. When the index is
+desynchronised from the media — the `stsz`/`stco` tables no longer describing the
+bytes in `mdat` — the offsets it follows point at the wrong bytes. The payload in the
+damaged span is normally *intact and recoverable*, because H.264 is self-describing;
+a remux reads it through the broken map and writes the result out as the new truth.
+The recoverable frames do not survive that.
+
+Measured on a real 1.67 GB file with damage from 8:39 to 10:00:
+
+| index rebuild run on | frames recovered | residual decode errors |
+|---|---|---|
+| the pristine file | **20,915** of 20,927 | **0** |
+| the same file, remuxed first | 18,493 of 20,927 | 21 |
+
+A step described as lossless destroyed 2,400 intact frames, permanently, and reported
+success. Worse, the obvious verification agrees with it: the remuxed file decodes
+cleanly at the head, so a bounded decode census pronounces it repaired.
+
+**The rule.** Anything that rewrites a container checks the index first:
+
+- `utilities.remux_faststart()` refuses a desynchronised file outright and says to
+  repair it first. It does *not* quietly do something else. The check costs ~0.4s on
+  a 1.67 GB file, because it reads sample headers and never the payload.
+- The faststart **scan** flags such a file up front, so a batch does not stop halfway.
+- The repair ladder picks its rung by the **fault**: an index fault goes straight to
+  the lossless rebuild, and only other faults start with a remux.
+- The main compression pipeline is not exposed — it only chooses `REMUX` for a source
+  that is not already MP4, and this is an MP4 phenomenon. That is pinned by a test, so
+  if the condition ever changes the guard has to follow it there.
+
+The reason this deserves a section of its own is that the belief it contradicts is
+almost universal, including in this codebase's own earlier reasoning: the first
+version of the repair ladder remuxed first *precisely because* it was "cheap and
+harmless", and the resulting damage looked like a success.
+
+---
+
 ## 1. Error classes handled
 
 Each class lists how it is **detected** and how it is **fixed**, with the exact
