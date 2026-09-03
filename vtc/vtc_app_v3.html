@@ -5330,6 +5330,24 @@ function mrShare(n){                              // {saved, secs} for the worst
 }
 // Hours for a slice of the library, at the SAME measured rate as the whole. Null
 // when the engine had nothing to measure against — we never invent a number.
+// Where the hours figure came from, in words rather than a label — and the three
+// sources are NOT equally solid, so the sentence must not read as though they
+// were. A real run and a benchmark are measurements of this machine. A preview
+// clip is five seconds long and mostly encoder start-up, which is fine for a
+// first guess and not fine as the basis for committing a night, so that case is
+// said out loud rather than dressed up in the same "based on…" clause.
+function mrRateClause(src){
+  if(src === 'your benchmark')  return ', based on benchmarking this machine';
+  if(src === 'your last run')   return ', based on your last run';
+  return '';                    // a sample clip is hedged in full below instead
+}
+function mrApproxNote(src){
+  if(src === 'your benchmark' || src === 'your last run') return '';
+  return ' Treat that as <b>approximate</b>: this machine has not been benchmarked, '
+       + 'so the figure is scaled from a five-second preview clip, most of which is '
+       + 'the encoder starting up. <b>Settings → This machine</b> measures it properly, '
+       + 'and takes about a minute.';
+}
 function mrHours(secs){
   const d=MR.data;
   if(!d || d.hours==null || !d.seconds) return null;
@@ -5368,8 +5386,9 @@ function mrLead(){
       tm.innerHTML = '<b>This is slow.</b> Doing '
         + (d.measured ? 'all '+n.toLocaleString() : 'everything found so far')
         + ' would take about <b>'+swHuman(d.hours*3600)+'</b> of encoding'
-        + (d.rate_from ? ', based on '+mrEsc(d.rate_from) : '')
-        + (d.measured ? '.' : ' — and that will grow with the count.');
+        + mrRateClause(d.rate_from)
+        + (d.measured ? '.' : ' — and that will grow with the count.')
+        + mrApproxNote(d.rate_from);
     }
   }
 }
