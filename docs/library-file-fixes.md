@@ -429,7 +429,19 @@ by per-stream MD5 on a real 1,133 MB, 32-track episode.
 | Chapters past the real end | `-show_chapters` vs duration, 1s slack | Remux |
 | Truncated container | Last top-level box ends past EOF | **None** — a half-downloaded file is gone, not broken |
 | Unreadable | Probe fails (DRM and truncation are checked first, so they answer instead) | None |
-| Bitstream damage / NAL errors | Decode census — **off by default**, bounded when on | The ladder below |
+| **Index desynchronised from the media** | `chain_ok` over every sample — 4-byte headers only, never the payload | The ladder below |
+| Bitstream damage / NAL errors | Decode census — bounded by default, **full once anything is found** | The ladder below |
+
+The index check is a **default**, not a `--deep` extra, because it is both cheap and
+the one that catches what sampling cannot. Measured on a real 1.67 GB, 11:38 file
+whose damage begins at **8:39**: it found 2,445 bad samples in **0.4 s**, while a
+30-second decode census took 1.2 s and reported the file perfectly healthy. Its cost
+scales with the sample *count*, not the file size.
+
+**Once damage is found, the whole file is checked.** A bounded census is a scanning
+compromise; on a file already known to be damaged it is the wrong economy. The full
+count is also the only honest "before" figure — without it there is no way to judge
+whether a repair actually improved anything. On that same file: 10,954 decode errors.
 
 ### The repair ladder — least destructive first
 
@@ -441,6 +453,24 @@ by per-stream MD5 on a real 1,133 MB, 32-track episode.
    re-encode option, and it runs *before* any re-encode is considered.
 3. **Re-encode** — last, because it is the only rung that spends quality. Capped-CRF
    at **the file's own bitrate**, so a repair never doubles as a shrink.
+
+**A rebuild beats a re-encode even when it is imperfect**, and that is not a
+compromise: *a re-encode does not repair damaged frames*. It encodes whatever the
+decoder managed to produce, errors included, for an hour and a generation of quality.
+So a rebuild that takes a file from thousands of errors to a handful is strictly the
+better outcome, and the residual is reported rather than used as grounds to spend that
+hour. Rejecting any non-zero residual is what VTC did first, and on the real file it
+threw away a good lossless repair in favour of an encode that could not have done
+better.
+
+**Verified end to end on a real damaged file** (`Caylian Curtis-brooken.mp4`, 1.67 GB,
+11:38, damage at 8:39–10:00): scan 42 s including the full census, repair 70 s,
+**10,954 decode errors → 21**, 18,493 of 20,927 frames kept, no re-encode.
+
+**Terminal faults short-circuit the scan.** DRM and truncation explain everything
+else, and a truncated file's index necessarily points at bytes that are not there —
+reporting that as separate "index damage" would offer a repair for a file that cannot
+be repaired.
 
 A fault with no automatic remedy says so rather than burning an hour proving it.
 

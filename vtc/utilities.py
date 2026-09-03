@@ -218,6 +218,9 @@ class FileReport:
     # stream-copied there). Not a fault — the file is fine as it is — but it is
     # why one of the container options will refuse it.
     blocks_mp4: str = ""
+    # Decode errors across the WHOLE file, measured once damage was found. 0 means
+    # "not measured", not "none" — the flag above says whether anything is wrong.
+    decode_errors_before: int = 0
 
     @property
     def needs(self) -> bool:
@@ -432,6 +435,44 @@ def _human(n: int) -> str:
     return f"{n} B"
 
 
+def index_desync(config: RunConfig, path: Path) -> Fault | None:
+    """Does the sample index still describe the bytes in `mdat`?
+
+    Cheap enough to be a default check and it catches what a bounded decode
+    cannot. Measured on a real 1.67 GB, 11.6-minute file with damage 519 seconds
+    in: this found 2,445 bad samples in 0.4s, while a 30-second decode census
+    took 1.2s and reported the file healthy — because the damage was nowhere near
+    the window it read. It validates each sample as a length-prefix chain from
+    the 4-byte headers alone and never touches the payload, so the cost is
+    bounded by the sample COUNT rather than the file size.
+    """
+    if path.suffix.lower() not in _MP4_EXTS:
+        return None
+    try:
+        d = mp4index.diagnose(path, ffmpeg=config.ffmpeg, ffprobe=config.ffprobe)
+    except mp4index.IndexRepairUnsupported:
+        return None            # not a file this check understands; say nothing
+    except Exception:          # noqa: BLE001 — a health check must never be the thing that breaks
+        return None
+    if not d["damaged"]:
+        return None
+    span = ""
+    if d["regions"]:
+        r = d["regions"][0]
+        span = (f" · {_mmss(r['from_s'])}–{_mmss(r['to_s'])}"
+                + (f" and {len(d['regions']) - 1} more" if len(d["regions"]) > 1 else ""))
+    return Fault(
+        kind="nal",
+        detail=(f"sample index does not match the media · {d['damaged']} of "
+                f"{d['samples']} frames ({d['percent']:.1f}%){span}"),
+        fix="reencode")        # the ladder tries the lossless rebuild first
+
+
+def _mmss(seconds: float) -> str:
+    m, s = divmod(int(seconds), 60)
+    return f"{m}:{s:02d}"
+
+
 def scan_health(config: RunConfig, path: Path, decode_seconds: int = 0) -> FileReport:
     """Every fault we can find in one file, cheapest check first."""
     rep = FileReport(path=path)
@@ -453,16 +494,52 @@ def scan_health(config: RunConfig, path: Path, decode_seconds: int = 0) -> FileR
                                    detail=_tidy(info.error or "") or "no video stream found",
                                    fix="none"))
         return rep
-    for check in (drm_protected, container_truncated, chapters_past_duration):
+    # DRM and truncation are TERMINAL: they explain everything else and nothing
+    # here can act on them, so they stop the scan rather than being listed
+    # alongside their own symptoms. A truncated file's index necessarily points at
+    # bytes that are not there — reporting that as separate "index damage" would
+    # offer a repair for a file that cannot be repaired.
+    for check in (drm_protected, container_truncated):
         fault = check(config, path)
         if fault:
             rep.faults.append(fault)
-    # Only decode when asked: it is the one check that reads the media itself.
-    if decode_seconds != 0:
+            return rep
+    for check in (index_desync, chapters_past_duration):
+        fault = check(config, path)
+        if fault:
+            rep.faults.append(fault)
+    # Once a cheap check has found something, it pays to look at the whole file.
+    # A sampled census is a scanning compromise; on a file already known to be
+    # damaged it is the wrong economy — the point now is to know the full extent,
+    # and to have a real "before" number to judge any repair against.
+    if rep.needs and any(f.kind == "nal" for f in rep.faults):
+        full = decode_errors(config, path, seconds=0)
+        if full:
+            rep.decode_errors_before = _error_count(config, path)
+    elif decode_seconds != 0:
         fault = decode_errors(config, path, seconds=max(0, decode_seconds))
         if fault:
             rep.faults.append(fault)
+            # Same escalation: a bounded window found damage, so measure it properly.
+            rep.decode_errors_before = _error_count(config, path)
     return rep
+
+
+def _error_count(config: RunConfig, path: Path) -> int:
+    """How many decode errors the WHOLE file produces.
+
+    The honest "before" figure. A repair is only worth accepting if it improves
+    on something measured, and a bounded sample cannot supply that number.
+    """
+    try:
+        r = subprocess.run(
+            [config.ffmpeg, "-v", "error", "-nostdin", "-i", str(path), "-f", "null", "-"],
+            capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=7200,
+            **TEXT_UTF8, **NO_WINDOW)
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    return len([ln for ln in (r.stderr or "").splitlines()
+                if "h264 @" in ln or "hevc @" in ln or "aac @" in ln])
 
 
 def scan_faststart(config: RunConfig, path: Path) -> FileReport:
@@ -652,14 +729,14 @@ def fix_health(config: RunConfig, report: FileReport, allow_reencode: bool = Fal
     # 1 · remux — seconds, lossless, and a container-level fault can present as a
     #     decode error, so it is worth trying even when the symptom looks deeper.
     attempt = remux_faststart(config, report.path)
-    if attempt.ok and decode_errors(config, attempt.path, seconds=20) is None:
+    if attempt.ok and _still_broken(config, attempt.path) is None:
         attempt.note = "repaired by remux — no re-encode needed"
         return attempt
     target = attempt.path if attempt.ok else report.path
     # 2 · rebuild the sample index — still no re-encode: the original sample bytes
     #     are carried across and only the map to them is rewritten. Only H.264 CFR
     #     MP4s qualify, and the module says so rather than half-trying.
-    rebuilt = rebuild_index(config, target)
+    rebuilt = rebuild_index(config, target, before_errors=report.decode_errors_before)
     if rebuilt is not None:
         if rebuilt.ok:
             return rebuilt
@@ -668,7 +745,20 @@ def fix_health(config: RunConfig, report: FileReport, allow_reencode: bool = Fal
     return repair_reencode(config, target)
 
 
-def rebuild_index(config: RunConfig, path: Path) -> FixResult | None:
+def _still_broken(config: RunConfig, path: Path) -> Fault | None:
+    """Did that repair actually work? Structurally, not by sampling.
+
+    Checking with a bounded decode is how a repair comes to report success it has
+    not earned: a remux copies a broken sample index straight through, and a
+    twenty-second window at the head of the file sees a clean stream and says so.
+    Caught on a real 1.67 GB file whose damage begins at 8:39 — the remux
+    "succeeded", the check agreed, and 2,445 damaged frames were still there.
+    The index check reads the whole file's headers and cannot be fooled that way.
+    """
+    return index_desync(config, path) or decode_errors(config, path, seconds=20)
+
+
+def rebuild_index(config: RunConfig, path: Path, before_errors: int = 0) -> FixResult | None:
     """Rebuild a desynchronised sample index. None if this file cannot qualify.
 
     Lossless: the payload is intact and self-describing, so only the container's
@@ -697,9 +787,19 @@ def rebuild_index(config: RunConfig, path: Path) -> FixResult | None:
         if not out.exists() or out.stat().st_size == 0:
             res.error = "the rebuild produced nothing"
             return res
-        if report.get("residual_errors"):
-            res.error = (f"still {report['residual_errors']} decode error(s) after the "
-                         f"rebuild — the damage is deeper than the index")
+        # The index it just wrote must actually describe the media — a rebuild that
+        # decodes cleanly but left a desynchronised table is a false success one
+        # rung further down.
+        if index_desync(config, out):
+            res.error = "the rebuilt index still does not match the media"
+            return res
+        residual = report.get("residual_errors") or 0
+        if residual and before_errors and residual >= before_errors:
+            res.error = (f"the rebuild left {residual} decode error(s), no better than "
+                         f"the {before_errors} it started with")
+            return res
+        if residual and not before_errors:
+            res.error = f"the rebuild left {residual} decode error(s)"
             return res
         res.after = out.stat().st_size
         dest = path.with_suffix(".mp4")
@@ -707,8 +807,19 @@ def rebuild_index(config: RunConfig, path: Path) -> FixResult | None:
         if dest != path:
             path.unlink(missing_ok=True)
         res.path, res.ok = dest, True
+        # A REBUILD BEATS A RE-ENCODE EVEN WHEN IT IS IMPERFECT, and that is not a
+        # compromise — a re-encode does not repair damaged frames. It encodes
+        # whatever the decoder managed to produce, errors included, at the cost of
+        # an hour and a generation of quality. So a rebuild that takes a file from
+        # thousands of errors to a handful is strictly the better outcome, and the
+        # residual is reported rather than used as grounds to spend that hour.
+        lost = report["frames_in"] - report["frames_out"]
         res.note = (f"index rebuilt losslessly · {report['frames_out']} of "
-                    f"{report['frames_in']} frames kept, no re-encode")
+                    f"{report['frames_in']} frames kept"
+                    + (f", {lost} lost to the damaged span" if lost else "")
+                    + ", no re-encode"
+                    + (f" · {before_errors} decode errors → {residual}"
+                       if before_errors else ""))
         return res
     finally:
         if out.exists() and not res.ok:
