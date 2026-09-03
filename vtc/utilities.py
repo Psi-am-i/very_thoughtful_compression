@@ -192,6 +192,10 @@ class FileReport:
     size: int = 0
     faststart: bool | None = None
     faults: list[Fault] = field(default_factory=list)
+    # Set when converting this file to MP4 is impossible (its codec cannot be
+    # stream-copied there). Not a fault — the file is fine as it is — but it is
+    # why one of the container options will refuse it.
+    blocks_mp4: str = ""
 
     @property
     def needs(self) -> bool:
@@ -392,6 +396,13 @@ def scan_faststart(config: RunConfig, path: Path) -> FileReport:
         rep.faults.append(Fault(kind="faststart",
                                 detail="index sits after the media · needs the pass",
                                 fix="remux"))
+    # Informational, and only if they ask to convert: a file whose codec cannot go
+    # into MP4 will refuse the "To MP4" option, and it is better to know that from
+    # the scan than from a failure part-way through a batch.
+    if path.suffix.lower() not in _MP4_EXTS:
+        clash = mp4_incompatible_codec(config, path)
+        if clash:
+            rep.blocks_mp4 = clash.detail
     return rep
 
 
@@ -441,6 +452,15 @@ def remux_faststart(config: RunConfig, path: Path, container: str = "keep") -> F
     src_ext = path.suffix.lower()
     want = {"keep": src_ext, "mp4": ".mp4", "mkv": ".mkv"}.get(container, src_ext)
     to_mkv = want in _MKV_EXTS
+    # Some codecs simply cannot be stream-copied into MP4. Catch that HERE rather
+    # than letting ffmpeg fail thirty seconds in with a message about muxers: this
+    # tool's whole promise is "a stream copy, seconds not hours", and the honest
+    # answer is that this particular file cannot have it.
+    if not to_mkv:
+        clash = mp4_incompatible_codec(config, path)
+        if clash:
+            res.error = clash.detail
+            return res
     if to_mkv:
         args = ["-i", str(path), "-map", "0", "-c", "copy", "-cues_to_front", "1"]
     else:

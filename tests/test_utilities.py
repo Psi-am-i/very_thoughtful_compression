@@ -303,3 +303,38 @@ def test_a_repair_re_encode_caps_at_the_file_s_own_bitrate():
         # that the "repair" is guaranteed to look worse than the damage.
         (d / "unknown.mp4").write_bytes(b"nope")
         assert U._source_kbps(_cfg(d), d / "unknown.mp4") == 8000
+
+
+def test_a_codec_that_cannot_go_into_mp4_is_refused_up_front():
+    """Not every file can be converted, and finding out thirty seconds into a
+    batch — from an ffmpeg message about muxers — is not an answer. The tool's
+    promise is "a stream copy, seconds not hours"; when that is impossible for a
+    particular file it should say so before starting."""
+    if not _HAVE_FF:
+        print("  skip (no ffmpeg)"); return
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        # WMV3 in an ASF wrapper: a real codec that MP4 cannot carry.
+        r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+                            "-i", "testsrc2=size=320x240:rate=25", "-t", "2",
+                            "-c:v", "wmv2", str(d / "old.wmv")],
+                           capture_output=True, stdin=subprocess.DEVNULL)
+        if r.returncode != 0 or not (d / "old.wmv").exists():
+            print("  skip (no wmv2 encoder here)"); return
+
+        fault = U.mp4_incompatible_codec(_cfg(d), d / "old.wmv")
+        assert fault and fault.kind == "codec", fault
+
+        res = U.remux_faststart(_cfg(d), d / "old.wmv", container="mp4")
+        assert not res.ok
+        assert "cannot be copied into MP4" in res.error, res.error
+        assert (d / "old.wmv").exists(), "the source must be untouched after a refusal"
+        assert not list(d.glob(".*part*"))
+
+        # …and the scan says so in advance, so a batch is not a surprise.
+        rep = U.scan_faststart(_cfg(d), d / "old.wmv")
+        assert rep.blocks_mp4, "the scan should warn that To MP4 will refuse this file"
+
+        # Converting the same file to MKV is still perfectly fine.
+        ok = U.remux_faststart(_cfg(d), d / "old.wmv", container="mkv")
+        assert ok.ok, ok.error
