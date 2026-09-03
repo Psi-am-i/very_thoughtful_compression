@@ -54,7 +54,11 @@ a = Analysis(
                    *_pn_hidden, *_cl_hidden,
                    'vtc', 'vtc.webapp', 'vtc.pipeline', 'vtc.encode',
                    'vtc.ffprobe', 'vtc.model', 'vtc.config', 'vtc.ledger',
-                   'vtc.report', 'vtc.result', 'vtc.winproc'],
+                   'vtc.report', 'vtc.result', 'vtc.winproc', 'vtc.netmove',
+                   # Utilities and the benchmark: reached through vtc.webapp, so
+                   # static analysis should find them — listed anyway, because a
+                   # module missing from a SHIPPED bundle fails at the worst moment.
+                   'vtc.utilities', 'vtc.mp4index', 'vtc.bench'],
     hookspath=[],
     runtime_hooks=[],
     excludes=['tkinter', 'PIL', 'numpy', 'pytest'],
