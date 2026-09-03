@@ -54,6 +54,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"vtc {__version__}")
     p.add_argument("-i", "--interactive", action="store_true", help="ask for settings with prompts")
     p.add_argument("--dry-run", action="store_true", help="show what would happen; encode nothing")
+    p.add_argument("--faststart", action="store_true",
+                   help="report which files have their index at the back (so they cannot "
+                        "start playing until fully downloaded). Add --fix to remux them")
+    p.add_argument("--health", action="store_true",
+                   help="report files with faults that break players — chapter markers "
+                        "past the real end, damaged containers, decode errors. "
+                        "Add --fix to repair what a remux can fix")
+    p.add_argument("--fix", action="store_true",
+                   help="with --faststart/--health: actually apply the repair. Without "
+                        "it, both are report-only and change nothing")
+    p.add_argument("--deep", action="store_true",
+                   help="with --health: decode each file to look for bitstream damage. "
+                        "Much slower — it reads the media, not just the headers")
     p.add_argument("--benchmark", action="store_true",
                    help="measure THIS machine on real files from the library and print "
                         "what each encoder actually does — speed and size at the same "
@@ -447,6 +460,55 @@ def _size_of(p: Path) -> int:
         return 0
 
 
+def _print_utility(cfg: RunConfig, tool: str, fix: bool, deep: bool) -> int:
+    """Report what a library needs, and only repair when explicitly told to.
+
+    Report-first is the whole shape of these tools: they operate on every file at
+    once, and one that starts by rewriting things is not one anybody can try out.
+    """
+    from . import utilities
+    files = list(pipeline.iter_video_files(cfg))
+    if not files:
+        print("  (no video files found)")
+        return 0
+    title = "Faststart" if tool == "faststart" else "File health"
+    print(f"\n  {title} — {len(files)} file(s) under {cfg.src}")
+    if tool == "health" and not deep:
+        print("  Headers only. --deep also decodes each file to find bitstream damage.")
+    print()
+    reports, needy = [], []
+    for f in files:
+        rep = (utilities.scan_faststart(cfg, f) if tool == "faststart"
+               else utilities.scan_health(cfg, f, decode_seconds=20 if deep else 0))
+        reports.append(rep)
+        if rep.needs:
+            needy.append(rep)
+            print(f"    {rep.path.name[:56]:<56} {'; '.join(x.detail for x in rep.faults)[:60]}")
+    if not needy:
+        print(f"    Nothing to do — all {len(files)} file(s) are fine.")
+        return 0
+    fixable = [r for r in needy if r.fix != "none"]
+    print(f"\n  {len(needy)} file(s) need attention; {len(fixable)} can be repaired here.")
+    unfixable = len(needy) - len(fixable)
+    if unfixable:
+        print(f"  {unfixable} cannot be repaired automatically — a truncated download is "
+              f"gone, not broken;\n  fetching the file again is the honest answer.")
+    if not fix:
+        print("\n  Nothing was changed. Add --fix to repair the ones that can be.")
+        return 0
+    print()
+    ok = 0
+    for rep in fixable:
+        res = (utilities.remux_faststart(cfg, rep.path) if tool == "faststart"
+               else utilities.fix_health(cfg, rep, allow_reencode=deep))
+        ok += bool(res.ok)
+        status = "fixed" if res.ok else f"FAILED — {res.error}"
+        extra = f" ({res.note})" if res.note else ""
+        print(f"    {rep.path.name[:56]:<56} {status}{extra}")
+    print(f"\n  Repaired {ok} of {len(fixable)}.")
+    return 0
+
+
 def _print_benchmark(cfg: RunConfig, samples: int, seconds: int) -> int:
     """What this machine actually does, measured on the user's own files.
 
@@ -505,6 +567,9 @@ def main(argv: list[str] | None = None) -> int:
         n = pipeline.Ledger(dataclasses.replace(cfg, ledger_enabled=True)).clear()
         print(f"cleared processing history: {n} entr{'y' if n == 1 else 'ies'}")
 
+    if args.faststart or args.health:
+        return _print_utility(cfg, "faststart" if args.faststart else "health",
+                              fix=args.fix, deep=args.deep)
     if args.benchmark:
         return _print_benchmark(cfg, args.benchmark_samples, args.benchmark_seconds)
     _print_header(cfg, dry=args.dry_run)

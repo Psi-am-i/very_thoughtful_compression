@@ -406,6 +406,59 @@ VTC's own capped-CRF path).
 
 ---
 
+## 4b. IMPLEMENTED — what actually shipped, and what was verified
+
+`vtc/utilities.py` (engine), `--faststart` / `--health` / `--fix` / `--deep` (CLI),
+`Api.utility_scan` / `utility_fix` / `stop_utility` (GUI). Both tools are
+**report-first**: they look at a whole library, and one that starts by rewriting
+files is not one anyone can safely try.
+
+**Faststart detection is a structural walk, and it was verified against the real
+library**, because the failure mode is a false positive that rewrites a healthy
+file on every run for ever:
+
+- MP4 — walk the top-level boxes, first of `moov`/`mdat` wins. Cross-checked
+  against libavformat's own parser on real episodes: agreed on every file. The
+  synthetic 5 MB-`moov` case (the one the old byte-scan gets wrong) is pinned as a
+  regression test — the walk says faststart, the byte-scan says it needs fixing.
+- MKV — walk the Segment's children, first of `Cues`/`Cluster` wins. **A raw byte
+  search for the Cues ID is NOT a valid check**: on a real 1.1 GB episode it hits
+  at offset 93, which is inside the *SeekHead*, where that ID is stored as a
+  pointer. The genuine `Cues` element was at byte 1,133,004,673 — after 1,044
+  clusters. A scanner is fooled by the pointer; the structural walk is not.
+- Anything unreadable returns **None** (unknown), never `False`. "I cannot tell"
+  must not collapse into "needs fixing".
+
+Measured on the real library: **319 of 3,717 files (8.6%)** have their index at the
+back, almost all MKV WEB-DLs, which is normal for that source and exactly what
+`-cues_to_front 1` addresses.
+
+**The remux is lossless, and that was checked rather than assumed.** A real 1,133 MB
+episode with 2 audio and 30 subtitle tracks: every stream byte-identical by
+per-stream MD5 before and after, duration unchanged, no temp left behind. The
+output is walked again before it replaces the source, so a pass that silently
+fails to move the index is caught instead of shipped.
+
+**Health checks, cheapest first**, with the honest limits stated:
+
+| Fault | Detection | Remedy |
+|---|---|---|
+| chapters past the real end | `-show_chapters` vs duration, 1s slack so rounding is not "damage" | remux |
+| truncated container | last top-level box ends past EOF | **none** — a half-downloaded file is gone, not broken |
+| unreadable | probe fails (structural check still runs first, so "300 MB short" beats "unreadable") | none |
+| bitstream damage | decode census, bounded window | re-encode, opt-in |
+
+The decode census is the only check that reads the media rather than the headers,
+so it is **off by default** and bounded when on — and a bounded read can only find
+damage inside the window it read, which is stated rather than hidden.
+
+**The repair ladder never escalates on its own**: remux first (seconds, lossless),
+and a re-encode only if explicitly enabled — capped-CRF at *the file's own bitrate*,
+so a repair never doubles as a shrink. A fault with no automatic remedy says so
+instead of burning an hour proving it.
+
+---
+
 ## 5. Mapping onto VTC's Utilities
 
 ### Tool 1 — Faststart remux

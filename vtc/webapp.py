@@ -34,7 +34,7 @@ import subprocess
 import sys
 import tempfile
 
-from . import __version__, bench, encode, netmove, pipeline
+from . import __version__, bench, encode, netmove, pipeline, utilities
 from .config import AudioPolicy, Container, Encoder, OutputMode, RunConfig, SourceAction
 from .ffprobe import probe
 from .model import OutCodec, Tier, capped_dims, target_kbps
@@ -1003,6 +1003,31 @@ def _rate_key(config: RunConfig, hw: bool) -> str:
     return f"{'hw' if hw else 'sw'}|{config.out_codec.value}|j{max(1, config.jobs)}"
 
 
+def _utility_row(rep, tool: str) -> dict:
+    """One scanned file, in the shape the Utilities list renders.
+
+    `needs`/`detail`/`fix` rather than a raw fault list: the UI shows one line per
+    file and the user picks an action, so the engine states the verdict plainly
+    instead of making the front end reason about severity.
+    """
+    detail = "; ".join(f.detail for f in rep.faults)
+    if not detail:
+        detail = "already faststart" if tool == "faststart" else "no faults found"
+    if tool == "faststart" and rep.faststart is None:
+        detail = "not a container whose index position can be read"
+    fix = rep.fix
+    return {
+        "f": rep.path.name, "path": str(rep.path),
+        "size": round(rep.size / 1e6, 1), "ext": rep.path.suffix.lstrip("."),
+        "needs": rep.needs, "detail": detail,
+        "kind": (rep.faults[0].kind if rep.faults else ""),
+        "fix": fix,
+        # Pre-arm only what can actually be repaired, so "fix everything" never
+        # queues a file whose fault has no automatic remedy.
+        "action": fix if fix != "none" else None,
+    }
+
+
 def _jobs_agnostic(key: str) -> str:
     """The same rate key at one job at a time.
 
@@ -1066,6 +1091,8 @@ class Api:
         # settings survive quitting the app (and rebuilding it).
         self._adv: dict = _load_settings()
         self._bench_stop = False           # set by stop_benchmark, polled between encodes
+        self._util_stop = False            # same, for a Utilities scan or fix
+        self._util_rows: dict = {}
         self._scan_gen = 0
         self._probe_gen = 0
         self._preview_gen = 0              # bumped whenever previews are (re)requested;
@@ -1606,6 +1633,83 @@ class Api:
         except Exception as e:                             # noqa: BLE001
             log.exception("benchmark failed")
             self._emit("__vtcBenchDone", {"error": str(e)[:200]})
+
+    # ── Utilities: the fixes that are not a re-encode ────────────────────────
+    def utility_scan(self, tool: str, src: str = "", decode_seconds: int = 0):
+        """Look at a folder and report what each file needs. Changes nothing.
+
+        Both tools open in scan mode on purpose: these operate on a whole library
+        at once, and a tool that starts by rewriting files is not one you can try
+        out. Runs in a worker and streams rows back as they are found, because a
+        library scan is long enough that a frozen window reads as a crash.
+        """
+        folder = Path(src) if src else self._src
+        if not folder or not Path(folder).is_dir():
+            return {"error": "no folder"}
+        self._util_stop = False
+        threading.Thread(target=self._utility_scan_worker,
+                         args=(str(tool), Path(folder), int(decode_seconds)),
+                         daemon=True).start()
+        return {"started": True}
+
+    def _utility_scan_worker(self, tool: str, folder: Path, decode_seconds: int):
+        try:
+            cfg = RunConfig(src=folder, ffmpeg=FFMPEG, ffprobe=FFPROBE)
+            _apply_advanced(cfg, self._adv or {})
+            files = list(pipeline.iter_video_files(cfg))
+            rows = []
+            for n, f in enumerate(files):
+                if self._util_stop:
+                    break
+                rep = (utilities.scan_faststart(cfg, f) if tool == "faststart"
+                       else utilities.scan_health(cfg, f, decode_seconds=decode_seconds))
+                rows.append(_utility_row(rep, tool))
+                self._emit("__vtcUtilProgress",
+                           {"done": n + 1, "total": len(files), "name": f.name})
+            self._util_rows = {r["path"]: r for r in rows}
+            self._emit("__vtcUtilScanDone",
+                       {"tool": tool, "rows": rows, "stopped": self._util_stop})
+        except Exception as e:                          # noqa: BLE001
+            log.exception("utility scan failed")
+            self._emit("__vtcUtilScanDone", {"error": str(e)[:200]})
+
+    def utility_fix(self, tool: str, paths: list, container: str = "keep",
+                    reencode: bool = False):
+        """Apply the chosen fix to the chosen files. Nothing else is touched."""
+        wanted = [Path(p) for p in (paths or []) if p]
+        if not wanted:
+            return {"error": "nothing selected"}
+        self._util_stop = False
+        threading.Thread(target=self._utility_fix_worker,
+                         args=(str(tool), wanted, str(container), bool(reencode)),
+                         daemon=True).start()
+        return {"started": True}
+
+    def _utility_fix_worker(self, tool: str, paths: list, container: str, reencode: bool):
+        cfg = RunConfig(src=(self._src or paths[0].parent), ffmpeg=FFMPEG, ffprobe=FFPROBE)
+        done = []
+        for n, p in enumerate(paths):
+            if self._util_stop:
+                break
+            try:
+                if tool == "faststart":
+                    res = utilities.remux_faststart(cfg, p, container=container)
+                else:
+                    rep = utilities.scan_health(cfg, p, decode_seconds=20)
+                    res = utilities.fix_health(cfg, rep, allow_reencode=reencode)
+            except Exception as e:                      # noqa: BLE001
+                res = utilities.FixResult(path=p, ok=False, error=str(e)[:160])
+            row = {"path": str(p), "name": p.name, "ok": res.ok, "action": res.action,
+                   "error": res.error, "note": res.note,
+                   "before": res.before, "after": res.after,
+                   "newPath": str(res.path), "newName": Path(res.path).name}
+            done.append(row)
+            self._emit("__vtcUtilFixed", {"done": n + 1, "total": len(paths), "row": row})
+        self._emit("__vtcUtilFixDone", {"rows": done, "stopped": self._util_stop})
+
+    def stop_utility(self):
+        self._util_stop = True
+        return {"stopped": True}
 
     def _record_rate(self, config: RunConfig, results: list) -> None:
         """Learn this machine's encoding speed from the run that just finished.
