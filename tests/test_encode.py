@@ -19,9 +19,11 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from vtc.config import Encoder, RunConfig  # noqa: E402
-from vtc.encode import build_video_args, run_encode, use_hardware, select_hw_encoder  # noqa: E402
+from vtc.encode import (  # noqa: E402
+    build_video_args, crf_for_tier, run_encode, use_hardware, select_hw_encoder,
+)
 from vtc.ffprobe import MediaInfo, probe  # noqa: E402
-from vtc.model import OutCodec  # noqa: E402
+from vtc.model import OutCodec, Tier  # noqa: E402
 from vtc.result import Mode  # noqa: E402
 
 _HAVE_FF = shutil.which("ffmpeg") and shutil.which("ffprobe")
@@ -38,7 +40,9 @@ def test_build_video_args_shrink_h265_software():
     info = MediaInfo(path=Path("x.mp4"), ok=True, vcodec="h264", pix_fmt="yuv420p")
     args = build_video_args(cfg, info, Mode.SHRINK, 4080, hw_encoder=None)
     assert "libx265" in args
-    assert "-crf" in args and args[args.index("-crf") + 1] == "21"
+    # CRF is the tier's measured band, not a fixed value: EXCELLENT is the default
+    # tier, so libx265 gets 19 (see _SHRINK_BANDS in encode.py)
+    assert "-crf" in args and args[args.index("-crf") + 1] == "19"
     # capped-CRF ceiling sits AT the tier target with a tight (~1s) bufsize, so the
     # software average holds near it and re-runs converge (over_target absorbs the slop)
     assert "-maxrate" in args and args[args.index("-maxrate") + 1] == "4080k"
@@ -62,9 +66,10 @@ def test_build_video_args_transcode_fidelity():
     cfg = _cfg(out_codec=OutCodec.H265, encoder=Encoder.SOFTWARE)
     info = MediaInfo(path=Path("x.mp4"), ok=True, vcodec="mpeg2video", pix_fmt="yuv420p")
     args = build_video_args(cfg, info, Mode.TRANSCODE, 5000, hw_encoder=None)
-    assert args[args.index("-crf") + 1] == "20"
+    # TRANSCODE sits two CRF below the SHRINK band for the same tier (EXCELLENT: 19 -> 17)
+    assert args[args.index("-crf") + 1] == "17"
     assert args[args.index("-preset") + 1] == "slow"
-    print("  ok  build_video_args TRANSCODE h265 -> crf 20 / slow")
+    print("  ok  build_video_args TRANSCODE h265 -> crf 17 / slow")
 
 
 def test_build_video_args_h264_software():
@@ -72,13 +77,45 @@ def test_build_video_args_h264_software():
     info = MediaInfo(path=Path("x.mp4"), ok=True, vcodec="h264", pix_fmt="yuv420p")
     args = build_video_args(cfg, info, Mode.SHRINK, 6800, hw_encoder=None)
     assert "libx264" in args
-    assert args[args.index("-crf") + 1] == "20"
+    assert args[args.index("-crf") + 1] == "16"          # EXCELLENT band for libx264
     # software ceiling capped at the tier target with tight bufsize so re-runs converge
     assert args[args.index("-maxrate") + 1] == "6800k"
     assert args[args.index("-bufsize") + 1] == "6800k"
     assert args[args.index("-profile:v") + 1] == "high"
     assert args[args.index("-pix_fmt") + 1] == "yuv420p"
     print("  ok  build_video_args SHRINK h264 software")
+
+
+def test_crf_bands_form_a_monotonic_ladder():
+    """The tier must reach the software encoder as CRF, not only as -maxrate.
+
+    This is the regression guard for the defect the bands fix: CRF used to be set
+    by MODE alone, so once its natural rate fell below the tier target the ceiling
+    never bound and every tier produced the SAME FILE — measured at 62% of INSANE's
+    promised density while hardware held ~100%.
+    """
+    info = MediaInfo(path=Path("x.mp4"), ok=True, vcodec="h264", pix_fmt="yuv420p")
+    for codec, enc_name in ((OutCodec.H264, "libx264"), (OutCodec.H265, "libx265")):
+        seen = []
+        for tier in Tier:
+            cfg = _cfg(out_codec=codec, encoder=Encoder.SOFTWARE, tier=tier)
+            args = build_video_args(cfg, info, Mode.SHRINK, 6800, hw_encoder=None)
+            assert enc_name in args
+            seen.append(int(args[args.index("-crf") + 1]))
+        # strictly decreasing: a higher tier must ask for higher quality
+        assert all(b < a for a, b in zip(seen, seen[1:])), f"{enc_name} ladder not monotonic: {seen}"
+        # and the ladder has to be wide enough to matter
+        assert seen[0] - seen[-1] >= 5, f"{enc_name} ladder too narrow: {seen}"
+    print("  ok  crf bands form a monotonic ladder per codec")
+
+
+def test_crf_band_transcode_offset():
+    """TRANSCODE is the only copy that will exist, so it sits below SHRINK."""
+    for tier in Tier:
+        shrink = crf_for_tier(tier, Mode.SHRINK)
+        transcode = crf_for_tier(tier, Mode.TRANSCODE)
+        assert transcode[0] < shrink[0] and transcode[1] < shrink[1]
+    print("  ok  transcode band sits below shrink for every tier")
 
 
 def test_build_video_args_hardware_no_crf():

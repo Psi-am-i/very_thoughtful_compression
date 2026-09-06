@@ -25,7 +25,7 @@ from pathlib import Path
 from .config import MP4_AUDIO_CODECS, AudioPolicy, Container, Encoder, RunConfig
 from .ffprobe import VTC_SIGNATURE, MediaInfo, SubtitleTrack
 from . import __version__
-from .model import OutCodec, capped_dims
+from .model import OutCodec, Tier, capped_dims
 from .result import EncodeResult, Mode, ProgressCB
 from .winproc import NO_WINDOW, TEXT_UTF8
 
@@ -247,6 +247,58 @@ def _scale_args(config: RunConfig, info: MediaInfo) -> list[str]:
     return ["-vf", f"scale={dims[0]}:{dims[1]}:flags=lanczos"]
 
 
+# ── CRF bands per tier ────────────────────────────────────────────────────────
+# The tier used to reach the software encoders ONLY as the -maxrate ceiling: CRF
+# was fixed by mode, so once CRF's natural rate fell below the tier target the
+# ceiling never bound and every higher tier produced the SAME FILE. Measured on
+# eight sources, H.264 delivered just 62-63% of INSANE's promised density while
+# hardware (which has no CRF) held 95-102% at every tier.
+#
+# These bands are MEASURED, not chosen. Per source we fit crf = a + b*log2(bpp)
+# across a 9-point CRF grid on 30s real-footage clips, which gives the ladder's
+# SHAPE from the slope (median -5.11 for x264, -5.21 for x265: about 5 CRF per
+# halving) and its POSITION from the median of the sources where each tier is
+# actually live. Fitting each rung independently does NOT work — the live source
+# set differs per rung, so the rungs are not comparable and the ladder comes out
+# non-monotonic (measured: 21 > 18 > 19 > 17). Validated by interpolating each
+# source's own measured CRF->SSIM curve at these values: SSIM climbs at every
+# rung on every source that has signal.
+#
+# Position is a dial, not a correctness question. Lower bands put -maxrate in
+# charge more often (tier density delivered, but easy content is padded); higher
+# bands let CRF bind more often (smaller files that land below nominal density).
+# These sit at the median, so dense/hard sources are maxrate-bound at ~100% of
+# target and ordinary sources are CRF-bound below it — which is the intended
+# "never pad a file that doesn't need it". Both outcomes stay inside
+# TIER_OVER_TOLERANCE, so re-runs still converge.
+_SHRINK_BANDS = {                       # (libx264, libx265)
+    "OK":        (21, 24),
+    "GOOD":      (18, 21),
+    "EXCELLENT": (16, 19),
+    "STELLAR":   (15, 18),
+    "INSANE":    (14, 16),
+}
+# TRANSCODE is a higher-fidelity pass (it is producing the only copy that will
+# exist), so it sits two CRF below the SHRINK band for the same tier — the same
+# offset the old fixed pair had (18/20 against 20/21), now applied to a ladder
+# instead of to a single value.
+_TRANSCODE_OFFSET = 2
+
+
+def crf_for_tier(tier: Tier, mode: Mode) -> tuple[int, int]:
+    """(libx264 CRF, libx265 CRF) for this tier and mode.
+
+    Falls back to the old fixed pair for an unknown tier name rather than
+    guessing, so a future tier cannot silently encode at the wrong quality.
+    """
+    band = _SHRINK_BANDS.get(getattr(tier, "name", ""))
+    if band is None:
+        return (18, 20) if mode == Mode.TRANSCODE else (20, 21)
+    if mode == Mode.TRANSCODE:
+        return (band[0] - _TRANSCODE_OFFSET, band[1] - _TRANSCODE_OFFSET)
+    return band
+
+
 def build_video_args(
     config: RunConfig,
     info: MediaInfo,
@@ -278,10 +330,8 @@ def build_video_args(
     if hw_encoder:
         return [*scale, *_hw_video_args(info, hw_encoder, target_kbps)]
 
-    if mode == Mode.TRANSCODE:
-        crf264, crf265, preset = 18, 20, "slow"
-    else:  # SHRINK
-        crf264, crf265, preset = 20, 21, "medium"
+    crf264, crf265 = crf_for_tier(config.tier, mode)
+    preset = "slow" if mode == Mode.TRANSCODE else "medium"
 
     # Software is capped-CRF: the CRF sets quality and -maxrate is only a ceiling. The
     # original bug was a LOOSE ceiling (bufsize = 2x target) that let the average land
