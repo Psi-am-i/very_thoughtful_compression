@@ -959,12 +959,12 @@ class Api:
             # the edit list (-use_editlist 0) is worse, not better — it re-exposes
             # the pre-roll AND leaves an 0.08s start offset. The panels are aligned
             # on the front end instead, by seeking every video to one position.
-            r = subprocess.run(
+            r = encode.run_tracked(
                 [FFMPEG, "-y", "-v", "error", "-ss", f"{start:.3f}", "-i", str(first),
                  "-t", f"{seglen:.3f}", "-map", "0:v:0", *svargs, "-an",
                  "-movflags", "+faststart", str(sample)],
                 stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                **TEXT_UTF8, **NO_WINDOW)
+                **TEXT_UTF8)
             if r.returncode != 0 or not sample.exists() or sample.stat().st_size == 0:
                 self._emit("__vtcPreviewError", "could not extract a sample clip"); return
             if stale():
@@ -1004,11 +1004,11 @@ class Api:
                     bpp = (tgt * 1000.0 / (sinfo.pixels * sinfo.fps)
                            if sinfo.pixels and sinfo.fps else 0.0)
                     vargs = encode.build_video_args(cfg2, sinfo, Mode.SHRINK, tgt, hw)
-                    rr = subprocess.run(
+                    rr = encode.run_tracked(
                         [FFMPEG, "-y", "-v", "error", "-i", str(sample), *vargs, "-an",
                          "-movflags", "+faststart", str(out)],
                         stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                        **TEXT_UTF8, **NO_WINDOW)
+                        **TEXT_UTF8)
                     if rr.returncode != 0 or not out.exists() or out.stat().st_size == 0:
                         log.error("preview %s failed: %s", key,
                                   (rr.stderr or "").strip().splitlines()[-1:])
@@ -1661,7 +1661,16 @@ def _kill_children() -> None:
     temp nothing would ever move into place, so resuming the run put a second
     ffmpeg on the same CPU/GPU and the resumed encode crawled. Registered both on
     the window-closed event and via atexit, since a quit can take either route.
+
+    The abort flag goes down FIRST. The run worker is a daemon thread still going
+    while we exit, and killing a child without it just tells the worker this file
+    failed — it would move straight on to the next queued file and spawn a fresh
+    orphan behind us. The flag file is what the pipeline's per-file loop reads.
     """
+    try:
+        pipeline.ABORT_FILE.touch()
+    except OSError:
+        pass                        # best effort; the in-process latch below still holds
     try:
         n = encode.kill_running_children()
         if n:

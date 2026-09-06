@@ -63,7 +63,14 @@ def sweep_stale_scratch(max_age: float = STALE_SCRATCH_AGE) -> int:
     if not TMPROOT.is_dir():
         return 0
     cutoff, n = time.time() - max_age, 0
-    for f in TMPROOT.iterdir():
+    try:
+        # The listing itself is inside the try: an unreadable scratch dir (made by
+        # another user, a restrictive umask) raises here, and this is called before
+        # the window exists — an uncollected cleanup must not stop the app opening.
+        entries = list(TMPROOT.iterdir())
+    except OSError:
+        return 0
+    for f in entries:
         try:
             if f.is_file() and f.stat().st_mtime < cutoff:
                 f.unlink()

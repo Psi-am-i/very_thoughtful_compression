@@ -17,10 +17,20 @@ packaging/BUILD.md and the recipient README).
 """
 
 import os
+import sys
 
 from PyInstaller.utils.hooks import collect_all
 
 repo_root = os.path.dirname(SPECPATH)
+
+# The version resource is GENERATED from vtc/__init__.py, like the .app's plist.
+# It used to be a checked-in file with the number typed into it, so it kept
+# reporting 1.2 in Explorer's file properties however far __version__ had moved.
+sys.path.insert(0, SPECPATH)
+from appversion import read_version, write_win_version_resource
+
+version_file = write_win_version_resource(read_version(repo_root),
+                                          os.path.join(workpath, 'vtc-version'))
 ffmpeg = os.environ.get('FFMPEG_BINARY_PATH')
 ffprobe = os.environ.get('FFPROBE_BINARY_PATH')
 for label, path in (('FFMPEG_BINARY_PATH', ffmpeg), ('FFPROBE_BINARY_PATH', ffprobe)):
@@ -71,7 +81,7 @@ exe = EXE(
     console=False,                             # windowed GUI, no console window
     argv_emulation=False,
     icon=os.path.join(repo_root, 'packaging', 'app_icon.ico'),
-    version=os.path.join(repo_root, 'packaging', 'version_win.txt'),
+    version=version_file,
 )
 
 coll = COLLECT(

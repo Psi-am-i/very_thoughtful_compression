@@ -14,17 +14,20 @@ cross-compile — the Windows build uses vtc-gui-win.spec on a Windows runner.
 """
 
 import os
-import re
+import sys
 
 repo_root = os.path.dirname(SPECPATH)
 
 # Read the version out of the package rather than repeating it here. It was
 # hardcoded and drifted: the shipped v1.2 .app still told Finder it was 1.0.1.
-with open(os.path.join(repo_root, 'vtc', '__init__.py'), encoding='utf-8') as fh:
-    m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', fh.read(), re.M)
-if not m:
-    raise SystemExit("could not read __version__ from vtc/__init__.py")
-version = m.group(1)
+# Shared with the Windows spec, which had the same drift in its version resource.
+sys.path.insert(0, SPECPATH)
+from appversion import numeric_version, read_version
+
+version = read_version(repo_root)
+# CFBundleShortVersionString must be one to three integers — a pre-release tag
+# like '1.4.0b1' would make the Info.plist invalid.
+short_version = numeric_version(version)
 
 ffmpeg = os.environ.get('FFMPEG_BINARY_PATH')
 ffprobe = os.environ.get('FFPROBE_BINARY_PATH')
@@ -77,7 +80,7 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'Very Thoughtful Compression',
         'CFBundleDisplayName': 'Very Thoughtful Compression',
-        'CFBundleShortVersionString': version,
+        'CFBundleShortVersionString': short_version,
         'CFBundleVersion': version,        # Finder shows Short; this is the build number
         'NSHighResolutionCapable': True,
         'LSMinimumSystemVersion': '10.14',

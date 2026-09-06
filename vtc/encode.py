@@ -37,8 +37,8 @@ _ENCODERS_CACHE: dict[str, str] = {}
 # Guards both probe caches. The GUI now probes on a background thread at startup
 # while the page's own hw_capabilities call arrives a moment later, so without
 # this the two race and each spawns its own ffmpeg — the second waits for the
-# first's answer instead. Re-entrant: hardware_report holds it across the calls
-# to _encoders_list / _encoder_works below.
+# first's answer instead. Held by the two leaf probes below and by nothing above
+# them: hardware_report is NOT atomic, it just cannot probe the same thing twice.
 _PROBE_LOCK = threading.RLock()
 
 
@@ -49,10 +49,13 @@ def _encoders_list(ffmpeg: str) -> str:
         if cached is not None:
             return cached
         try:
+            # timeout, because this now runs under the shared probe lock: a cold
+            # bundle's first exec (Gatekeeper) or a stalled network-mounted ffmpeg
+            # would otherwise hang every later capability call, not just this one.
             out = subprocess.run(
                 [ffmpeg, "-hide_banner", "-encoders"],
                 capture_output=True, text=True, stdin=subprocess.DEVNULL,
-                **TEXT_UTF8, **NO_WINDOW,
+                timeout=30, **TEXT_UTF8, **NO_WINDOW,
             ).stdout
         except (OSError, subprocess.SubprocessError):
             out = ""
@@ -501,26 +504,39 @@ def abort_running() -> int:
 
 
 def kill_running_children() -> int:
-    """Kill any ffmpeg still running, WITHOUT latching the abort flag.
+    """Kill any ffmpeg still running at shutdown, and latch so none is respawned.
 
     For process shutdown. ffmpeg is a separate process, so when the app quits
     mid-run Python exiting does not take it with us — it is reparented and keeps
     encoding a temp file nobody will ever move into place, competing with the
-    resumed run for the very same CPU/GPU. Distinct from abort_running() because
-    that one sets a latch meant for a user-requested stop; at exit there is no
-    later attempt to suppress, and the latch would have to be cleared again.
+    resumed run for the very same CPU/GPU.
+
+    The latch matters as much as the kill. The run worker is a daemon thread that
+    keeps executing while we shut down, and a bare kill reads to it as an ordinary
+    failure: it would drop the temp and start the NEXT attempt in the ladder (the
+    next audio strategy, or subs-embedded -> not), spawning a fresh child just
+    after we swept — the very orphan this exists to prevent. Nothing needs to
+    clear the latch in a dying process, and every new run re-arms via clear_abort().
     """
-    with _live_lock:
-        procs = list(_live_procs)
-    n = 0
-    for p in procs:
-        try:
-            if p.poll() is None:
-                p.kill()
-                n += 1
-        except OSError:
-            pass
-    return n
+    return abort_running()
+
+
+def run_tracked(args: list[str], **kwargs) -> subprocess.CompletedProcess:
+    """subprocess.run, but the child is REGISTERED so abort/shutdown can kill it.
+
+    For the one-shot ffmpeg calls outside the run pipeline — the preview encodes.
+    They are short but they are still full encodes on a big source, and run
+    unregistered they survived the app quitting exactly as run encodes used to.
+    """
+    if kwargs.pop("capture_output", False):
+        kwargs.setdefault("stdout", subprocess.PIPE)
+        kwargs.setdefault("stderr", subprocess.PIPE)
+    # NO_WINDOW here rather than at each call site: it is easy to forget, and one
+    # forgotten spawn strobes a console window across the app on Windows.
+    proc = subprocess.Popen(args, **NO_WINDOW, **kwargs)
+    with _tracked(proc):
+        out, err = proc.communicate()
+    return subprocess.CompletedProcess(args, proc.returncode, out, err)
 
 
 def _run_ffmpeg(
