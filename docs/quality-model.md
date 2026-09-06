@@ -54,13 +54,29 @@ gave it:
 | path | used |
 |---|---|
 | H.265 hardware | 95–101% — ABR aims at the target, so the tier *is* the bitrate |
-| H.265 software | 26–95% — capped CRF is satisfied first, so tiers can go inert |
+| H.265 software | 26–100% — CRF is often satisfied below the ceiling |
 | AV1 software | ~68% consistently — VBR undershoots |
 
-On the software H.26x path the CRF, not the tier, is usually the binding constraint:
-Alien lands at the same 1.4 Mbps whether asked for OK or INSANE. That is the
-capped-CRF design working as intended — quality first, the target as a ceiling — but
-it does mean the tier ladder is close to inert there on already-lean sources.
+**This used to mean the software tier ladder was inert, and that was a bug, not the
+design.** CRF was fixed by *mode* (SHRINK 20/21), so the tier reached libx264/libx265
+only as the `-maxrate` ceiling. Once CRF's natural rate fell below the tier target the
+ceiling never bound and every higher tier produced the same file — measured at 62% of
+INSANE's promised density on H.264 software, against 95–102% at every tier on hardware,
+which has no CRF. Alien landed at the same 1.4 Mbps whether asked for OK or INSANE.
+
+Each tier now has its own **measured CRF band** (see *Encoders and what actually
+controls quality*), so the tier reaches the software encoder twice: as quality via CRF,
+and as a ceiling via `-maxrate`. Two regimes follow, and both are intended:
+
+- **Dense or hard sources are ceiling-bound** — CRF's natural rate exceeds the target,
+  `-maxrate` holds it, and the file lands at ~100% of the tier density.
+- **Ordinary sources are CRF-bound** — the band is satisfied below the target, so the
+  file lands *under* nominal density and is never padded to reach it.
+
+So a tier is best read as **"up to this density, at this quality"**. On easy content the
+density is aspirational and the quality is what you actually get; a file is never
+inflated to hit a number. What changed is that the *quality* now varies by tier — which
+is the part that was broken.
 
 ## The core idea: a tier is a quality *density*, not a bitrate
 
@@ -517,9 +533,27 @@ source is usually easy content, a fat one usually hard), not on a genre label.
 
 ## Encoders and what actually controls quality
 
-- **Software (libx264/libx265)** — capped-CRF: `-crf 20/21 -maxrate <target> -bufsize`.
+- **Software (libx264/libx265)** — capped-CRF: `-crf <band> -maxrate <target> -bufsize`.
   CRF is a constant-*quality* target; the tier bitrate is a ceiling on peaks. This is
-  the quality path.
+  the quality path. The band is **per tier and measured**, not a constant:
+
+  | tier | libx264 | libx265 |
+  |---|---|---|
+  | OK | 21 | 24 |
+  | GOOD | 18 | 21 |
+  | EXCELLENT | 16 | 19 |
+  | STELLAR | 15 | 18 |
+  | INSANE | 14 | 16 |
+
+  TRANSCODE sits two CRF below the same tier's band, keeping the fidelity offset the
+  old fixed pair had. The bands come from fitting `crf = a + b·log2(bpp)` per source
+  over a 9-point CRF grid on 30s real-footage clips (8 sources, 126 encodes): the
+  *shape* is the slope (median −5.11 for x264, −5.21 for x265 — about 5 CRF per
+  halving) and the *position* is the median of the sources where each tier is actually
+  live. Fitting each rung independently does **not** work: the live source set differs
+  per rung, so the rungs are not comparable and the ladder comes out non-monotonic.
+  Validated by interpolating each source's own measured CRF→SSIM curve at these values
+  — SSIM climbs at every rung on every source that has signal.
 - **Hardware (VideoToolbox)** — `-b:v <target>` only (no true CRF). Here the tier
   bitrate *is* the quality knob, which is why the bpp calibration matters most on this
   path.
