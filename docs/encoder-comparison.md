@@ -131,17 +131,58 @@ unreliable zone, and was abandoned on this evidence.
 
 ---
 
-## 5. Where SSIM stops helping
+## 5. Where SSIM stops helping — and where it is telling the truth
 
 On Top Gun, SSIM sits near 0.934 and **stops responding to bitrate**: H.264
 hardware scores 0.9344 at 18.5 Mbps and 0.9339 at 47.7 Mbps — slightly *worse* for
-two and a half times the data. Frame counts were checked and align exactly, so
-this is not a measurement artefact.
+two and a half times the data.
 
-The explanation is the grain. It is high-entropy and effectively noise; no
-bitrate reproduces it exactly, and SSIM penalises any difference without caring
-whether the result looks better. So on grainy 4K, **SSIM saturates before quality
-does**, and the tier ladder looks flat when it is not.
+An earlier draft of this section blamed grain, and that was wrong. Four controls
+show the measurement is sound: reference against itself scores 1.000000; a
+mathematically lossless `x264 -qp 0` scores 1.000000; deliberate ±1 and ±2 frame
+shifts fall off symmetrically around zero, so alignment is correct; and a plain
+CRF 20 encode of the whole clip lands at 0.932103 / 33,706 kbps against the
+matrix's own 0.9321 / 33,659 kbps — VTC's arguments simply reproduce plain x264.
 
-That is a limit of the metric, not of the encoders — and the reason this document
-shows crops as well as numbers.
+**The real cause is the source's own density.** Top Gun is 14.2 Mbps across
+3840×2080 — only 0.0742 bpp. INSANE asks for 0.2492 bpp, which is **3.4× the
+density the source ever had**. There is no fidelity above the source to recover,
+so bits spent past that point re-describe the source's existing compression
+artefacts more precisely. SSIM correctly reports no gain, because there is none.
+
+The matrix ran targets **unclamped on purpose**, so the tiers stayed
+distinguishable; a real run clamps every target to the source bitrate, so this
+regime never occurs in production — those files are simply skipped.
+
+The proof is a source with density to spare. TimeLapse is 60.3 Mbps 4K (0.2427
+bpp), so its whole ladder sits *below* source density — and there SSIM climbs
+monotonically on every path: H.264 hardware +0.01336, H.265 hardware +0.01259,
+AV1 +0.00685. Same encoders, same metric, same tier span.
+
+### Where SSIM genuinely goes mute
+
+That said, there is real content SSIM cannot rank. SoftSkin (4K H.264 at 78.8
+Mbps) moves just **0.00152 across a 3.6× bitrate range** — inside the encoder's
+own nondeterminism. Its content is noise-like: at CRF 20 it produces almost
+exactly the same density as TimeLapse (0.1562 vs 0.1536 bpp) yet scores 0.879
+against TimeLapse's 0.971. No bitrate reproduces that texture exactly, and SSIM
+penalises every difference without caring whether the result looks better.
+
+So the two effects are separate and should not be confused:
+
+| symptom | cause | is the encoder at fault? |
+|---|---|---|
+| flat SSIM on a **lean** source | tier targets above the source's own density | no — nothing to recover |
+| flat SSIM on a **noise-like** source | metric saturates on high-entropy texture | no — limit of the metric |
+
+Both are reasons this document shows crops as well as numbers, and why the CRF
+bands in `quality-model.md` are anchored on **density** rather than on SSIM: across
+the 4K controls the sources agree on density to within a percent, while their SSIM
+response to the same bitrate span differs by 15×.
+
+## 6. Per-clip rate–distortion curves
+
+`images/rdclip-<source>-<length>s.svg` plots delivered density against measured
+SSIM for every encode, one panel per clip. The dashed vertical rule on each panel
+is that source's own density — the ceiling described above. Curves flatten to the
+right of it, which is the whole of section 5 in one mark.
