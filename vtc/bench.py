@@ -177,13 +177,41 @@ def available_paths(config: RunConfig) -> list[tuple[OutCodec, str, str]]:
     return out
 
 
+# The sample budget is quoted at 1080p30. A benchmark's cost is pixel-frames, not
+# seconds, so a fixed number of SECONDS makes the run time depend entirely on what
+# the library happens to contain — 60s of 4K is four times the work of 60s of
+# 1080p, and 4K60 is eight times, for exactly the same answer, since the rate that
+# comes out is normalised to pixel-frames anyway. A 4K library was measured taking
+# over half an hour where a 1080p one took eight minutes.
+_REF_PIXEL_FPS = 1920 * 1080 * 30.0
+# Never go below this: at some point the encoder's start-up dominates and the
+# measurement stops being about steady-state throughput.
+_MIN_SAMPLE_SECONDS = 8
+
+
+def sample_seconds(info: MediaInfo, budget: int) -> float:
+    """How long a slice of THIS file equals `budget` seconds of 1080p30 work."""
+    work = (info.display_width or info.width) * (info.display_height or info.height) \
+        * (info.fps or 30.0)
+    if work <= 0:
+        return float(budget)
+    return max(_MIN_SAMPLE_SECONDS, min(float(budget), budget * _REF_PIXEL_FPS / work))
+
+
 def _extract(config: RunConfig, src: Path, dest: Path, seconds: int) -> MediaInfo | None:
     """A stream-copied slice from the middle of a file — no re-encode, so nothing
     about the sample is coloured by how we took it. The middle, because the start
-    of an episode is titles and the end is credits, and neither is the content."""
+    of an episode is titles and the end is credits, and neither is the content.
+
+    `seconds` is a budget at 1080p30; the slice actually taken is shortened for a
+    bigger frame so every sample costs the encoder about the same (see
+    sample_seconds). Without that, one 4K show in the library turns a two-minute
+    benchmark into half an hour.
+    """
     info = probe(src, config.ffprobe)
     if not info.ok or not info.vcodec or info.width <= 0:
         return None
+    seconds = sample_seconds(info, seconds)
     dur = info.duration or 0.0
     start = max(0.0, dur / 2 - seconds / 2) if dur > seconds else 0.0
     r = subprocess.run(

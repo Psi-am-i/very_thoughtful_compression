@@ -10,15 +10,15 @@
 <text class="mu" x="47" y="105.5" text-anchor="end">0.980</text>
 <line class="gr" x1="54" y1="32.0" x2="546" y2="32.0"/>
 <text class="mu" x="47" y="35.5" text-anchor="end">0.981</text>
-<text class="mu" x="54.0" y="328" text-anchor="middle">1</text>
-<text class="mu" x="177.0" y="328" text-anchor="middle">4</text>
-<text class="mu" x="300.0" y="328" text-anchor="middle">7</text>
-<text class="mu" x="423.0" y="328" text-anchor="middle">10</text>
-<text class="mu" x="546.0" y="328" text-anchor="middle">12</text>
+<text class="mu" x="54.0" y="328" text-anchor="middle">0.021</text>
+<text class="mu" x="177.0" y="328" text-anchor="middle">0.078</text>
+<text class="mu" x="300.0" y="328" text-anchor="middle">0.135</text>
+<text class="mu" x="423.0" y="328" text-anchor="middle">0.192</text>
+<text class="mu" x="546.0" y="328" text-anchor="middle">0.249</text>
 <line class="ax" x1="54" y1="312" x2="546" y2="312"/>
 <line class="ax" x1="54" y1="18" x2="54" y2="312"/>
 <text class="tx" x="54" y="14" font-weight="600">Annihilation</text>
-<text class="mu" x="307" y="352" text-anchor="middle">output bitrate (Mbps) — further left is smaller</text>
+<text class="mu" x="307" y="352" text-anchor="middle">bits per pixel per frame — the tier&#8217;s own unit; further left is smaller</text>
 <text class="mu" transform="translate(13,180) rotate(-90)" text-anchor="middle">SSIM — higher is closer to the source</text>
 <path d="M209.6,176.2 L276.4,129.6 L356.4,104.5 L437.2,85.4 L520.4,65.1" fill="none" stroke="#3b82f6" stroke-width="1.8" stroke-linejoin="round"/>
 <circle cx="209.6" cy="176.2" r="2.6" fill="#3b82f6"/>

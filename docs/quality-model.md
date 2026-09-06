@@ -4,6 +4,64 @@ This documents the bitrate/quality logic now implemented in the `vtc` Python
 engine (`vtc/model.py`, `vtc/pipeline.py`, `vtc/encode.py`) — the reference spec
 that the retired `very_thoughtful_compression.sh` originally established.
 
+## How this document states numbers
+
+Comparisons are easy to write ambiguously — "70%" can mean seven tenths of the size,
+seven tenths faster, or seven tenths slower, and a reader cannot tell which. So there
+is one rule here, and it holds everywhere:
+
+> **A ratio is always `subject ÷ baseline` for a NAMED quantity, written `×`.**
+
+- `size ×0.16` — sixteen hundredths of the baseline's size.
+- `speed ×3.2` — three point two times the baseline's speed.
+
+Because the quantity is always named, `×` below 1 always means *less of that thing*
+and above 1 always means *more of it*. The direction never flips, and words like
+"faster" or "smaller" never appear as a bare multiplier. Whether more is good depends
+on the quantity, which is why the quantity is stated.
+
+**Percentages are only ever a share of an explicitly named whole** — "used 68% of the
+bitrate it was given" — never a comparison between two things.
+
+## Two different quality words: bpp and SSIM
+
+The app has always spoken in **bpp** — bits per pixel per frame. It is worth being
+exact about what that is, because a second measure now appears alongside it:
+
+- **bpp is what is ASKED FOR.** A tier *is* a bpp; the target bitrate is that density
+  multiplied out by the frame and the frame rate. It is a dial, set before encoding,
+  and it says nothing on its own about how the result looks.
+- **SSIM is what was GOT.** It compares the encoded frames against the source and
+  scores the fidelity, after the fact. It cannot be set, only measured.
+
+They are not interchangeable, and the interesting question — *what does a given bpp
+actually buy?* — needs both. Measured, it buys much less than the ladder suggests:
+
+| Alien, software AV1 | bpp | SSIM |
+|---|---|---|
+| OK | 0.030 | 0.9813 |
+| EXCELLENT | 0.052 | 0.9819 |
+| INSANE | 0.078 | 0.9822 |
+
+bpp ×2.6 from OK to INSANE, for 0.0009 of SSIM. See
+[encoder-comparison.md](encoder-comparison.md) for where that holds and where it does
+not, and for the point at which SSIM stops responding to bitrate altogether.
+
+**A tier does not mean the same thing on every path**, which matters when reading any
+of this. Measured share of the bitrate each path actually used, against what the tier
+gave it:
+
+| path | used |
+|---|---|
+| H.265 hardware | 95–101% — ABR aims at the target, so the tier *is* the bitrate |
+| H.265 software | 26–95% — capped CRF is satisfied first, so tiers can go inert |
+| AV1 software | ~68% consistently — VBR undershoots |
+
+On the software H.26x path the CRF, not the tier, is usually the binding constraint:
+Alien lands at the same 1.4 Mbps whether asked for OK or INSANE. That is the
+capped-CRF design working as intended — quality first, the target as a ceiling — but
+it does mean the tier ladder is close to inert there on already-lean sources.
+
 ## The core idea: a tier is a quality *density*, not a bitrate
 
 A bitrate on its own is meaningless without knowing what it pays for — 8 Mbps is
@@ -214,11 +272,18 @@ H.265 remains the suggested default.
 so on), the conservative end of SVT-AV1's published 20–40% advantage over x265. That
 number is only honest at a preset that earns it, so `AV1_PRESET` and those factors move
 together — encoding faster would quietly under-deliver the quality the tier promises.
-Preset 6 is the balance point. ⚠️ An earlier note here claimed it cost about the same
-as software H.265; that came from a synthetic clip and was wrong. On real 1080p
-television SVT-AV1 preset 6 runs at **1.6× realtime against libx265's 2.6×** — it is
-the slowest path the app offers, and on a Mac (no hardware AV1) it is roughly six times
-slower than the hardware H.265 most runs use today.
+Preset 6 is the balance point.
+
+⚠️ **AV1's speed ranking does not survive a change of resolution**, so any single
+sentence about "how fast AV1 is" is wrong somewhere. On 1080p television SVT-AV1
+preset 6 runs at 1.6× realtime against libx265's 2.6× — the slowest path the app
+offers. On **4K it is the other way round**: measured on the same 60s clip, AV1 took
+80s where libx265 took 255s (speed ×3.2 relative to libx265), produced a smaller file,
+and scored slightly higher SSIM. Software H.265 degrades far worse with frame size
+than AV1 does.
+
+On a Mac there is no hardware AV1 either way, so AV1 always means software — several
+times slower than the hardware H.265 most runs use today, whatever the resolution.
 
 **Rate control is VBR (`-b:v`), not the capped-CRF the H.26x paths use** — measured,
 not preferred. Against a 2400 kbps target on a 15s 1080p clip:
@@ -307,9 +372,13 @@ Real television, five-minute samples, the app's own arguments, × realtime:
 | Stath Lets Flats 1080p25 | 9.08 | 2.52 | 8.96 | — | 1.44 |
 | Clarkson's Farm 720p25 | 17.73 | 10.60 | 14.83 | 3.53 | — |
 
-**Do not re-derive these from `lavfi`.** Synthetic sources gave 7.27 vs 6.32 for H.264
-— a gap a third the real size — and made SVT-AV1 look faster than libx265 when it is
-in fact the slowest path here.
+**These are 1080p/720p television.** They do not carry to 4K — see the resolution
+table above, and [encoder-comparison.md](encoder-comparison.md) for the full 375-encode
+matrix across five kinds of content.
+
+**Do not re-derive these from `lavfi`.** Synthetic sources gave 7.27 against 6.32 for
+H.264 — a gap a third the real size — and made SVT-AV1 look faster than libx265 at a
+resolution where it is in fact slower.
 
 Quality per bit runs the other way, and it is worth knowing before choosing hardware
 for speed. At the same tier, software's capped CRF is frequently satisfied far below
@@ -335,11 +404,28 @@ counting forty is a bug nobody finds until 3am.
 (`pipeline.encode_work` = width × height × fps × duration). An encoder is a
 pixels-per-second machine, so:
 
-- a 4K file costs roughly four times a 1080p one of the same length;
 - a 60fps file costs twice a 30fps one;
+- a 4K file costs *at least* four times a 1080p one of the same length — four times
+  the pixels, and for software encoders **considerably worse than that** (below);
 - and a **frame-size cap makes the run genuinely faster** — capping a 4K library at
-  1080p quarters the work, and an estimate priced on the source frame would quote
-  four times the truth.
+  1080p removes at least three quarters of the work, and an estimate priced on the
+  source frame would quote several times the truth.
+
+⚠️ **The unit is not resolution-independent for software encoders.** Measured over
+375 encodes ([encoder comparison](encoder-comparison.md)), as a ratio of the 4K rate
+to the same encoder's 1080p rate — so `×1.00` would mean "scales perfectly":
+
+| path | rate at 4K, relative to its own 1080p rate |
+|---|---|
+| H.264 hardware | ×1.07 |
+| H.265 hardware | ×1.10 |
+| H.264 software | ×0.52 |
+| H.265 software | **×0.35** |
+
+Hardware amortises larger frames slightly *better*; software collapses, almost
+certainly memory bandwidth rather than arithmetic. So `encode_seconds()`
+under-predicts a software 4K run — by up to about three times — and a benchmark
+cannot sample cheap 1080p files and extrapolate to a 4K library.
 
 **The rate is measured on this machine.** Every run records what it actually achieved
 (`_observed_rate`, excluding remuxes — a stream copy is near-instant and would inflate

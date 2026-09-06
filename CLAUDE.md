@@ -75,10 +75,11 @@ one. Chrome proves it *looks* right — see [[ui-test-harness]] in the palace.
 redundancy, and motion a search resolves far too easily. They flatter and punish
 the two encoder paths differently, so a conclusion drawn from them can be simply
 backwards. Measured the same comparison both ways: on `testsrc2`, hardware H.264
-looked only 1.15× faster than `libx264`, which would have justified recommending
-software; on real episodes it is **3×**. Synthetic content also made SVT-AV1 look
-*faster* than libx265 (3.06× vs 2.86×) when on real footage it is the slowest path
-of the lot (1.6× vs 2.6×). Use `/Volumes/RAID/TV` (154 shows,
+came out at speed ×1.15 against `libx264`, which would have justified recommending
+software; on real episodes it is **speed ×3.0**. Synthetic content also mis-ranked SVT-AV1
+against libx265 — and note that even on real footage that ranking flips with
+resolution (AV1 is slower at 1080p, faster at 4K), so never state it without one.
+Use `/Volumes/RAID/TV` (154 shows,
 every resolution and bitrate) and take a few five-minute samples with `-c copy`.
 Synthetic clips are fine for *plumbing* tests — does the filter apply, does the
 argument reach ffmpeg — and for nothing that produces a number a user will see.

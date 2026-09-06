@@ -429,12 +429,25 @@ class PlanRow:
 
 
 def encode_work(width: int, height: int, fps: float, duration: float) -> float:
-    """Output pixel-frames — the unit encoding time is actually spent in.
+    """Output pixel-frames — a better unit for encoding time than seconds of video.
 
-    Not seconds of video: a 4K file takes roughly four times as long as a 1080p
-    one of the same length, and a 60fps file twice as long as a 30fps one. Counting
-    the pixels the encoder has to produce makes a rate measured on one library
-    usable on another, and makes a frame-size cap correctly predict a faster run.
+    Counting the pixels the encoder has to produce is what lets a frame-size cap
+    predict a faster run, and stops a 60fps file being priced like a 30fps one.
+
+    ⚠️ IT IS NOT RESOLUTION-INDEPENDENT FOR SOFTWARE ENCODERS, and the difference
+    is large. Measured across 375 encodes (docs/encoder-comparison.md), rate in
+    pixel-frames per second, 1080p against 4K:
+
+        H.264 hardware   speed x1.07 at 4K    fixed-function; bigger frames amortise
+        H.265 hardware   speed x1.10 at 4K
+        H.264 software   speed x0.52 at 4K
+        H.265 software   speed x0.35 at 4K    a third of its 1080p rate per pixel
+
+    So this under-predicts software 4K encoding, by up to about three times. The
+    estimate is still self-correcting in flight, and the stored rate is kept per
+    encoder path — but a rate learned on a 1080p library will quote a software 4K
+    run far too optimistically. Fixing that properly means keying the rate on
+    resolution class as well as path; until then, this is the known error.
     """
     if width <= 0 or height <= 0 or fps <= 0 or duration <= 0:
         return 0.0
