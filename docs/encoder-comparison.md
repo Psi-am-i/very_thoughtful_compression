@@ -180,7 +180,55 @@ bands in `quality-model.md` are anchored on **density** rather than on SSIM: acr
 the 4K controls the sources agree on density to within a percent, while their SSIM
 response to the same bitrate span differs by 15×.
 
-## 6. Per-clip rate–distortion curves
+## 6. What the metrics could not see
+
+Everything above rests on SSIM, and blind viewing showed SSIM is not adequate for
+this job. The test: a 2×2 montage, each quadrant a 960×540 crop at 1:1 from a
+different version of the same clip, tiled without scaling and encoded losslessly so
+the comparison adds no artefacts of its own. Placement randomised, key withheld
+until after viewing.
+
+Two films, four quadrants each — **source, OK, EXCELLENT and INSANE, all eight
+ranked correctly by eye**, on a monitor, first attempt. By chance that is 1 in 576.
+
+The films were chosen as the easy case and the hard case:
+
+| | SSIM span | VMAF span | ranked by eye |
+|---|---|---|---|
+| Downfall (responsive) | 0.00869 | 3.69 | 4/4 correct |
+| HailMary ("mute") | **0.00104** | **1.85** | **4/4 correct** |
+
+HailMary is the finding. Its H.265 ladder runs 887 → 6,230 kbps — a 7× bitrate
+range — and SSIM moves 0.001 across it. On that evidence this document previously
+called the source "SSIM-mute" and concluded the tiers were indistinguishable on it.
+A viewer separated all four immediately, including picking the source out from a
+6,230 kbps encode.
+
+So a flat SSIM curve means **the metric is blind, not that the encodes are
+equivalent**. Three consequences:
+
+- **SSIM cannot certify equivalence.** It can only fail to distinguish. Any
+  conclusion of the form "these are the same" that rests on a small SSIM delta is
+  unsupported, including the earlier finding that 2-pass buys no quality over
+  capped-CRF.
+- **VMAF is better but still understates.** It saw HailMary's ladder where SSIM did
+  not, but scored the span at 1.85 points — below the ~6-point rule of thumb for a
+  just-noticeable difference, on a ladder a viewer ranked perfectly. That rule is
+  calibrated for sequential viewing; side-by-side at 1:1 is far more sensitive.
+- **Matched-SSIM interpolation is invalid on flat curves.** Codec comparisons drawn
+  that way — including the AV1 figures in section 1 — are being redone by blind
+  comparison instead.
+
+What survives untouched is anything measured in *bitrate* rather than fidelity: the
+delivered-density tables, the convergence checks, and the elimination of single-pass
+ABR (which breached the convergence gate on 10 of 16 cases at 118% of target against
+2-pass's 101%).
+
+**The practical rule for this project: bitrate questions are settled by measurement,
+fidelity questions by looking.** A metric is a scalable proxy for triage, not an
+arbiter.
+
+## 7. Per-clip rate–distortion curves
 
 `images/rdclip-<source>-<length>s.svg` plots delivered density against measured
 SSIM for every encode, one panel per clip. The dashed vertical rule on each panel

@@ -73,10 +73,32 @@ and as a ceiling via `-maxrate`. Two regimes follow, and both are intended:
 - **Ordinary sources are CRF-bound** — the band is satisfied below the target, so the
   file lands *under* nominal density and is never padded to reach it.
 
-So a tier is best read as **"up to this density, at this quality"**. On easy content the
-density is aspirational and the quality is what you actually get; a file is never
-inflated to hit a number. What changed is that the *quality* now varies by tier — which
-is the part that was broken.
+## What a tier actually means
+
+Calling a tier "up to this density, at this quality" is circular, because this model
+defines quality *as* density. The definition needs two axes, and it has them — a tier
+sets two numbers that do two different jobs:
+
+- **A threshold** — the density above which a file is judged wasteful and worth
+  re-encoding at all. This decides *whether* anything happens.
+- **A quality** — the CRF band it is re-encoded *at*, if it crosses that threshold.
+
+So **INSANE does not mean "re-encode everything to maximum quality"**. It means "only
+touch files fatter than this generous budget, and when you do, encode them well". The
+threshold is a property of the source; the quality is a property of the encode. Neither
+is defined in terms of the other.
+
+The observable consequence is counterintuitive and worth stating plainly: **a higher
+tier touches FEWER files.** A 720p race at 3.64 Mbps is re-encoded at OK, and left
+alone at EXCELLENT — a higher tier sets a more generous budget the source no longer
+exceeds. Picking INSANE does less work than picking OK, not more.
+
+Two regimes follow from the quality half, and both are intended:
+
+- **Dense or hard sources are ceiling-bound** — CRF's natural rate exceeds the target,
+  `-maxrate` holds it, and the file lands at ~100% of the tier density.
+- **Ordinary sources are CRF-bound** — the band is satisfied below the target, so the
+  file lands *under* nominal density and is never padded to reach it.
 
 ## The core idea: a tier is a quality *density*, not a bitrate
 
