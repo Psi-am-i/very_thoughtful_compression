@@ -180,6 +180,10 @@ bands in `quality-model.md` are anchored on **density** rather than on SSIM: acr
 the 4K controls the sources agree on density to within a percent, while their SSIM
 response to the same bitrate span differs by 15×.
 
+> **See also `measuring-quality.md`** — the full account of what fooled us:
+> metric muteness, SVT-AV1 defaulting to `tune=PSNR`, the source-density
+> ceiling, and how to build a comparison that can be trusted.
+
 ## 6. What the metrics could not see
 
 Everything above rests on SSIM, and blind viewing showed SSIM is not adequate for
