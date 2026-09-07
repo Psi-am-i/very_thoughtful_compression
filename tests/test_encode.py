@@ -86,6 +86,25 @@ def test_build_video_args_h264_software():
     print("  ok  build_video_args SHRINK h264 software")
 
 
+def test_av1_tunes_for_subjective_quality():
+    """SVT-AV1 defaults to tune=PSNR — the metric that was judging it.
+
+    Regression guard for the subtlest defect this project has hit: AV1 output
+    scored well on SSIM while losing every blind side-by-side, because the encoder
+    was optimising for the same metric used to evaluate it. x264/x265 enable
+    psychovisual optimisation by default; SVT-AV1 does not, so default settings do
+    not give a like-for-like comparison. Measured blind on real footage, tune=0
+    ranked above tune=PSNR while using 8% fewer bits.
+    """
+    cfg = _cfg(out_codec=OutCodec.AV1, encoder=Encoder.SOFTWARE)
+    info = MediaInfo(path=Path("x.mp4"), ok=True, vcodec="h264", pix_fmt="yuv420p")
+    args = build_video_args(cfg, info, Mode.SHRINK, 2400, hw_encoder=None)
+    assert "libsvtav1" in args
+    assert "-svtav1-params" in args
+    assert "tune=0" in args[args.index("-svtav1-params") + 1]
+    print("  ok  av1 asks for tune=0 (subjective), not the PSNR default")
+
+
 def test_crf_bands_form_a_monotonic_ladder():
     """The tier must reach the software encoder as CRF, not only as -maxrate.
 

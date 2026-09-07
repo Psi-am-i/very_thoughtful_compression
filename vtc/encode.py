@@ -360,9 +360,22 @@ def build_video_args(
         # every file looking over-target forever and re-encode it on every run —
         # the exact bug the x265 ceiling was tightened to fix. VBR lands inside the
         # gate, so a second run correctly leaves the file alone.
+        # tune=0 (subjective) — SVT-AV1 v4.1.0 DEFAULTS TO tune=PSNR, which is why
+        # our AV1 output scored well on SSIM while losing every blind side-by-side
+        # it was put in: the encoder was optimising for the same metric that was
+        # judging it. x264 and x265 enable psychovisual optimisation by default and
+        # SVT-AV1 does not, so a default-settings codec comparison is not like for
+        # like. Measured twice on real footage, blind: tune=0 ranked above
+        # tune=PSNR while using 8% FEWER bits.
+        #
+        # It narrows the gap but does not close it — at 1080p, matched bitrate,
+        # x265 medium still beat SVT-AV1 preset 4 clearly (see
+        # docs/measuring-quality.md). AV1 stays on offer because some workflows
+        # require the format, not because it wins here.
         pix = ["-pix_fmt", "yuv420p10le" if _is_10bit(info) else "yuv420p"]
         av1_preset = AV1_PRESET_HQ if mode == Mode.TRANSCODE else AV1_PRESET
         return [*scale, "-c:v", AV1_SOFTWARE, "-b:v", f"{target_kbps}k",
+                "-svtav1-params", "tune=0",
                 "-preset", str(av1_preset), *pix]
 
     if config.out_codec == OutCodec.H264:
