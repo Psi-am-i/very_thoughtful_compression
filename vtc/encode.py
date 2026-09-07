@@ -372,7 +372,18 @@ def build_video_args(
         # x265 medium still beat SVT-AV1 preset 4 clearly (see
         # docs/measuring-quality.md). AV1 stays on offer because some workflows
         # require the format, not because it wins here.
-        pix = ["-pix_fmt", "yuv420p10le" if _is_10bit(info) else "yuv420p"]
+        # ALWAYS 10-bit, even from an 8-bit source. This is not a passthrough of the
+        # source's depth like the H.26x paths: SVT-AV1 works internally at higher
+        # precision, so 10-bit avoids quantisation rounding and bands far less, and
+        # the documented result is a SMALLER file at the same perceptual quality.
+        # Measured here at effectively identical bitrate (1303 vs 1311 kbps, same
+        # CRF) and noticeably better by eye on real footage.
+        #
+        # It costs nothing in compatibility: 10-bit is part of AV1's Main profile,
+        # so every AV1 decoder handles it. That is NOT true of the H.26x paths —
+        # H.264 10-bit is Hi10P, which essentially no consumer hardware decodes,
+        # which is why they still mirror the source.
+        pix = ["-pix_fmt", "yuv420p10le"]
         av1_preset = AV1_PRESET_HQ if mode == Mode.TRANSCODE else AV1_PRESET
         return [*scale, "-c:v", AV1_SOFTWARE, "-b:v", f"{target_kbps}k",
                 "-svtav1-params", "tune=0",

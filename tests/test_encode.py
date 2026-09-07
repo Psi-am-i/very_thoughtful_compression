@@ -86,6 +86,28 @@ def test_build_video_args_h264_software():
     print("  ok  build_video_args SHRINK h264 software")
 
 
+def test_av1_always_encodes_10bit():
+    """AV1 goes 10-bit even from an 8-bit source — deliberately unlike H.26x.
+
+    SVT-AV1 works internally at higher precision, so 10-bit bands less and is
+    smaller at the same perceptual quality. Measured at effectively identical
+    bitrate (1303 vs 1311 kbps, same CRF) and clearly better by eye.
+
+    Compatibility is free here because 10-bit is part of AV1's Main profile. The
+    H.26x paths must NOT copy this: H.264 10-bit is Hi10P, which consumer hardware
+    does not decode.
+    """
+    info8 = MediaInfo(path=Path("x.mp4"), ok=True, vcodec="h264", pix_fmt="yuv420p")
+    cfg = _cfg(out_codec=OutCodec.AV1, encoder=Encoder.SOFTWARE)
+    args = build_video_args(cfg, info8, Mode.SHRINK, 2400, hw_encoder=None)
+    assert args[args.index("-pix_fmt") + 1] == "yuv420p10le"
+    # and H.264 must still mirror the 8-bit source, for hardware decode
+    cfg264 = _cfg(out_codec=OutCodec.H264, encoder=Encoder.SOFTWARE)
+    a264 = build_video_args(cfg264, info8, Mode.SHRINK, 2400, hw_encoder=None)
+    assert a264[a264.index("-pix_fmt") + 1] == "yuv420p"
+    print("  ok  av1 is always 10-bit; h264 stays 8-bit for compatibility")
+
+
 def test_av1_tunes_for_subjective_quality():
     """SVT-AV1 defaults to tune=PSNR — the metric that was judging it.
 
