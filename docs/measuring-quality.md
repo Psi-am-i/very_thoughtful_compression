@@ -134,6 +134,21 @@ no-seek is the only trustworthy form.
   MP4: a 69-second clip carrying 22 chapters reported a 95-minute duration and played
   as an hour of black. Use `-map 0:v:0 -map_chapters -1 -dn`.
 
+### Record the exact parameter string, not the label
+
+A configuration called *shadowTools* won a blind panel and is now **unreproducible**.
+It beat AV1-as-shipped on 4.5% fewer bits; six hours later the script that built it had
+been cleared from `/tmp`, and the file itself carries only `Lavc62.28.102 libsvtav1` in
+its metadata. We know which two flags it used and not their strengths — and
+`--variance-boost-strength` is 1–4, `--variance-boost-curve` 0–2, `--luminance-qp-bias`
+0–100, so "the two flags" names some hundreds of configurations.
+
+**Write the full encoder argument list into the KEY file beside the bitrates.** A panel
+is a measurement, and a measurement whose settings are not recorded is an anecdote. The
+recovery here was to drop the un-pinned flag entirely and re-fit against variance boost
+at its documented defaults, which is reproducible — at the cost of throwing away a
+result that had already won.
+
 ### An accidental control worth repeating deliberately
 
 A script bug once put the **same file in two quadrants**. They were ranked 3rd and
@@ -271,6 +286,13 @@ A 720p race at 3.64 Mbps is SHRINK at OK and REMUX at EXCELLENT — verified thr
   ranked *below* H.264 by eye. If that holds, the model's central premise — hand the
   efficient codec fewer bits — is overstated at 1080p. Needs H.264 vs H.265 at matched
   bitrate.
+- **Every AV1-vs-H.265 panel so far contradicts `AV1_FACTOR_HD = 0.45`.** At the same
+  tier the model hands H.265 **33% more bits** than AV1 (0.60 against 0.45), on the
+  premise that AV1 needs fewer to match it. In the panels H.265 has won while using
+  *fewer actual bits* — 1450 kbps against AV1-psy's 1496, so 3% fewer, not a third
+  more. The factors are still not being touched, because every one of those panels
+  predates a fix to the AV1 path; but this is the specific observation that would
+  change them, and the test is a matched-bitrate blind comparison at 1080p.
 - **Every AV1 conclusion predates the `tune` discovery** and must be re-tested with
   `tune=0` before being acted on.
 - **The AV1 efficiency factors have still not been re-measured.** `AV1_FACTOR_HD =
