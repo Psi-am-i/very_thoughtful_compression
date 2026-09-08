@@ -1,6 +1,5 @@
 **MemPalace wing:** `very_thoughtful_compression` — file every diary entry, drawer and KG fact for this project here.
-**Agent identity:** `atlas-claude` on Atlas, `scout-claude` on Scout (`hostname -s`). Never write as plain `claude-code`.
-**Before answering about past decisions or prior sessions here, search first** (`mempalace_search(query="…", wing="sessions")`) and quote what you find.
+**Global policy — agent identity, MemPalace, machines, secrets — lives in `~/CLAUDE.md` (rules 1-5)** and `~/projects/SECRETS.md`. Do not restate it here.
 
 ---
 

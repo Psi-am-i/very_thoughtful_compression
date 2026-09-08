@@ -1,66 +1,68 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 530 350" width="100%" height="auto" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="11">
-<style>.ax{stroke:currentColor;opacity:.28}.gr{stroke:currentColor;opacity:.10}.tx{fill:currentColor}.mu{fill:currentColor;opacity:.62}.sr{stroke:currentColor;opacity:.45;stroke-dasharray:4 3}</style>
-<line class="gr" x1="56" y1="300.0" x2="514" y2="300.0"/>
-<text class="mu" x="49" y="303.5" text-anchor="end">0.951</text>
-<line class="gr" x1="56" y1="235.0" x2="514" y2="235.0"/>
-<text class="mu" x="49" y="238.5" text-anchor="end">0.958</text>
-<line class="gr" x1="56" y1="170.0" x2="514" y2="170.0"/>
-<text class="mu" x="49" y="173.5" text-anchor="end">0.965</text>
-<line class="gr" x1="56" y1="105.0" x2="514" y2="105.0"/>
-<text class="mu" x="49" y="108.5" text-anchor="end">0.971</text>
-<line class="gr" x1="56" y1="40.0" x2="514" y2="40.0"/>
-<text class="mu" x="49" y="43.5" text-anchor="end">0.978</text>
-<text class="mu" x="56.0" y="316" text-anchor="middle">0.030</text>
-<text class="mu" x="170.5" y="316" text-anchor="middle">0.090</text>
-<text class="mu" x="285.0" y="316" text-anchor="middle">0.149</text>
-<text class="mu" x="399.5" y="316" text-anchor="middle">0.208</text>
-<text class="mu" x="514.0" y="316" text-anchor="middle">0.268</text>
-<line class="ax" x1="56" y1="300" x2="514" y2="300"/>
-<line class="ax" x1="56" y1="30" x2="56" y2="300"/>
-<line class="sr" x1="466.1" y1="30" x2="466.1" y2="300"/>
-<text class="mu" x="470.1" y="42">source 0.243</text>
-<text class="tx" x="56" y="15" font-weight="600">TimeLapse — 60s clip</text>
-<text class="mu" x="56" y="27">3840x2160 @29.97  ·  source h264 60334 kbps</text>
-<text class="mu" x="293" y="342" text-anchor="middle">delivered bits per pixel per frame</text>
+<style>.ax{stroke:currentColor;opacity:.28}.gr{stroke:currentColor;opacity:.10}.vg{stroke:currentColor;opacity:.07}.tx{fill:currentColor}.mu{fill:currentColor;opacity:.62}</style>
+<line class="gr" x1="58" y1="298.0" x2="514" y2="298.0"/>
+<text class="mu" x="51" y="301.5" text-anchor="end">0.951</text>
+<line class="gr" x1="58" y1="235.0" x2="514" y2="235.0"/>
+<text class="mu" x="51" y="238.5" text-anchor="end">0.958</text>
+<line class="gr" x1="58" y1="172.0" x2="514" y2="172.0"/>
+<text class="mu" x="51" y="175.5" text-anchor="end">0.965</text>
+<line class="gr" x1="58" y1="109.0" x2="514" y2="109.0"/>
+<text class="mu" x="51" y="112.5" text-anchor="end">0.971</text>
+<line class="gr" x1="58" y1="46.0" x2="514" y2="46.0"/>
+<text class="mu" x="51" y="49.5" text-anchor="end">0.978</text>
+<line class="vg" x1="72.0" y1="34" x2="72.0" y2="298"/>
+<text class="mu" x="72.0" y="314" text-anchor="middle">OK</text>
+<line class="vg" x1="179.5" y1="34" x2="179.5" y2="298"/>
+<text class="mu" x="179.5" y="314" text-anchor="middle">Good</text>
+<line class="vg" x1="287.0" y1="34" x2="287.0" y2="298"/>
+<text class="mu" x="287.0" y="314" text-anchor="middle">Excellent</text>
+<line class="vg" x1="394.5" y1="34" x2="394.5" y2="298"/>
+<text class="mu" x="394.5" y="314" text-anchor="middle">Stellar</text>
+<line class="vg" x1="502.0" y1="34" x2="502.0" y2="298"/>
+<text class="mu" x="502.0" y="314" text-anchor="middle">Insane</text>
+<line class="ax" x1="58" y1="298" x2="514" y2="298"/>
+<line class="ax" x1="58" y1="34" x2="58" y2="298"/>
+<text class="tx" x="58" y="15" font-weight="600">TimeLapse — 60s clip</text>
+<text class="mu" x="58" y="27">3840x2160 @29.97 · source h264 60334 kbps = 0.2427 bpp</text>
 <text class="mu" transform="translate(13,175) rotate(-90)" text-anchor="middle">SSIM</text>
-<path d="M186.0,201.5 L249.8,156.0 L328.2,117.5 L406.4,88.0 L484.8,70.0" fill="none" stroke="var(--rd-h264-hardware, #3b82f6)" stroke-width="1.8" stroke-linejoin="round"/>
-<circle cx="186.0" cy="201.5" r="2.5" fill="var(--rd-h264-hardware, #3b82f6)"/>
-<circle cx="249.8" cy="156.0" r="2.5" fill="var(--rd-h264-hardware, #3b82f6)"/>
-<circle cx="328.2" cy="117.5" r="2.5" fill="var(--rd-h264-hardware, #3b82f6)"/>
-<circle cx="406.4" cy="88.0" r="2.5" fill="var(--rd-h264-hardware, #3b82f6)"/>
-<circle cx="484.8" cy="70.0" r="2.5" fill="var(--rd-h264-hardware, #3b82f6)"/>
-<path d="M184.4,174.1 L246.3,134.3 L283.6,111.9 L288.0,109.5 L294.0,106.1" fill="none" stroke="var(--rd-h264-software, #1d4ed8)" stroke-width="1.8" stroke-linejoin="round"/>
-<circle cx="184.4" cy="174.1" r="2.5" fill="var(--rd-h264-software, #1d4ed8)"/>
-<circle cx="246.3" cy="134.3" r="2.5" fill="var(--rd-h264-software, #1d4ed8)"/>
-<circle cx="283.6" cy="111.9" r="2.5" fill="var(--rd-h264-software, #1d4ed8)"/>
-<circle cx="288.0" cy="109.5" r="2.5" fill="var(--rd-h264-software, #1d4ed8)"/>
-<circle cx="294.0" cy="106.1" r="2.5" fill="var(--rd-h264-software, #1d4ed8)"/>
-<path d="M90.5,270.0 L121.4,227.9 L159.9,193.7 L198.8,167.7 L237.7,146.1" fill="none" stroke="var(--rd-h265-hardware, #f97316)" stroke-width="1.8" stroke-linejoin="round"/>
-<circle cx="90.5" cy="270.0" r="2.5" fill="var(--rd-h265-hardware, #f97316)"/>
-<circle cx="121.4" cy="227.9" r="2.5" fill="var(--rd-h265-hardware, #f97316)"/>
-<circle cx="159.9" cy="193.7" r="2.5" fill="var(--rd-h265-hardware, #f97316)"/>
-<circle cx="198.8" cy="167.7" r="2.5" fill="var(--rd-h265-hardware, #f97316)"/>
-<circle cx="237.7" cy="146.1" r="2.5" fill="var(--rd-h265-hardware, #f97316)"/>
-<path d="M90.7,220.1 L121.8,195.2 L160.6,169.7 L190.3,153.3 L197.5,148.5" fill="none" stroke="var(--rd-h265-software, #c2410c)" stroke-width="1.8" stroke-linejoin="round"/>
-<circle cx="90.7" cy="220.1" r="2.5" fill="var(--rd-h265-software, #c2410c)"/>
-<circle cx="121.8" cy="195.2" r="2.5" fill="var(--rd-h265-software, #c2410c)"/>
-<circle cx="160.6" cy="169.7" r="2.5" fill="var(--rd-h265-software, #c2410c)"/>
-<circle cx="190.3" cy="153.3" r="2.5" fill="var(--rd-h265-software, #c2410c)"/>
-<circle cx="197.5" cy="148.5" r="2.5" fill="var(--rd-h265-software, #c2410c)"/>
-<path d="M64.0,209.3 L88.6,188.5 L119.6,169.1 L151.7,153.5 L180.3,141.9" fill="none" stroke="var(--rd-av1-software, #16a34a)" stroke-width="1.8" stroke-linejoin="round"/>
-<circle cx="64.0" cy="209.3" r="2.5" fill="var(--rd-av1-software, #16a34a)"/>
-<circle cx="88.6" cy="188.5" r="2.5" fill="var(--rd-av1-software, #16a34a)"/>
-<circle cx="119.6" cy="169.1" r="2.5" fill="var(--rd-av1-software, #16a34a)"/>
-<circle cx="151.7" cy="153.5" r="2.5" fill="var(--rd-av1-software, #16a34a)"/>
-<circle cx="180.3" cy="141.9" r="2.5" fill="var(--rd-av1-software, #16a34a)"/>
-<line x1="412" y1="30" x2="426" y2="30" stroke="var(--rd-av1-software, #16a34a)" stroke-width="2.4"/>
-<text class="tx" x="431" y="33.5">AV1 so</text>
-<line x1="412" y1="44" x2="426" y2="44" stroke="var(--rd-h264-hardware, #3b82f6)" stroke-width="2.4"/>
-<text class="tx" x="431" y="47.5">H.264 ha</text>
-<line x1="412" y1="58" x2="426" y2="58" stroke="var(--rd-h264-software, #1d4ed8)" stroke-width="2.4"/>
-<text class="tx" x="431" y="61.5">H.264 so</text>
-<line x1="412" y1="72" x2="426" y2="72" stroke="var(--rd-h265-hardware, #f97316)" stroke-width="2.4"/>
-<text class="tx" x="431" y="75.5">H.265 ha</text>
-<line x1="412" y1="86" x2="426" y2="86" stroke="var(--rd-h265-software, #c2410c)" stroke-width="2.4"/>
-<text class="tx" x="431" y="89.5">H.265 so</text>
+<path d="M72.0,202.1 L179.5,158.7 L287.0,121.9 L394.5,93.7 L502.0,76.5" fill="none" stroke="var(--rd-h264-hardware, #3b82f6)" stroke-width="1.8" stroke-linejoin="round"/>
+<circle cx="72.0" cy="202.1" r="2.9" fill="var(--rd-h264-hardware, #3b82f6)"/>
+<circle cx="179.5" cy="158.7" r="2.9" fill="var(--rd-h264-hardware, #3b82f6)"/>
+<circle cx="287.0" cy="121.9" r="2.9" fill="var(--rd-h264-hardware, #3b82f6)"/>
+<circle cx="394.5" cy="93.7" r="2.9" fill="var(--rd-h264-hardware, #3b82f6)"/>
+<circle cx="502.0" cy="76.5" r="2.6" fill="none" stroke="var(--rd-h264-hardware, #3b82f6)" stroke-width="1.4"/>
+<path d="M72.0,175.9 L179.5,137.9 L287.0,116.6 L394.5,114.2 L502.0,111.0" fill="none" stroke="var(--rd-h264-software, #1d4ed8)" stroke-width="1.8" stroke-linejoin="round"/>
+<circle cx="72.0" cy="175.9" r="2.9" fill="var(--rd-h264-software, #1d4ed8)"/>
+<circle cx="179.5" cy="137.9" r="2.9" fill="var(--rd-h264-software, #1d4ed8)"/>
+<circle cx="287.0" cy="116.6" r="2.9" fill="var(--rd-h264-software, #1d4ed8)"/>
+<circle cx="394.5" cy="114.2" r="2.9" fill="var(--rd-h264-software, #1d4ed8)"/>
+<circle cx="502.0" cy="111.0" r="2.6" fill="none" stroke="var(--rd-h264-software, #1d4ed8)" stroke-width="1.4"/>
+<path d="M72.0,267.5 L179.5,227.2 L287.0,194.6 L394.5,169.8 L502.0,149.2" fill="none" stroke="var(--rd-h265-hardware, #f97316)" stroke-width="1.8" stroke-linejoin="round"/>
+<circle cx="72.0" cy="267.5" r="2.9" fill="var(--rd-h265-hardware, #f97316)"/>
+<circle cx="179.5" cy="227.2" r="2.9" fill="var(--rd-h265-hardware, #f97316)"/>
+<circle cx="287.0" cy="194.6" r="2.9" fill="var(--rd-h265-hardware, #f97316)"/>
+<circle cx="394.5" cy="169.8" r="2.9" fill="var(--rd-h265-hardware, #f97316)"/>
+<circle cx="502.0" cy="149.2" r="2.9" fill="var(--rd-h265-hardware, #f97316)"/>
+<path d="M72.0,219.8 L179.5,196.1 L287.0,171.7 L394.5,156.0 L502.0,151.5" fill="none" stroke="var(--rd-h265-software, #c2410c)" stroke-width="1.8" stroke-linejoin="round"/>
+<circle cx="72.0" cy="219.8" r="2.9" fill="var(--rd-h265-software, #c2410c)"/>
+<circle cx="179.5" cy="196.1" r="2.9" fill="var(--rd-h265-software, #c2410c)"/>
+<circle cx="287.0" cy="171.7" r="2.9" fill="var(--rd-h265-software, #c2410c)"/>
+<circle cx="394.5" cy="156.0" r="2.9" fill="var(--rd-h265-software, #c2410c)"/>
+<circle cx="502.0" cy="151.5" r="2.9" fill="var(--rd-h265-software, #c2410c)"/>
+<path d="M72.0,209.5 L179.5,189.7 L287.0,171.2 L394.5,156.2 L502.0,145.1" fill="none" stroke="var(--rd-av1-software, #16a34a)" stroke-width="1.8" stroke-linejoin="round"/>
+<circle cx="72.0" cy="209.5" r="2.9" fill="var(--rd-av1-software, #16a34a)"/>
+<circle cx="179.5" cy="189.7" r="2.9" fill="var(--rd-av1-software, #16a34a)"/>
+<circle cx="287.0" cy="171.2" r="2.9" fill="var(--rd-av1-software, #16a34a)"/>
+<circle cx="394.5" cy="156.2" r="2.9" fill="var(--rd-av1-software, #16a34a)"/>
+<circle cx="502.0" cy="145.1" r="2.9" fill="var(--rd-av1-software, #16a34a)"/>
+<line x1="418" y1="34" x2="432" y2="34" stroke="var(--rd-av1-software, #16a34a)" stroke-width="2.4"/>
+<text class="tx" x="437" y="37.5">AV1 so</text>
+<line x1="418" y1="48" x2="432" y2="48" stroke="var(--rd-h264-hardware, #3b82f6)" stroke-width="2.4"/>
+<text class="tx" x="437" y="51.5">H.264 ha</text>
+<line x1="418" y1="62" x2="432" y2="62" stroke="var(--rd-h264-software, #1d4ed8)" stroke-width="2.4"/>
+<text class="tx" x="437" y="65.5">H.264 so</text>
+<line x1="418" y1="76" x2="432" y2="76" stroke="var(--rd-h265-hardware, #f97316)" stroke-width="2.4"/>
+<text class="tx" x="437" y="79.5">H.265 ha</text>
+<line x1="418" y1="90" x2="432" y2="90" stroke="var(--rd-h265-software, #c2410c)" stroke-width="2.4"/>
+<text class="tx" x="437" y="93.5">H.265 so</text>
 </svg>
