@@ -155,6 +155,29 @@ def _is_10bit(info: MediaInfo) -> bool:
     return bool(re.search(r"10(le|be)?$", pix) or "10" in pix)
 
 
+# H.265 MIRRORS THE SOURCE'S BIT DEPTH, and deliberately does NOT follow the AV1
+# path to unconditional 10-bit. This is the obvious next change to make after
+# reading the AV1 10-bit note below, so here is why it was declined.
+#
+# Tested directly, blind, on Downfall 1080p: 8-bit and 10-bit both at CRF 24,
+# bitrates matched by bisection, tiled 1:1 against the source and an AV1 encode.
+# 10-bit ranked just BELOW 8-bit and the two were called close — while using 6.9%
+# FEWER bits (1353 vs 1446 kbps).
+#
+# Read that carefully: it is CONSISTENT with the documented ~5-7% Main10 gain, not
+# a refutation of it. The gain appears to be real and simply too small to see at
+# 1080p. That is what settles it, because the cost is not zero — Main10 is a
+# different profile from Main, and a narrow band of 2014-15 devices decode HEVC
+# Main but not Main10. An invisible gain does not buy that.
+#
+# The asymmetry with AV1 is therefore about COMPATIBILITY, not quality: 10-bit is
+# inside AV1's Main profile so every AV1 decoder takes it, and there is no such
+# thing as an 8-bit-only AV1 device to protect. Decided 2026-09-08.
+#
+# What would reopen this: a playback-target setting (once the user can say "modern
+# devices only", the compatibility cost goes to zero and the ~5-7% is free), or an
+# EXACTLY bitrate-matched test showing a gain visible at 4K, where more of the
+# picture is smooth gradient and banding has room to appear.
 def _hevc_profile(info: MediaInfo) -> str:
     """main10 for a 10-bit source, else main (mirrors the pix_fmt case in bash)."""
     return "main10" if _is_10bit(info) else "main"
