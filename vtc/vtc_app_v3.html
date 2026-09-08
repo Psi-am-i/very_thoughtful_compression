@@ -1664,8 +1664,8 @@ body{
 .big-srcinfo{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8b857a;letter-spacing:.03em}
 /* The AV1 caveat under the preview codec control. The panels are the one place
    in the app that can actively mislead about AV1 — they are H.265 samples, and
-   five seconds is exactly where SVT-AV1 overshoots — so the note sits with them
-   rather than in a sheet nobody has open by then. Amber rule, no scare styling. */
+   AV1's size relative to them swings with the footage — so the note sits with
+   them rather than in a sheet nobody has open by then. Amber rule, no scare. */
 .pv-av1{font-size:11.5px;line-height:1.5;color:var(--ink-3);margin:0;
   padding:1px 0 1px 9px;border-left:2px solid var(--warn-line)}
 .pv-av1[hidden]{display:none}
@@ -2132,7 +2132,7 @@ body{
               </span>
             </div>
             <!-- Only present when the RUN's codec is AV1 (renderPreviewCodecNote). -->
-            <p class="pv-av1" id="pv-av1" hidden="">These panels are <b>H.265</b> five-second samples whatever the run is set to — AV1 is not sampled. An AV1 run lands roughly <b>25% under</b> the sizes shown; and on a clip this short SVT-AV1 overshoots its own target (1.19× at 6s, 1.01× by a minute), so a sampled AV1 panel would read <b>bigger</b> than the codec really is. Judge the tiers here on how they look.</p>
+            <p class="pv-av1" id="pv-av1" hidden="">These panels are <b>H.265</b> five-second samples whatever the run is set to — AV1 is not sampled. Measured across eight sources, an AV1 run lands anywhere from <b>30% under</b> these sizes to slightly <b>over</b> them depending on the footage, so the panels will not tell you what AV1 costs. Judge the tiers here on how they look.</p>
             <!-- The two pulldowns and the button that acts on them are one group:
                  pick two encodes, then compare them full screen. "All tiers" and
                  "Refresh" are separate — they don't depend on the chosen pair. -->
@@ -3845,12 +3845,12 @@ function syncEncoderQuestion(){
     if(M[step] && M[step].id==='encoder' && armed===0) armed = 1;   // otherwise lie
   }
   // …and the software option names the encoder it will actually run. AV1 is not
-  // capped CRF: SVT-AV1 rejects the H.26x rate control, so the tier target IS
-  // the bitrate there (docs/quality-model.md, "AV1").
+  // capped CRF at a measured band, like the H.26x paths — SVT-AV1 does take it,
+  // once --mbr-overshoot-pct is set (docs/quality-model.md, "AV1").
   if(ci===2){
     SW.tag  = 'SVT-AV1';
     SW.name = 'Software (SVT-AV1)';
-    SW.t    = 'SVT-AV1 at preset 6, aimed straight at the tier bitrate (VBR). The capped CRF the H.26x paths use is not an option here — measured against a 2400 kbps target it overshot by 2.8× — so for AV1 the tier target IS the bitrate, which is exactly why the bpp calibration matters. Preset 6 measured 2.72× realtime against libx265 medium\'s 2.89×: near enough the same cost as software H.265, and the preset that earns the 25% the targets assume.';
+    SW.t    = 'SVT-AV1 at preset 6, capped CRF at the tier\'s measured band — the same shape the H.26x paths use, so the tier sets quality first and the bitrate is a ceiling on peaks. AV1 needs its own band: it takes 8.6 CRF to double its bitrate against about 5.2 on x265, so the numbers do not transfer. Preset 6 measured 2.72× realtime against libx265 medium\'s 2.89×: near enough the same cost as software H.265, and the preset that earns the 25% the targets assume.';
   } else {
     SW.tag = SW._tag; SW.name = SW._name; SW.t = SW._t;
   }
@@ -7638,11 +7638,16 @@ window.pvSetSampleName = pvSetSampleName;
 })();
 // The tier previews are five-second samples encoded in H.265 (H.264 on Windows,
 // where the webview has no HEVC decoder) whatever OUTPUT codec the run is set to
-// — the preview worker takes a codec of its own. Two things follow for AV1, and
-// both push the same way: the panels are not AV1, and SVT-AV1 overshoots its
-// target on a clip this short (1.19× at 6s, 1.01× by 60s — docs/quality-model.md),
-// so even a real AV1 panel would read bigger than the codec is. Someone comparing
-// panels would draw the exact opposite conclusion, so say it beside them.
+// — the preview worker takes a codec of its own. So the panels are not AV1, and
+// what an AV1 run costs relative to them is not one number: measured at the GOOD
+// tier on eight sources it ranged 0.71x to 1.07x of the H.265 encode, median
+// 0.83x. Someone sizing an AV1 run off these panels would be wrong in a direction
+// they cannot predict, so say it beside them.
+//
+// The old note here also warned that SVT-AV1 overshoots on a clip this short
+// (1.19x at 6s). That was a VBR start-up cost and it went with VBR: re-measured
+// under capped CRF, 5s/15s/30s land 0.44/0.44/0.38 on one source and
+// 0.93/0.91/0.92 on another — flat. Do not reinstate it.
 function renderPreviewCodecNote(){
   const el = document.getElementById('pv-av1');
   if(el) el.hidden = answers.codec !== 2;

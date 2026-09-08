@@ -38,7 +38,8 @@ setTimeout(()=>{
   ck('AV1: hardware is NOT offered', !!enc.opts[0].disabled, true);
   ck('...and says why, without reading as a fault', /no Mac has an AV1 encoder/.test(enc.sub), true);
   ck('...software names SVT-AV1', enc.opts[1].tag, 'SVT-AV1');
-  ck('...and describes VBR, not capped CRF', /VBR/.test(enc.opts[1].t), true);
+  ck('...and describes capped CRF, not VBR', /capped CRF/.test(enc.opts[1].t), true);
+  ck('...and does not still claim VBR', /VBR/.test(enc.opts[1].t), false);
   // a saved "hardware" answer cannot survive a codec with no hardware
   answers.encoder = 0; w.eval('syncForMachine()');
   ck('a stale Hardware answer is corrected', answers.encoder, 1);
