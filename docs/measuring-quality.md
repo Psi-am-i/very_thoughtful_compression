@@ -207,6 +207,25 @@ At one second AV1 looks dramatically less consistent. At four — three times it
 mini-GOP — the two are comparable and AV1 is the steadier of the pair on most sources.
 **The gap was mostly the hierarchy period, not the bitrate allocation.**
 
+**Locate the period, do not guess it.** Autocorrelating the raw frame-size series is
+free and finds it directly: AV1 peaks at **lag 32 (+0.75)** with harmonics at 16 and 48,
+while x265 peaks at lag 4–12 around **+0.26**. Measured independently by two sessions on
+the same files, to within 0.01.
+
+⚠️ **A window rule fixes the period and throws away the amplitude, which is the part
+that might actually be visible.** AV1's cycle is about **three times stronger** than
+x265's, and a 1.33-second cycle at +0.75 is a real quality pulse, not a bookkeeping
+artefact. A viewer described one unprompted — *"some frames are really much better than
+others… frame by frame becomes a moving target of better"* — before seeing any of these
+numbers. Autocorrelation amplitude is a better candidate for that observation than
+per-second CV was; it is still not proof of visibility.
+
+**And variance is not a quality proxy in either direction.** On one blind panel, within
+AV1 (same mini-GOP both sides, so no window artefact), the encode with the *higher* CV
+and the *lower* floor ranked *above* the steadier one. `--enable-variance-boost` works
+**by** increasing variance — spending on flat and shadow regions, saving where texture
+masks. Variance diagnoses a mechanism; it does not rank quality.
+
 Two things this does *not* say. It does not say a viewer was wrong: a 32-frame mini-GOP
 is a real ~1.3s quality cycle and may well be visible, which a bitrate statistic cannot
 settle either way. And it does not credit capped-CRF with fixing consistency — at a 1s

@@ -308,6 +308,15 @@ def _scale_args(config: RunConfig, info: MediaInfo) -> list[str]:
 # non-monotonic ladder (INSANE 14.2 sitting above STELLAR 15.0, on the four dense
 # sources that are the only ones live that high) — the failure this method exists
 # to avoid.
+# ⛔ THE AV1 COLUMN IS MEASURED WITH SVT-AV1'S PSYCHOVISUAL OPTIONS OFF, WHICH IS
+# WHAT WE SHIP. If any of them is ever turned on, THIS BAND IS WRONG AND MUST BE
+# RE-MEASURED — they do not merely change how the picture looks, they move the
+# CRF/rate relationship bodily. Measured at CRF 21 on three of the calibration
+# clips, --enable-variance-boost alone roughly DOUBLES the bitrate: Moscow 1094 ->
+# 2106, Red Dwarf 3679 -> 7956, Shadows 2631 -> 5197 kbps (1.9-2.2x). At AV1's
+# 8.58 CRF per doubling that is about nine CRF on every rung, so shipping the psy
+# options against these numbers would hand every tier roughly twice the bitrate it
+# asked for and break convergence everywhere.
 _SHRINK_BANDS = {                       # (libx264, libx265, libsvtav1)
     "OK":        (21, 24, 25),
     "GOOD":      (18, 21, 21),
