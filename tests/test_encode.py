@@ -136,7 +136,8 @@ def test_crf_bands_form_a_monotonic_ladder():
     promised density while hardware held ~100%.
     """
     info = MediaInfo(path=Path("x.mp4"), ok=True, vcodec="h264", pix_fmt="yuv420p")
-    for codec, enc_name in ((OutCodec.H264, "libx264"), (OutCodec.H265, "libx265")):
+    for codec, enc_name in ((OutCodec.H264, "libx264"), (OutCodec.H265, "libx265"),
+                            (OutCodec.AV1, "libsvtav1")):
         seen = []
         for tier in Tier:
             cfg = _cfg(out_codec=codec, encoder=Encoder.SOFTWARE, tier=tier)
@@ -155,7 +156,7 @@ def test_crf_band_transcode_offset():
     for tier in Tier:
         shrink = crf_for_tier(tier, Mode.SHRINK)
         transcode = crf_for_tier(tier, Mode.TRANSCODE)
-        assert transcode[0] < shrink[0] and transcode[1] < shrink[1]
+        assert all(t < s for t, s in zip(transcode, shrink)), (tier, shrink, transcode)
     print("  ok  transcode band sits below shrink for every tier")
 
 

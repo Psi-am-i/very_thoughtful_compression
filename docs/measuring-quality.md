@@ -149,8 +149,9 @@ fine distinctions are noise.
 These stand regardless of any fidelity metric, because they are counts of bits:
 
 ```
-SVT-AV1 VBR (-b:v)     64-84% of target, worse at slower presets
-SVT-AV1 CRF mode       97-99% of target
+SVT-AV1 VBR (-b:v)     69-86% of target, on every source at every tier
+SVT-AV1 capped CRF     20-132% of target at the encoder's default ceiling
+SVT-AV1 capped CRF     20- 97% with mbr-overshoot-pct=10  <- shipping
 libx264/5 1-pass ABR   93-141% of target, breached the 1.10 gate on 10 of 16 cases
 libx264/5 2-pass ABR   99-103% of target, breached on 0 of 16
 ```
@@ -159,6 +160,27 @@ Single-pass ABR is eliminated on that evidence alone: landing at 118% of target 
 a file still reads as over-target next run and is re-encoded forever. 2-pass earns its
 1.3×/1.8× cost by **converging**, not by looking better — its quality advantage
 measured +0.00021 SSIM, which post-§1 we should treat as unmeasured rather than zero.
+
+### A rate-control number can be true and still be the wrong conclusion
+
+AV1 sat on VBR for a whole release because capped CRF "measured 1.24× over target".
+The measurement was fine; what was missing was that **SVT-AV1's ceiling has a
+documented leak** — `--mbr-overshoot-pct` defaults to 50, so `-maxrate` permits half
+again as much. Setting it to 10 moved the worst of 40 real cases from 1.32× to 0.97×.
+Two lessons, and the second is the expensive one:
+
+- **Read the encoder's own `--help` before concluding the encoder cannot do
+  something.** Every fact needed here was one command away, and `-bufsize` — which we
+  had been passing all along — turns out to map to a CBR-only parameter and to have
+  been doing nothing at all.
+- **"It does not converge" is a claim about our arguments, not about the codec.** The
+  same sentence was true of libx264 before its VBV buffer was tightened. When a path
+  cannot hit a target, suspect the configuration before the format.
+
+And one number that simply did not reproduce: the recorded `-crf 32 alone → 6644 kbps,
+2.77× over` came back as **486 kbps** on real 1080p footage — 13× out. It had been
+carried in a code comment and a doc table as settled fact. Re-measure a number before
+building on it, especially one that is the sole evidence for a decision.
 
 ---
 
@@ -201,3 +223,9 @@ A 720p race at 3.64 Mbps is SHRINK at OK and REMUX at EXCELLENT — verified thr
   bitrate.
 - **Every AV1 conclusion predates the `tune` discovery** and must be re-tested with
   `tune=0` before being acted on.
+- **The AV1 efficiency factors have still not been re-measured.** `AV1_FACTOR_HD =
+  0.45` and its siblings were set when AV1 was misconfigured three ways — `tune=PSNR`,
+  8-bit, and VBR under-feeding it to ~78% of the budget it was given. All three are
+  now fixed, so AV1 is being handed the smallest budget of the three codecs *and*
+  finally spending it. Whether 0.45 is still right is an open question, and it is now
+  answerable: a matched-bitrate blind comparison against H.265 at 1080p.

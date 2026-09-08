@@ -178,6 +178,11 @@ AV1_SOFTWARE = "libsvtav1"
 # tier promises.
 AV1_PRESET, AV1_PRESET_HQ = 6, 4
 
+# How far past -maxrate SVT-AV1 is allowed to run in capped-CRF mode. Its own
+# default is 50 (see build_video_args) — chosen here to keep the worst measured
+# source inside the 1.10 convergence gate with room to spare.
+AV1_MBR_OVERSHOOT_PCT = 10
+
 
 def _hw_video_args(info: MediaInfo, enc: str, target_kbps: int) -> list[str]:
     """`-c:v` args for a specific hardware encoder, ABR-targeting the tier bitrate.
@@ -271,31 +276,48 @@ def _scale_args(config: RunConfig, info: MediaInfo) -> list[str]:
 # target and ordinary sources are CRF-bound below it — which is the intended
 # "never pad a file that doesn't need it". Both outcomes stay inside
 # TIER_OVER_TOLERANCE, so re-runs still converge.
-_SHRINK_BANDS = {                       # (libx264, libx265)
-    "OK":        (21, 24),
-    "GOOD":      (18, 21),
-    "EXCELLENT": (16, 19),
-    "STELLAR":   (15, 18),
-    "INSANE":    (14, 16),
+# The AV1 column was measured the same way and separately, on eight 30s clips
+# from the real library (source density 0.085-0.294 bpp). Its slope is the reason
+# it could not simply be borrowed from H.265: SVT-AV1 needs a median 8.58 CRF per
+# doubling of bitrate against 5.11 on x264 and 5.21 on x265, so the same CRF step
+# moves AV1 about 60% further. Position comes from the GOOD rung, which is live on
+# all eight sources; reading each rung off its own live subset again produced a
+# non-monotonic ladder (INSANE 14.2 sitting above STELLAR 15.0, on the four dense
+# sources that are the only ones live that high) — the failure this method exists
+# to avoid.
+_SHRINK_BANDS = {                       # (libx264, libx265, libsvtav1)
+    "OK":        (21, 24, 25),
+    "GOOD":      (18, 21, 21),
+    "EXCELLENT": (16, 19, 18),
+    "STELLAR":   (15, 18, 15),
+    "INSANE":    (14, 16, 13),
 }
 # TRANSCODE is a higher-fidelity pass (it is producing the only copy that will
-# exist), so it sits two CRF below the SHRINK band for the same tier — the same
-# offset the old fixed pair had (18/20 against 20/21), now applied to a ladder
-# instead of to a single value.
-_TRANSCODE_OFFSET = 2
+# exist), so it sits below the SHRINK band for the same tier — the same offset the
+# old fixed pair had (18/20 against 20/21), now applied to a ladder instead of to a
+# single value.
+#
+# It is per codec because a CRF step is not worth the same on all three. At the
+# measured slopes above, dropping two CRF buys x264 and x265 about 30% more bits
+# but AV1 only 17%, so one shared number would quietly make TRANSCODE a weaker
+# pass on AV1 than on the others. Three CRF puts AV1 at ~28%: the same step, not
+# the same number.
+_TRANSCODE_OFFSET = (2, 2, 3)
 
 
-def crf_for_tier(tier: Tier, mode: Mode) -> tuple[int, int]:
-    """(libx264 CRF, libx265 CRF) for this tier and mode.
+def crf_for_tier(tier: Tier, mode: Mode) -> tuple[int, int, int]:
+    """(libx264 CRF, libx265 CRF, libsvtav1 CRF) for this tier and mode.
 
-    Falls back to the old fixed pair for an unknown tier name rather than
-    guessing, so a future tier cannot silently encode at the wrong quality.
+    Falls back to a fixed set for an unknown tier name rather than guessing, so a
+    future tier cannot silently encode at the wrong quality.
     """
     band = _SHRINK_BANDS.get(getattr(tier, "name", ""))
     if band is None:
-        return (18, 20) if mode == Mode.TRANSCODE else (20, 21)
+        return (18, 20, 18) if mode == Mode.TRANSCODE else (20, 21, 21)
     if mode == Mode.TRANSCODE:
-        return (band[0] - _TRANSCODE_OFFSET, band[1] - _TRANSCODE_OFFSET)
+        a, b, c = band
+        oa, ob, oc = _TRANSCODE_OFFSET
+        return (a - oa, b - ob, c - oc)
     return band
 
 
@@ -330,7 +352,7 @@ def build_video_args(
     if hw_encoder:
         return [*scale, *_hw_video_args(info, hw_encoder, target_kbps)]
 
-    crf264, crf265 = crf_for_tier(config.tier, mode)
+    crf264, crf265, crf_av1 = crf_for_tier(config.tier, mode)
     preset = "slow" if mode == Mode.TRANSCODE else "medium"
 
     # Software is capped-CRF: the CRF sets quality and -maxrate is only a ceiling. The
@@ -349,17 +371,34 @@ def build_video_args(
     bufsize = f"{target_kbps}k"
 
     if config.out_codec == OutCodec.AV1:
-        # SVT-AV1 takes VBR (-b:v), NOT the capped-CRF the H.26x paths use, and this
-        # is MEASURED rather than a preference. On a 15s 1080p clip against a 2400
-        # kbps target:
-        #     -crf 32 alone                     6644 kbps   2.77x over
-        #     -crf 32 -maxrate -bufsize         2983 kbps   1.24x over
-        #     -b:v 2400k                        2491 kbps   1.04x  ✓
-        #     -b:v with -maxrate/-bufsize       REJECTED by SVT-AV1 outright
-        # 1.24x is past the 1.10 convergence gate, so capped-CRF here would leave
-        # every file looking over-target forever and re-encode it on every run —
-        # the exact bug the x265 ceiling was tightened to fix. VBR lands inside the
-        # gate, so a second run correctly leaves the file alone.
+        # Capped CRF, like the H.26x paths. SVT-AV1 was previously on VBR (-b:v)
+        # because capped CRF "did not converge" — it does, but its ceiling has to
+        # be ASKED to hold, and two encoder defaults hide that:
+        #
+        #   • --mbr-overshoot-pct DEFAULTS TO 50. SVT-AV1's ceiling is specified to
+        #     leak by up to half, so -maxrate on its own is a suggestion. Measured
+        #     over eight real sources x five tiers: at the default, 7 of 40 cases
+        #     landed past the 1.10 convergence gate (worst 1.32x); at 10, none did
+        #     (worst 0.97x).
+        #   • -bufsize does nothing here. ffmpeg maps it to SVT-AV1's --buf-sz,
+        #     which the encoder documents as CBR-only — so the tight VBV buffer
+        #     that makes the x265 ceiling bind has no equivalent, and passing one
+        #     only makes the argument list look like it is doing something.
+        #
+        # VBR converged only by never approaching the target: measured at 69-86% of
+        # it on every source at every tier, so an AV1 file reliably landed about a
+        # quarter below the density its tier had promised, and no tier setting could
+        # lift it. Capped CRF restores the two regimes the other software paths
+        # have — hard sources ceiling-bound near target, ordinary ones CRF-bound
+        # well below it (measured down to 0.20x on Obi-Wan), which is the intended
+        # "never pad a file that does not need it".
+        #
+        # ⚠️ 10 is a MARGIN, not a target. mbr-overshoot-pct=25 lands hard content
+        # nearer 100% of tier density, but leaves 0.9% of headroom on the hardest
+        # source measured (1.091 against a 1.10 gate). That is the same trap as an
+        # x265 ceiling set at target x 1.10: one source slightly harder than
+        # anything tested tips over the gate and then re-encodes on every run
+        # forever.
         # tune=0 (subjective) — SVT-AV1 v4.1.0 DEFAULTS TO tune=PSNR, which is why
         # our AV1 output scored well on SSIM while losing every blind side-by-side
         # it was put in: the encoder was optimising for the same metric that was
@@ -391,8 +430,9 @@ def build_video_args(
         # however good it looks. Decided explicitly, 2026-09-08.
         pix = ["-pix_fmt", "yuv420p10le"]
         av1_preset = AV1_PRESET_HQ if mode == Mode.TRANSCODE else AV1_PRESET
-        return [*scale, "-c:v", AV1_SOFTWARE, "-b:v", f"{target_kbps}k",
-                "-svtav1-params", "tune=0",
+        return [*scale, "-c:v", AV1_SOFTWARE, "-crf", str(crf_av1),
+                "-maxrate", maxrate,
+                "-svtav1-params", f"tune=0:mbr-overshoot-pct={AV1_MBR_OVERSHOOT_PCT}",
                 "-preset", str(av1_preset), *pix]
 
     if config.out_codec == OutCodec.H264:

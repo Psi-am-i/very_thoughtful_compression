@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from vtc import encode, pipeline  # noqa: E402
 from vtc.config import Encoder, RunConfig, SourceAction  # noqa: E402
 from vtc.ffprobe import MediaInfo, probe  # noqa: E402
-from vtc.model import OutCodec, av1_factor, codec_factor, target_kbps  # noqa: E402
+from vtc.model import OutCodec, Tier, av1_factor, codec_factor, target_kbps  # noqa: E402
 from vtc.result import Mode  # noqa: E402
 
 _HAVE_FF = shutil.which("ffmpeg") and shutil.which("ffprobe")
@@ -71,19 +71,39 @@ def test_an_av1_target_actually_reaches_the_decision():
 
 
 # ── rate control: AV1 is NOT capped-CRF ──────────────────────────────────────
-def test_software_av1_uses_vbr_not_capped_crf():
-    """MEASURED, not preferred: SVT-AV1 with -crf and a ceiling lands 1.24x over
-    target — past the 1.10 convergence gate — so every re-run would re-encode the
-    same file forever. -b:v lands at 1.04x. It also rejects -b:v with
-    -maxrate/-bufsize outright, so the H.26x shape cannot simply be reused."""
+def test_software_av1_uses_capped_crf_with_the_ceiling_asked_to_hold():
+    """AV1 was on VBR because capped CRF "did not converge". It does — but only if
+    --mbr-overshoot-pct is set, because SVT-AV1 defaults it to 50 and the ceiling is
+    therefore specified to leak by half. Measured over 8 real sources x 5 tiers: at
+    the default, 7 of 40 cases landed past the 1.10 gate (worst 1.32x); at 10, none
+    (worst 0.97x). This is the regression guard for that default coming back."""
     with tempfile.TemporaryDirectory() as d:
         cfg = RunConfig(src=Path(d), out_codec=OutCodec.AV1)
         args = encode.build_video_args(cfg, _info(), Mode.SHRINK, 2400, None)
         assert "libsvtav1" in args
-        assert "-b:v" in args and "2400k" in args
-        assert "-crf" not in args, "capped-CRF does not converge on SVT-AV1"
-        assert "-maxrate" not in args, "SVT-AV1 rejects -b:v alongside -maxrate"
+        assert "-crf" in args
+        assert "-maxrate" in args and args[args.index("-maxrate") + 1] == "2400k"
+        assert "-b:v" not in args, "VBR under-delivered the tier by ~25%"
+        params = args[args.index("-svtav1-params") + 1]
+        assert f"mbr-overshoot-pct={encode.AV1_MBR_OVERSHOOT_PCT}" in params
+        assert encode.AV1_MBR_OVERSHOOT_PCT < 50, "50 is the leaky encoder default"
+        # -bufsize maps to SVT-AV1's --buf-sz, which is CBR-only: passing one here
+        # would only make the argument list look like it were doing something.
+        assert "-bufsize" not in args
         assert "-preset" in args
+
+
+def test_the_av1_crf_band_is_its_own_measured_ladder():
+    """AV1 must not borrow H.265's numbers. Its measured slope is 8.58 CRF per
+    doubling of bitrate against x265's 5.21, so the same CRF means something
+    different — and the tier has to reach the encoder as quality, not only as a
+    ceiling, or every tier produces the same file."""
+    seen = []
+    for tier in Tier:
+        _, crf265, crf_av1 = encode.crf_for_tier(tier, Mode.SHRINK)
+        seen.append(crf_av1)
+    assert all(b < a for a, b in zip(seen, seen[1:])), f"not monotonic: {seen}"
+    assert seen[0] - seen[-1] >= 5, f"ladder too narrow: {seen}"
 
 
 def test_h265_still_uses_capped_crf():

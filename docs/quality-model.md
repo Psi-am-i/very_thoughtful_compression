@@ -55,7 +55,7 @@ gave it:
 |---|---|
 | H.265 hardware | 95–101% — ABR aims at the target, so the tier *is* the bitrate |
 | H.265 software | 26–100% — CRF is often satisfied below the ceiling |
-| AV1 software | ~68% consistently — VBR undershoots |
+| AV1 software | 20–97% — capped-CRF, same two regimes as the H.26x software paths |
 
 **This used to mean the software tier ladder was inert, and that was a bug, not the
 design.** CRF was fixed by *mode* (SHRINK 20/21), so the tier reached libx264/libx265
@@ -323,19 +323,42 @@ than AV1 does.
 On a Mac there is no hardware AV1 either way, so AV1 always means software — several
 times slower than the hardware H.265 most runs use today, whatever the resolution.
 
-**Rate control is VBR (`-b:v`), not the capped-CRF the H.26x paths use** — measured,
-not preferred. Against a 2400 kbps target on a 15s 1080p clip:
+**Rate control is capped-CRF, the same shape as the H.26x paths** — `-crf <band>
+-maxrate <target>`, plus one argument the other two do not need.
 
-| Mode | Result |
-|---|---|
-| `-crf 32` alone | 6644 kbps — 2.77× over |
-| `-crf 32 -maxrate -bufsize` | 2983 kbps — 1.24× over |
-| `-b:v 2400k` | 2491 kbps — **1.04× ✓** |
-| `-b:v` with `-maxrate`/`-bufsize` | rejected by SVT-AV1 outright |
+This reverses an earlier conclusion. AV1 was on VBR (`-b:v`) because capped-CRF
+"measured 1.24× over target" and so could never converge. The real story is two
+encoder defaults:
 
-1.24× is past the 1.10 convergence gate, so capped-CRF here would leave every file
-looking over-target forever and re-encode it on every run — the exact bug the x265
-ceiling was tightened to fix.
+- **`--mbr-overshoot-pct` defaults to 50.** SVT-AV1's capped-CRF ceiling is
+  *specified* to leak by up to half, so `-maxrate` on its own is a suggestion rather
+  than a cap. We now pass **`mbr-overshoot-pct=10`**.
+- **`-bufsize` does nothing here.** ffmpeg maps it to SVT-AV1's `--buf-sz`, which the
+  encoder documents as CBR-only. The tight VBV buffer that makes the x265 ceiling bind
+  has no AV1 equivalent, so we no longer pass one — it only made the argument list
+  look like it were doing something.
+
+Measured over 8 real sources × 5 tiers, as ratio to target (gate is 1.10):
+
+| Mode | Range | Breached the gate |
+|---|---|---|
+| `-crf` alone | 0.20 – 2.40 | 14 of 40 |
+| capped-CRF, encoder default `mbr-overshoot-pct=50` | 0.20 – 1.32 | 7 of 40 |
+| capped-CRF, `mbr-overshoot-pct=25` | — | 0 of 12 retested, worst **1.091** |
+| capped-CRF, **`mbr-overshoot-pct=10`** | 0.20 – 0.97 | **0 of 40 ✓** |
+| VBR `-b:v` | 0.69 – 0.86 | 0 of 40 — but never near target |
+
+**VBR converged only by never arriving.** It delivered 69–86% of target on every
+source at every tier, so an AV1 file landed about a quarter below the density its tier
+promised and no tier setting could lift it. Capped-CRF restores the two regimes the
+other software paths have: hard sources ceiling-bound near target, ordinary ones
+CRF-bound well below it (0.20× on Obi-Wan), which is the intended "never pad a file
+that does not need it".
+
+⚠️ **10 is a margin, not a target.** 25 lands hard content nearer 100% of tier density,
+but leaves 0.9% of headroom on the hardest source measured. That is the same trap as
+setting the x265 ceiling at target × 1.10: one source slightly harder than anything
+tested tips over the gate and re-encodes on every run forever.
 
 ⚠️ **SVT-AV1 overshoots on very short clips**, and it is a fixed start-up cost that
 amortises: measured at a 2100 kbps target, 6s lands 1.19× over, 15s 1.06×, 30s 1.04×,
@@ -555,27 +578,38 @@ source is usually easy content, a fat one usually hard), not on a genre label.
 
 ## Encoders and what actually controls quality
 
-- **Software (libx264/libx265)** — capped-CRF: `-crf <band> -maxrate <target> -bufsize`.
+- **Software (libx264/libx265/libsvtav1)** — capped-CRF: `-crf <band> -maxrate <target>`.
   CRF is a constant-*quality* target; the tier bitrate is a ceiling on peaks. This is
   the quality path. The band is **per tier and measured**, not a constant:
 
-  | tier | libx264 | libx265 |
-  |---|---|---|
-  | OK | 21 | 24 |
-  | GOOD | 18 | 21 |
-  | EXCELLENT | 16 | 19 |
-  | STELLAR | 15 | 18 |
-  | INSANE | 14 | 16 |
+  | tier | libx264 | libx265 | libsvtav1 |
+  |---|---|---|---|
+  | OK | 21 | 24 | 25 |
+  | GOOD | 18 | 21 | 21 |
+  | EXCELLENT | 16 | 19 | 18 |
+  | STELLAR | 15 | 18 | 15 |
+  | INSANE | 14 | 16 | 13 |
 
-  TRANSCODE sits two CRF below the same tier's band, keeping the fidelity offset the
-  old fixed pair had. The bands come from fitting `crf = a + b·log2(bpp)` per source
-  over a 9-point CRF grid on 30s real-footage clips (8 sources, 126 encodes): the
-  *shape* is the slope (median −5.11 for x264, −5.21 for x265 — about 5 CRF per
-  halving) and the *position* is the median of the sources where each tier is actually
-  live. Fitting each rung independently does **not** work: the live source set differs
-  per rung, so the rungs are not comparable and the ladder comes out non-monotonic.
-  Validated by interpolating each source's own measured CRF→SSIM curve at these values
-  — SSIM climbs at every rung on every source that has signal.
+  TRANSCODE sits below the same tier's band, keeping the fidelity offset the old fixed
+  pair had — **two CRF on the H.26x paths, three on AV1**, because a CRF step is not
+  worth the same on all three (see the slopes below: two CRF buys x265 ~30% more bits
+  and AV1 only ~17%).
+
+  The bands come from fitting `crf = a + b·log2(bpp)` per source over a 9-point CRF
+  grid on 30s real-footage clips (8 sources, 126 encodes for H.26x; a separate 8
+  sources and 72 encodes for AV1): the *shape* is the slope and the *position* is the
+  median of the sources where the anchor rung is live. Fitting each rung independently
+  does **not** work: the live source set differs per rung, so the rungs are not
+  comparable and the ladder comes out non-monotonic — it did so again on the AV1 pass,
+  putting INSANE at 14.2 *above* STELLAR's 15.0 on the four dense sources that are the
+  only ones live that high. Validated for H.26x by interpolating each source's own
+  measured CRF→SSIM curve at these values — SSIM climbs at every rung on every source
+  that has signal.
+
+  ⚠️ **The slopes are not interchangeable between codecs.** Median CRF per doubling of
+  bitrate: **5.11 on x264, 5.21 on x265, 8.58 on SVT-AV1** (R² 0.93–0.99 across the
+  eight AV1 sources). Any correction that assumes one constant — a rate-matcher, a
+  preview estimate, a "just drop 6 CRF" rule of thumb — is wrong for AV1 by about 60%.
 - **Hardware (VideoToolbox)** — `-b:v <target>` only (no true CRF). Here the tier
   bitrate *is* the quality knob, which is why the bpp calibration matters most on this
   path.
