@@ -40,6 +40,22 @@ HEVC_FACTOR_8K = 0.45              # above 4K  (55% saving)
 # published 20-40% BD-rate advantage of SVT-AV1 over x265, and is only honest at
 # a preset that earns it (see AV1_PRESET in encode.py — a fast preset gives that
 # advantage back, so the two numbers have to move together).
+#
+# ⚠️ THESE ARE DERIVED FROM THE H.265 FACTORS, NOT MEASURED, AND THE ARITHMETIC
+# SHOWS IT. Divide them through: 0.45/0.60 = 0.750, 0.38/0.50 = 0.760,
+# 0.34/0.45 = 0.756. AV1's curve is H.265's scaled by a constant, so the model
+# asserts AV1 needs ~25% fewer bits than H.265 AT EVERY RESOLUTION and contains no
+# claim about resolution dependence at all — while "AV1 pulls ahead at 4K" is
+# exactly the hypothesis anyone would want to test. Whatever replaces these has to
+# be free to bend, not just to move; a single new constant would re-commit the
+# same structural assumption.
+#
+# And it is TWO unmeasured hops, not one. The factors multiply the H.264 target,
+# so a tier only means the same quality across codecs if H.264->H.265 AND
+# H.265->AV1 are both right. The first is itself in doubt (see docs/
+# measuring-quality.md §8: H.265 given exactly its prescribed 60% ranked BELOW
+# H.264 by eye), so measuring the AV1 ratio alone would calibrate against an
+# unvalidated anchor.
 AV1_FACTOR_HD = 0.45               # <= 1080p  (55% saving vs H.264)
 AV1_FACTOR_4K = 0.38               # <= 4K     (62% saving)
 AV1_FACTOR_8K = 0.34               # above 4K  (66% saving)

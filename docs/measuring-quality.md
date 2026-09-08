@@ -326,6 +326,15 @@ with "never make a file worse".
 Worth stating because it is exactly the kind of flag that looks like a win in a
 side-by-side and is indefensible once you ask what it actually did.
 
+### Deferred-untested is not declined
+
+x265's `--tune grain` has been audited and **not tested**: no evidence either way. That
+is a different state from `--enable-tf=0`, which was tested against the pre-registered
+bar, ranked below the default, and cost 7.8% more bits — a defensible negative.
+
+Keep the two apart in writing. Recording an untested option as "declined" reads as
+considered without being it, and it is the sentence that stops anyone testing it later.
+
 ## 7. What a tier means
 
 Defining a tier *as* a bits-per-pixel density makes every description circular. A tier
@@ -352,6 +361,14 @@ A 720p race at 3.64 Mbps is SHRINK at OK and REMUX at EXCELLENT — verified thr
   ranked *below* H.264 by eye. If that holds, the model's central premise — hand the
   efficient codec fewer bits — is overstated at 1080p. Needs H.264 vs H.265 at matched
   bitrate.
+- **The AV1 factors cannot express the claim anyone would want to test.** They are
+  H.265's scaled by a constant — 0.45/0.60 = 0.750, 0.38/0.50 = 0.760, 0.34/0.45 =
+  0.756 — so the model asserts AV1 needs ~25% fewer bits than H.265 at *every*
+  resolution and says nothing about resolution dependence, which is the hypothesis.
+  The fix is structural, not a better number: a replacement has to be free to bend.
+  And it is **two** unmeasured hops (H.264→H.265 and H.265→AV1), so measuring the AV1
+  ratio alone calibrates against an anchor that is itself in doubt — see the previous
+  bullet. Honest scope is two staircases per resolution band.
 - **Every AV1-vs-H.265 panel so far contradicts `AV1_FACTOR_HD = 0.45`.** At the same
   tier the model hands H.265 **33% more bits** than AV1 (0.60 against 0.45), on the
   premise that AV1 needs fewer to match it. In the panels H.265 has won while using
