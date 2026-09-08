@@ -86,6 +86,8 @@ def test_software_av1_uses_capped_crf_with_the_ceiling_asked_to_hold():
         assert "-b:v" not in args, "VBR under-delivered the tier by ~25%"
         params = args[args.index("-svtav1-params") + 1]
         assert f"mbr-overshoot-pct={encode.AV1_MBR_OVERSHOOT_PCT}" in params
+        # the psy string and the CRF band are one measurement — see AV1_PSY_PARAMS
+        assert encode.AV1_PSY_PARAMS in params
         assert encode.AV1_MBR_OVERSHOOT_PCT < 50, "50 is the leaky encoder default"
         # -bufsize maps to SVT-AV1's --buf-sz, which is CBR-only: passing one here
         # would only make the argument list look like it were doing something.
@@ -94,7 +96,7 @@ def test_software_av1_uses_capped_crf_with_the_ceiling_asked_to_hold():
 
 
 def test_the_av1_crf_band_is_its_own_measured_ladder():
-    """AV1 must not borrow H.265's numbers. Its measured slope is 8.58 CRF per
+    """AV1 must not borrow H.265's numbers. Its measured slope is 10.04 CRF per
     doubling of bitrate against x265's 5.21, so the same CRF means something
     different — and the tier has to reach the encoder as quality, not only as a
     ceiling, or every tier produces the same file."""
@@ -194,3 +196,24 @@ def test_a_real_av1_encode_converges():
         assert out.effective_bps / 1000 <= first.detail.vid_kbps * 1.10, (
             "AV1 overshot its target — re-runs would never converge")
         assert pipeline.run(cfg())[0].outcome.value.startswith("skip")
+
+
+def test_av1_asks_for_the_psychovisual_layer_svt_ships_disabled():
+    """SVT-AV1 ships its whole Psychovisual Options section off while x264/x265
+    enable psy-rd by default, so default-settings AV1 is not a like-for-like
+    comparison. --enable-variance-boost is an ADDITIONAL layer on top of the
+    aq-mode 2 SVT-AV1 already runs, and it won a blind matched-bitrate panel.
+
+    Guards two things a future edit could break silently: that the flag is still
+    asked for, and that it is left at its documented defaults — a hand-tuned
+    variant won an earlier panel and is now unreproducible because its strengths
+    were never written down (docs/measuring-quality.md §5)."""
+    with tempfile.TemporaryDirectory() as d:
+        cfg = RunConfig(src=Path(d), out_codec=OutCodec.AV1)
+        args = encode.build_video_args(cfg, _info(), Mode.SHRINK, 2400, None)
+        params = args[args.index("-svtav1-params") + 1]
+        assert "enable-variance-boost=1" in params
+        for pinned in ("variance-boost-strength", "variance-boost-curve",
+                       "luminance-qp-bias", "sharpness"):
+            assert pinned not in params, f"{pinned} set without a re-fitted band"
+    print("  ok  av1 asks for variance boost, at documented defaults")

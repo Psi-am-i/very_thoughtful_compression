@@ -249,6 +249,72 @@ the normalised floor slightly *worse* (0.29 → 0.24). Capped-CRF was adopted fo
 convergence and density, which are separate and demonstrated; consistency remains open
 and is a viewing question.
 
+### "Both codecs at their best" is not a well-defined comparison
+
+Once you start enabling non-default options, the obvious next question is whether the
+*other* encoder has been given the same courtesy. It is a fair question and it has no
+stopping point, because the two encoders' knobs do not map onto each other.
+
+What is actually known, from each encoder's own config banner rather than from memory:
+
+| | SVT-AV1 4.1.0 default | x265 4.2 default (preset medium) |
+|---|---|---|
+| adaptive quantisation | `aq-mode 2` **on** | `aq-mode 2` **on** |
+| psychovisual RD | `tune=0` VQ (we set it; default is PSNR) | `psy-rd 2.00` **on** |
+| extra AQ layer | `enable-variance-boost` **off** | — no equivalent |
+| psy in quantisation | — | `psy-rdoq` off at medium, **on at slow** |
+
+So enabling variance boost does **not** bring AV1 level with x265's `aq-mode 2` — AV1
+already had that. It adds a layer x265 has no counterpart for. Equally, x265's
+`--tune grain` bundle (psy-rd doubled to 4.00, `sao` off, AQ and cu-tree disabled,
+`rskip` off) has no AV1 counterpart either. Neither encoder is "further tuned" than the
+other in any orderable sense.
+
+**The comparison this tool needs is "each codec as we would ship it"** — that one
+terminates, and it is the one that decides anything.
+
+**But it is not the only question, and on its own it would have missed every AV1 fix
+in this document.** As-we-would-ship-it *was* `tune=PSNR`, 8-bit, VBR and psy-off. Run
+that fairly against x265 and it returns "AV1 loses at 1080p" — true of our build, false
+of the codec, and we would have concluded AV1 was weak rather than that we had
+configured it badly. Four real defects came out of a different question: **is this
+configuration defensible on its own terms?**
+
+So there are two activities and both are needed:
+
+- **Audit** — read the encoder's `--help` and its config banner and ask whether each
+  default is one we would choose. Generates candidates. Costs nothing but reading.
+- **Panel** — adjudicate a candidate blind at matched bitrate. Costs the one scarce
+  resource, a viewer's attention and freshness.
+
+Audit widely; panel narrowly. And prefer an **intra-codec** panel where the question
+allows it (this setting on versus off, same encoder both sides): it terminates, it is
+immune to the knob-mapping problem above, and it is the test that earned variance boost
+its place.
+
+### Pre-register the rule before the panel runs
+
+Decide what result would change the code *before* seeing the result, and write it down:
+
+> Ship X if it wins on the viewer's eye at matched bitrate on 2+ clips **and** the
+> re-fitted band clears the 1.10 convergence gate. Otherwise drop it and record the
+> negative.
+
+Deciding shippability first and testing second gets the dependency backwards; deciding
+after seeing the result invites the number to pick its own interpretation. The bar is
+credible here only because something has actually failed it — `--enable-tf=0` was
+tested on that rule and lost, so the rule is not decoration.
+
+⚠️ **A preset can switch a flag on for you.** `psy-rdoq` is inert at preset *medium*
+because RDOQ itself is off there, and switches on by itself at *slow*. VTC uses medium
+for SHRINK and slow for TRANSCODE — so the common path is missing a psychovisual stage
+the rarer path has, which nobody chose. It also means setting `psy-rdoq` alone at medium
+would do nothing without raising `rdoq-level` first: a flag that looks set and is not.
+
+That is an unchosen asymmetry, **not a bug with a free fix**: RDOQ costs encode time,
+which is why the presets differ in the first place. Enabling it at medium is a trade to
+be measured like any other, not an oversight to be corrected.
+
 ## 6b. One thing we will not do
 
 **AV1 film-grain synthesis stays off.** It would likely score well on any

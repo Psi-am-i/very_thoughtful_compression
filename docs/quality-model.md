@@ -323,6 +323,16 @@ than AV1 does.
 On a Mac there is no hardware AV1 either way, so AV1 always means software — several
 times slower than the hardware H.265 most runs use today, whatever the resolution.
 
+**AV1 runs with `--enable-variance-boost`**, which SVT-AV1 ships disabled along with
+the rest of its *Psychovisual Options* section, while x264/x265 enable psy-rd by
+default. It is an *additional* layer on top of the `aq-mode 2` SVT-AV1 already runs —
+the config banner reads `AQ mode / Variance Boost : 2 / 0` — spending bits on flat and
+shadow regions and saving where texture masks. It won a blind matched-bitrate panel
+against AV1 as previously shipped, and psy-on AV1 then beat libx265 on the same panel,
+the first time it has done so here. Left at documented defaults deliberately: a
+hand-tuned variant won an earlier panel and is now unreproducible because its strengths
+were never recorded.
+
 **Rate control is capped-CRF, the same shape as the H.26x paths** — `-crf <band>
 -maxrate <target>`, plus one argument the other two do not need.
 
@@ -346,6 +356,7 @@ Measured over 8 real sources × 5 tiers, as ratio to target (gate is 1.10):
 | capped-CRF, encoder default `mbr-overshoot-pct=50` | 0.20 – 1.32 | 7 of 40 |
 | capped-CRF, `mbr-overshoot-pct=25` | — | 0 of 12 retested, worst **1.091** |
 | capped-CRF, **`mbr-overshoot-pct=10`** | 0.20 – 0.97 | **0 of 40 ✓** |
+| the above, re-verified with variance boost on | 0.44 – 1.01 | **0 of 40 ✓** |
 | VBR `-b:v` | 0.69 – 0.86 | 0 of 40 — but never near target |
 
 **VBR converged only by never arriving.** It delivered 69–86% of target on every
@@ -584,11 +595,18 @@ source is usually easy content, a fat one usually hard), not on a genre label.
 
   | tier | libx264 | libx265 | libsvtav1 |
   |---|---|---|---|
-  | OK | 21 | 24 | 25 |
-  | GOOD | 18 | 21 | 21 |
-  | EXCELLENT | 16 | 19 | 18 |
-  | STELLAR | 15 | 18 | 15 |
-  | INSANE | 14 | 16 | 13 |
+  | OK | 21 | 24 | 32 |
+  | GOOD | 18 | 21 | 28 |
+  | EXCELLENT | 16 | 19 | 24 |
+  | STELLAR | 15 | 18 | 21 |
+  | INSANE | 14 | 16 | 19 |
+
+  ⛔ **The AV1 column and `AV1_PSY_PARAMS` are one measurement.** A psychovisual
+  option moves the CRF/rate relationship bodily, not just the picture:
+  `--enable-variance-boost` alone roughly *doubles* the bitrate at the same CRF, which
+  is why enabling it moved this column by 6–7 CRF on every rung and steepened AV1's
+  slope from 8.58 to 10.04. Change the string without re-fitting the column and every
+  tier gets about twice the bitrate it asked for.
 
   TRANSCODE sits below the same tier's band, keeping the fidelity offset the old fixed
   pair had — **two CRF on the H.26x paths, three on AV1**, because a CRF step is not
@@ -606,10 +624,13 @@ source is usually easy content, a fat one usually hard), not on a genre label.
   measured CRF→SSIM curve at these values — SSIM climbs at every rung on every source
   that has signal.
 
-  ⚠️ **The slopes are not interchangeable between codecs.** Median CRF per doubling of
-  bitrate: **5.11 on x264, 5.21 on x265, 8.58 on SVT-AV1** (R² 0.93–0.99 across the
-  eight AV1 sources). Any correction that assumes one constant — a rate-matcher, a
-  preview estimate, a "just drop 6 CRF" rule of thumb — is wrong for AV1 by about 60%.
+  ⚠️ **The slopes are not interchangeable between codecs, and not even between
+  configurations of one codec.** Median CRF per doubling of bitrate: **5.11 on x264,
+  5.21 on x265, 10.04 on SVT-AV1 with variance boost** (8.58 without it; R² 0.99+
+  across the eight AV1 sources either way). Any correction that assumes one constant —
+  a rate-matcher, a preview estimate, a "just drop 6 CRF" rule of thumb — is wrong for
+  AV1 by nearly a factor of two. Per source it ranges 6.06 to 11.58, so even 10.04 is a
+  median rather than a constant: **bisect to match a bitrate, do not single-step.**
 - **Hardware (VideoToolbox)** — `-b:v <target>` only (no true CRF). Here the tier
   bitrate *is* the quality knob, which is why the bpp calibration matters most on this
   path.

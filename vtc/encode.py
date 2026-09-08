@@ -206,6 +206,23 @@ AV1_PRESET, AV1_PRESET_HQ = 6, 4
 # source inside the 1.10 convergence gate with room to spare.
 AV1_MBR_OVERSHOOT_PCT = 10
 
+# SVT-AV1 ships its entire "Psychovisual Options" section OFF while x264/x265 enable
+# psy-rd by default, so a default-settings codec comparison is not like for like.
+# --enable-variance-boost spends bits on flat and shadow regions and saves where
+# texture masks; it is an ADDITIONAL layer on top of the aq-mode 2 that SVT-AV1
+# already runs (the banner reads "AQ mode / Variance Boost : 2 / 0"), not a
+# replacement for it. It won a blind matched-bitrate panel against AV1 as previously
+# shipped, and the psy-on AV1 then beat libx265 on the same panel — the first time
+# it has done so here.
+#
+# Left at its documented defaults (strength 2, curve 0) DELIBERATELY: a hand-tuned
+# variant won an earlier panel and is now unreproducible because its strengths were
+# never recorded (see docs/measuring-quality.md §5). Defaults are reproducible.
+#
+# ⛔ This string and _SHRINK_BANDS' AV1 column are ONE measurement. Changing either
+# without re-fitting the other breaks convergence — see the note on the bands.
+AV1_PSY_PARAMS = "tune=0:enable-variance-boost=1"
+
 
 def _hw_video_args(info: MediaInfo, enc: str, target_kbps: int) -> list[str]:
     """`-c:v` args for a specific hardware encoder, ABR-targeting the tier bitrate.
@@ -301,28 +318,27 @@ def _scale_args(config: RunConfig, info: MediaInfo) -> list[str]:
 # TIER_OVER_TOLERANCE, so re-runs still converge.
 # The AV1 column was measured the same way and separately, on eight 30s clips
 # from the real library (source density 0.085-0.294 bpp). Its slope is the reason
-# it could not simply be borrowed from H.265: SVT-AV1 needs a median 8.58 CRF per
+# it could not simply be borrowed from H.265: SVT-AV1 needs a median 10.04 CRF per
 # doubling of bitrate against 5.11 on x264 and 5.21 on x265, so the same CRF step
-# moves AV1 about 60% further. Position comes from the GOOD rung, which is live on
+# moves AV1 nearly twice as far. Position comes from the GOOD rung, which is live on
 # all eight sources; reading each rung off its own live subset again produced a
 # non-monotonic ladder (INSANE 14.2 sitting above STELLAR 15.0, on the four dense
 # sources that are the only ones live that high) — the failure this method exists
 # to avoid.
-# ⛔ THE AV1 COLUMN IS MEASURED WITH SVT-AV1'S PSYCHOVISUAL OPTIONS OFF, WHICH IS
-# WHAT WE SHIP. If any of them is ever turned on, THIS BAND IS WRONG AND MUST BE
-# RE-MEASURED — they do not merely change how the picture looks, they move the
-# CRF/rate relationship bodily. Measured at CRF 21 on three of the calibration
-# clips, --enable-variance-boost alone roughly DOUBLES the bitrate: Moscow 1094 ->
-# 2106, Red Dwarf 3679 -> 7956, Shadows 2631 -> 5197 kbps (1.9-2.2x). At AV1's
-# 8.58 CRF per doubling that is about nine CRF on every rung, so shipping the psy
-# options against these numbers would hand every tier roughly twice the bitrate it
-# asked for and break convergence everywhere.
+# ⛔ THE AV1 COLUMN IS MEASURED AGAINST AV1_PSY_PARAMS EXACTLY. The two are one
+# measurement, and a psychovisual option does not merely change how the picture
+# looks — it moves the CRF/rate relationship bodily. Measured at CRF 21 on three
+# calibration clips, --enable-variance-boost alone roughly DOUBLES the bitrate
+# (Moscow 1094 -> 2106, Red Dwarf 3679 -> 7956, Shadows 2631 -> 5197 kbps), which
+# is why enabling it moved this column by 6-7 CRF on every rung and steepened the
+# slope from 8.58 to 10.04. Change that string without re-fitting and every tier
+# gets roughly twice the bitrate it asked for.
 _SHRINK_BANDS = {                       # (libx264, libx265, libsvtav1)
-    "OK":        (21, 24, 25),
-    "GOOD":      (18, 21, 21),
-    "EXCELLENT": (16, 19, 18),
-    "STELLAR":   (15, 18, 15),
-    "INSANE":    (14, 16, 13),
+    "OK":        (21, 24, 32),
+    "GOOD":      (18, 21, 28),
+    "EXCELLENT": (16, 19, 24),
+    "STELLAR":   (15, 18, 21),
+    "INSANE":    (14, 16, 19),
 }
 # TRANSCODE is a higher-fidelity pass (it is producing the only copy that will
 # exist), so it sits below the SHRINK band for the same tier — the same offset the
@@ -464,7 +480,8 @@ def build_video_args(
         av1_preset = AV1_PRESET_HQ if mode == Mode.TRANSCODE else AV1_PRESET
         return [*scale, "-c:v", AV1_SOFTWARE, "-crf", str(crf_av1),
                 "-maxrate", maxrate,
-                "-svtav1-params", f"tune=0:mbr-overshoot-pct={AV1_MBR_OVERSHOOT_PCT}",
+                "-svtav1-params",
+                f"{AV1_PSY_PARAMS}:mbr-overshoot-pct={AV1_MBR_OVERSHOOT_PCT}",
                 "-preset", str(av1_preset), *pix]
 
     if config.out_codec == OutCodec.H264:
