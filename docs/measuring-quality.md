@@ -184,6 +184,37 @@ building on it, especially one that is the sole evidence for a decision.
 
 ---
 
+### Aggregating packet sizes: pick a window wider than the encoder's mini-GOP
+
+Packet sizes come free off the container index, with no decode, which makes
+per-second bitrate a tempting way to ask whether an encoder *starves* a hard passage
+rather than merely hitting its average. It is a good question — convergence is a claim
+about the mean, and a viewer reports the worst passage — but the window has to be
+chosen against the encoder, not against the clock.
+
+**SVT-AV1's mini-GOP is 32 frames; x265's is 8.** At 24fps a one-second bucket is 24
+frames: it straddles AV1's hierarchy and cannot straddle H.265's. Measured on eight
+sources at GOOD, AV1 capped-CRF against libx265, as median coefficient of variation
+and median worst-window-over-mean:
+
+| bucket | AV1 CV | H.265 CV | AV1 floor | H.265 floor | AV1 steadier |
+|---|---|---|---|---|---|
+| 1s | 42.9% | 30.5% | 0.24 | 0.45 | 1 of 8 |
+| 2s | 33.2% | 27.8% | 0.44 | 0.51 | 1 of 8 |
+| 4s | 26.0% | 21.0% | 0.66 | 0.69 | **5 of 8** |
+
+At one second AV1 looks dramatically less consistent. At four — three times its
+mini-GOP — the two are comparable and AV1 is the steadier of the pair on most sources.
+**The gap was mostly the hierarchy period, not the bitrate allocation.**
+
+Two things this does *not* say. It does not say a viewer was wrong: a 32-frame mini-GOP
+is a real ~1.3s quality cycle and may well be visible, which a bitrate statistic cannot
+settle either way. And it does not credit capped-CRF with fixing consistency — at a 1s
+bucket, moving AV1 from VBR to capped-CRF changed median CV only 46.5% → 42.9% and made
+the normalised floor slightly *worse* (0.29 → 0.24). Capped-CRF was adopted for
+convergence and density, which are separate and demonstrated; consistency remains open
+and is a viewing question.
+
 ## 6b. One thing we will not do
 
 **AV1 film-grain synthesis stays off.** It would likely score well on any
