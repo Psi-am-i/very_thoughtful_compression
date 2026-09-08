@@ -162,6 +162,17 @@ measured +0.00021 SSIM, which post-§1 we should treat as unmeasured rather than
 
 ---
 
+## 6b. One thing we will not do
+
+**AV1 film-grain synthesis stays off.** It would likely score well on any
+grain-retention comparison, and it is nearly free. But it does not preserve grain —
+the decoder *synthesises* a noise pattern that was never in the source. Retaining
+detail and fabricating it are different acts, and only one of them is compatible
+with "never make a file worse".
+
+Worth stating because it is exactly the kind of flag that looks like a win in a
+side-by-side and is indefensible once you ask what it actually did.
+
 ## 7. What a tier means
 
 Defining a tier *as* a bits-per-pixel density makes every description circular. A tier

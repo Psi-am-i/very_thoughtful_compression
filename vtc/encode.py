@@ -383,6 +383,12 @@ def build_video_args(
         # so every AV1 decoder handles it. That is NOT true of the H.26x paths —
         # H.264 10-bit is Hi10P, which essentially no consumer hardware decodes,
         # which is why they still mirror the source.
+        # ⛔ DO NOT enable AV1 film-grain synthesis (`film-grain=N`). It is tempting
+        # — it scores well on grain-retention judgements and costs almost nothing —
+        # but it does not PRESERVE grain, it has the decoder INVENT a noise pattern
+        # that was never in the source. This tool's first rule is never to make a
+        # file worse, and fabricating detail is a different act from keeping it,
+        # however good it looks. Decided explicitly, 2026-09-08.
         pix = ["-pix_fmt", "yuv420p10le"]
         av1_preset = AV1_PRESET_HQ if mode == Mode.TRANSCODE else AV1_PRESET
         return [*scale, "-c:v", AV1_SOFTWARE, "-b:v", f"{target_kbps}k",
