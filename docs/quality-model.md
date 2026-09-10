@@ -635,6 +635,56 @@ source is usually easy content, a fat one usually hard), not on a genre label.
   bitrate *is* the quality knob, which is why the bpp calibration matters most on this
   path.
 
+### The `--tune` options, audited
+
+Read from the encoders on this build, not from a UI list. **x265 4.2 has no `animation`
+tune** — that is x264 only; HandBrake presents them together, which makes the two easy
+to conflate.
+
+```
+x265 4.2  --tune : psnr  ssim  grain  zerolatency  fastdecode
+x264      --tune : film  animation  grain  stillimage  psnr  ssim  fastdecode  zerolatency
+```
+
+These are **not** profile/level. `--profile` and `--level-idc` cap what a decoder must
+support; `fastdecode` and `zerolatency` also aim at the decoder, but they get there by
+*removing encoding tools*, so they cost quality rather than merely restricting it.
+
+| x265 tune | change from preset-medium default |
+|---|---|
+| `grain` | psy-rd **2.00 → 4.00**, `sao` off, `rskip` off, **AQ and cu-tree disabled** |
+| `psnr` | **psy-rd off**, AQ strength → 0.0 |
+| `ssim` | **psy-rd off**, AQ kept |
+| `fastdecode` | **deblock off, sao off, b-intra off**; psy-rd kept |
+
+| x264 tune | ref | deblock | psy_rd | bframes | aq |
+|---|---|---|---|---|---|
+| *default* | 3 | 1:0:0 | 1.00:0.00 | 3 | 1:1.00 |
+| `animation` | 6 | **1:1:1** | **0.40**:0.00 | 5 | 1:0.60 |
+| `grain` | 3 | 1:−2:−2 | 1.00:0.25 | 3 | 1:0.50 |
+| `film` | 3 | 1:−1:−1 | 1.00:0.15 | 3 | 1:1.00 |
+
+⛔ **`psnr` and `ssim` must never be offered.** Both switch psy-rd *off* — the identical
+defect that made SVT-AV1's `tune=PSNR` default score well on the metric judging it and
+lose every blind trial (§2 of measuring-quality.md). `tune=ssim` is the dangerous one
+because it *sounds* rigorous. `zerolatency` and `fastdecode` are also out: both spend
+picture quality on something this tool does not need — latency, and weak decoders.
+
+⚠️ **Both surviving tunes move the CRF/rate relationship**, so neither can be enabled
+against a band fitted without it — the same coupling as AV1's variance boost. Measured
+at a fixed CRF on real clips:
+
+| tune | rate at the same CRF | CRF equivalent |
+|---|---|---|
+| x265 `grain` | **×1.75** (P&P 1.75, Shadows 1.74, Red Dwarf 1.79) | ≈ **4.2 CRF** at x265's 5.21 slope |
+| x264 `animation` on animation | ×0.83 (X-Men '97) | ≈ 1.4 CRF at x264's 5.11 slope |
+| x264 `animation` on live action | ×0.76 Curb, **×0.56 Obi-Wan** | — |
+
+**That last row is a misuse detector.** `animation` costs far *more* bits on animation
+(×0.83) than on live action (×0.56) because on live action it is smoothing away detail
+that animation does not have: `deblock 1:1:1` and psy-rd cut to 0.40. A big rate drop
+is the signature of it being applied to the wrong content.
+
 `MIN_SAVING_RATIO` is a separate, post-encode guard: a shrink is only kept if the
 output is actually ≥ N% smaller than the source.
 
