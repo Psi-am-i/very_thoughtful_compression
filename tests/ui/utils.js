@@ -9,7 +9,7 @@
 //   ⛔ a DRM file is intact and must never reach the trash flow;
 //   • only a file that is genuinely past saving may.
 const fs=require('fs'); const {JSDOM}=require('jsdom');
-const dom=new JSDOM(fs.readFileSync('/Users/simondavis/projects/very_thoughtful_compression/vtc/vtc_app_v3.html','utf8'),
+const dom=new JSDOM(fs.readFileSync('/Users/simondavis/projects/video-audio/very_thoughtful_compression/vtc/vtc_app_v3.html','utf8'),
  {runScripts:'dangerously',pretendToBeVisual:true,url:'http://127.0.0.1/x.html',
   beforeParse(w){w.matchMedia=(q)=>({matches:/prefers-reduced-motion/.test(String(q)),addListener(){},removeListener(){},addEventListener(){},removeEventListener(){}});
    w.HTMLMediaElement.prototype.play=()=>Promise.resolve();w.HTMLMediaElement.prototype.pause=()=>{};w.HTMLMediaElement.prototype.load=()=>{};}});

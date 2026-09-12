@@ -1,7 +1,7 @@
 """Full 8 x 5 matrix with the shipping shape: capped CRF at the measured band,
 -maxrate at target, mbr-overshoot-pct=10, no -bufsize (CBR-only, a no-op here)."""
 import json, subprocess, os, sys
-sys.path.insert(0, '/Users/simondavis/projects/very_thoughtful_compression')
+sys.path.insert(0, '/Users/simondavis/projects/video-audio/very_thoughtful_compression')
 from vtc.model import Tier, OutCodec, target_kbps
 
 BANDS = json.load(open('bands.json'))

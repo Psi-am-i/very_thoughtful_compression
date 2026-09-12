@@ -16,6 +16,7 @@ from .model import (
     AV1_FACTOR_8K,
     AV1_FACTOR_HD,
     BITRATE_FLOOR_KBPS,
+    FPS_PRICE_EXPONENT,
     HEVC_FACTOR_4K,
     HEVC_FACTOR_8K,
     HEVC_FACTOR_HD,
@@ -334,6 +335,24 @@ class RunConfig:
         if self.reencode_modern:
             parts.append(f"mod{self.modern_over_tolerance:.2f}"
                          f"+{'.'.join(sorted(c.lower() for c in self.modern_codecs))}")
+        # The TARGET FORMULA ITSELF is an input to every decision, so a change to it
+        # has to invalidate history — otherwise the change cannot reach the library it
+        # was measured on. A file judged "already at tier" is written to the ledger as
+        # done (pipeline.py), and its key is signature+path+size+mtime; a file that was
+        # LEFT ALONE has identical size and mtime, so on the next run ledger.has() hits
+        # and returns RESUME before the file is even probed. The population a re-priced
+        # fps term exists to reach — the high-frame-rate files previously skipped as
+        # at-tier — is exactly the population that would never be re-evaluated.
+        #
+        # ⚠️ UNCONDITIONAL, unlike the three tokens above. Those are appended only when
+        # the setting is explicitly chosen, precisely so a default run still matches
+        # ledgers written before the setting existed. Here that reasoning inverts:
+        # invalidating older ledgers IS the point, and the cost is a re-probe of the
+        # library, not a re-encode — only files genuinely over the new target encode.
+        # Interpolating the constant rather than a hand-bumped version number means a
+        # later re-fit of the exponent invalidates history on its own, without anyone
+        # having to remember to.
+        parts.append(f"fps{FPS_PRICE_EXPONENT:.3f}")
         return "|".join(parts)
 
     def validate(self) -> list[str]:

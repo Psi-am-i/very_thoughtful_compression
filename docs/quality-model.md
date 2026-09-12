@@ -205,6 +205,163 @@ the old logic computed `target = source_bitrate × ratio`, so every re-run re-an
 to the (now smaller) file and shaved another ~40% off, cutting a file down across
 successive runs (3.5 GB → 2.2 GB → 1.2 GB …) until it bottomed out near a bpp floor.
 
+### Frame rate is priced on a measured curve, not multiplied straight in
+
+**Changed 2026-09-12.** `× fps` used to assert that a frame costs the same number of bits
+whatever the frame rate — halve the frame rate and you halve the target. That had never
+been tested: the 1080p calibration set is entirely 23.98–25 fps, a 4% range, so the term
+had only ever been exercised over almost no range at all. It is false, and the term is now
+
+```
+target_kbps = tier_bpp × pixels × priced_fps(fps) × codec_factor ÷ 1000
+priced_fps(fps) = 24 × (fps / 24) ** 0.322
+```
+
+which leaves the anchor untouched and tightens everything above it:
+
+| Source frame rate | Priced as | Target vs the old linear term |
+|---|---|---|
+| 23.976 | 23.99 | 1.001× |
+| 24 | 24.00 | 1.000× (identical, by construction) |
+| 25 | 24.32 | 0.973× |
+| 29.97 | 25.78 | 0.860× |
+| 50 | 30.40 | 0.608× |
+| 60 | 32.24 | 0.537× |
+
+⛔ **`fps` is only ever a bitrate calculation. VTC does not change a file's frame rate**,
+which stays as the source's — 24 fps and 60 fps are how their films were meant to be seen.
+Pricing decides how many bits a second of them is worth, nothing else.
+
+**The anchor is 24 fps, not `_REF_FPS`.** The tier's bpp is *defined* at 1080p/30 fps, but
+the CRF bands were *fitted* on eight clips whose median is 23.988 fps — that is where the
+model is empirically calibrated, so that is where the curve must pass through the old
+value. Anchoring at 30 instead would hand every 24 fps file — about half a real library —
+a **15% more generous** target, loosening the bulk while trying to tighten the tail. One
+consequence to state plainly: a 1080p30 file no longer receives exactly its tier's quoted
+Mbps (EXCELLENT gives 9025 kbps H.264, not 10500). The quoted figure is the tier's
+reference *density*; the CLI banner and the walkthrough copy now say so.
+
+#### The measurement
+
+Three harnesses, all encoding the same footage at two or more frame rates at the same CRF,
+with the lower-rate arms keeping every Nth frame of the *same* decode so the kept pixels
+are identical — no intermediate, no asymmetric generation loss:
+
+| Harness | What it measured |
+|---|---|
+| `fps_term.py` | the shape of the curve at 4K: 60/30/20/15 fps, three CRF rungs, plus convergence at 4K |
+| `fps_term_library.py` | the exponent on five 1080p50 H.264 library shows, 30 s samples, 25 vs 50 fps |
+| `fps_term_hardest.py` | the shipped constant: the all-distinct case at a compliant 30 s |
+
+The curve's shape, from the 4K run (25 s, so its absolute values are superseded — see the
+methodology note below — but the *shape* across four frame rates is what it establishes):
+
+| Frame rate | Cost of one frame, against 60 fps | Old term's claim |
+|---|---|---|
+| 30 fps | 1.560× | 1.000 |
+| 20 fps | 1.997× | 1.000 |
+| 15 fps | 2.399× | 1.000 |
+
+A slower frame rate means bigger gaps between frames, larger residuals, and so more bits
+per frame. Those three points fit a single power law to within 2% over a 4× range, and the
+60↔30 pair repeated at three separate rungs of the band (crf 24 / 19 / 16) agreed to 1%.
+**So bitrate goes as roughly `fps^⅓`, not `fps^1`** — halving the frame rate cut the
+bitrate by 22%, not by 50%. `FPS_PRICE_EXPONENT` is `1 − 0.678 = 0.322`, from the 30 s
+measurement of the hardest case; why that case and not the median is below.
+
+What the old linear term cost was never quality — CRF sets that, and still does. It was
+that the *target* described a bitrate the content never needed, and the target drives two
+decisions: `over_target()` judged a high-frame-rate file "already at tier" and skipped it
+when encoding at the band's CRF would have shrunk it for nothing, and
+`predict_output_bytes()` (which prices video as `target × duration`) over-predicted the
+output and so understated the saving.
+
+**Exposure in a real library is small but not nil.** Across 149 shows on `/Volumes/RAID/TV`
+(one episode each): 75 at 23.97–24, 58 at 25, 9 at 29.97, 5 at 50. So 89% sit at the
+anchor and are unaffected; 9% are above it. Re-pricing flips 19 of 70 (show × tier)
+decisions among those 14 shows from skip to shrink. Verified with a real encode: The IT
+Crowd (1080p50, 6399 kbps, previously skipped at OK) now shrinks, and at the new 3647 kbps
+target the encode lands at 1996 kbps — **CRF-bound, so nothing was squeezed** — a 69%
+saving, converging well inside the gate.
+
+#### Why the constant is set at the hardest case
+
+`a` is **not** a constant of nature. It measures how much *new information* each extra
+frame carries, and it was measured across content that varies enormously in that:
+
+| Source | Frames genuinely distinct | `a` |
+|---|---|---|
+| Fake or Fortune! | 25% | 1.041 |
+| Mandy | 64% | 1.047 |
+| Nighty Night | — | 0.945 |
+| Ellie & Natasia | — | 0.938 |
+| The IT Crowd | 96% | 0.857 |
+| iPhone 4K60 | 100% | 0.678 |
+
+Where most frames are near-duplicates the extra frames were free, so halving the frame
+rate changes the bitrate not at all — Mandy measured 1556 kbps at 50 fps against 1560 at
+25, the same number. Fake or Fortune! is nominally 50 fps carrying about 12 fps of actual
+content. Where every frame is new, the survivors have to work much harder.
+
+The shipped constant takes the **hardest** case (`a = 0.678`, all frames distinct). On the
+**software** path that buys a real margin, because there the target is the `-maxrate`
+ceiling and the two errors are not symmetric:
+
+- **too generous** → CRF binds, the file lands at its natural rate, quality is the tier's.
+  Cost: a file may stay under the gate and never be offered a shrink.
+- **too tight** → the ceiling binds and the file is squeezed below what its CRF asked for.
+  Cost: quality, silently. A starved encode still probes valid, still matches play length
+  and is still smaller, so every check in the pipeline passes it.
+
+At the aggressive end (`a = 0.96`, the library median) the all-distinct case is squeezed
+32% below its CRF's wish; at 0.678 it sits in the ordinary "dense source, ceiling-bound
+near target" regime the bands already intend.
+
+⚠️ **That asymmetry does not exist on the default path, so do not lean on it there.**
+`encoder` defaults to AUTO — hardware where available, VideoToolbox on any Mac — and
+hardware encoders have no CRF: `_hw_video_args` emits `-b:v =` the target, so **the target
+is the delivered bitrate**, not a ceiling something else may sit under. Measured on The IT
+Crowd at 1080p50 through `hevc_videotoolbox` with the exact arguments the engine builds:
+asked 6000k → delivered 5941k (0.990×), asked 3647k → delivered 3574k (0.980×). The same
+file under the same 3647k ceiling in software chose 1996k, CRF-bound. So on hardware this
+exponent sets a 50 fps file's bitrate to 0.608× of what it used to get, flatly, and only
+the exponent being right protects it — choosing the hardest case there is simply the least
+aggressive reading of the measurement, not a margin. A blind 2-up of source against the
+hardware encode at the new target is built and waiting to be judged
+(`SPLIT-HWFPS-ITCrowd-*` in `VTC-TESTING/VTC-compare/`, key withheld); if the re-encoded
+side is visibly worse, the exponent wants **lowering**, which makes the target more
+generous.
+
+The saving this constant declines to chase is real and measured — Fake or Fortune! at OK
+would go 3658 → ~948 kbps — and is why a **per-file novelty probe** is on the roadmap
+(`docs/FUTURE-VERSIONS.md`). Until then, under-claiming is the side to be wrong on.
+
+#### It has to invalidate the ledger, or it cannot reach a scanned library
+
+A change to the target *formula* is a change to a cache key. The ledger records a file as
+done under `signature + path + size + mtime`, and `process_file()` returns `RESUME` on a
+hit **before the file is probed or `decide()` runs**. A file that was *left alone* keeps
+its size and mtime for ever, so without a signature change the high-frame-rate files this
+re-pricing exists to reach — the ones previously judged "already at tier" — are precisely
+the files that would never be looked at again. `settings_signature()` therefore appends
+`fps{FPS_PRICE_EXPONENT:.3f}`, **unconditionally**: the retune/frame-cap/modern tokens are
+appended only when set, so a default run still matches older ledgers, but here invalidating
+them is the point. The cost is a one-time re-probe of the library, not a re-encode — only
+files genuinely over the new target encode.
+
+#### Two methodological notes worth keeping
+
+**30 seconds is the minimum for a test clip** (Simon's rule, and it has teeth here).
+x265's keyint is 250 **frames**, so a clip shorter than one keyint is a single GOP and the
+slower arm of an fps comparison then carries double the I-frame share — an I-frame costing
+several times a P-frame. A 2 s smoke run reported a clean, self-consistent 1.49× on three
+separate CRF rungs for exactly that reason, and was discarded. The 25 s 4K run gave 0.642
+for the pair that a compliant 30 s run put at 0.678; the shipped number is the 30 s one.
+
+**A number agreeing with itself is not a number being right.** The harness counts I-frames
+per arm and flags a divergent share; it flagged the 20 and 15 fps arms on its own, which
+were then re-measured with `scenecut=0`, a pinned keyint, and non-I frames only.
+
 ## Frame size: a cap on height, priced into the target
 
 The walkthrough's **Frame Size** question (and `--max-height` on the CLI) caps the
@@ -259,6 +416,15 @@ there is no separate "bpp skip floor" any more — the tier target *is* the floo
 
 H.265/AV1/VP9 sources are classified `modern` and never transcoded (that would only
 add a generation of loss); they are only remuxed losslessly into MP4 if asked.
+
+**Verified at 4K, 2026-09-12.** The bands were fitted at 1080p, so convergence at 4K was
+an assumption. Measured with the shipping shape (capped CRF at the band, `-maxrate` and
+`-bufsize` at target) on two 4K sources at 30 and 60 fps, all five tiers: every one of the
+ten cases came out **CRF-bound**, at 0.41–0.63 of target, clearing the 1.10 gate with
+room. The ceiling never bound at 4K on this material, which is the intended regime — the
+CRF sets the quality and the file lands below target rather than being padded up to it. It
+also means 4K has no convergence problem of the kind the loose-`bufsize` bug once caused.
+(The low ratios at 60 fps are the `fps` term, not the gate — see above.)
 
 ### The exception: genuinely bloated modern files
 

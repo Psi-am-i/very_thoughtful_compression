@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from vtc import encode, pipeline  # noqa: E402
 from vtc.config import AudioPolicy, Container, RunConfig  # noqa: E402
 from vtc.ffprobe import AudioTrack, MediaInfo, SubtitleTrack  # noqa: E402
-from vtc.model import OutCodec, Tier, over_target, target_kbps  # noqa: E402
+from vtc.model import OutCodec, Tier, over_target, priced_fps, target_kbps  # noqa: E402
 from vtc.result import Mode, Outcome  # noqa: E402
 from vtc.webapp import build_config  # noqa: E402
 
@@ -90,10 +90,17 @@ def test_hevc_factor_label():
 # ── "Quality tiers · bits per pixel per frame" ────────────────────────────────
 def test_tier_bpp_label():
     cfg = _cfg(bpp={"EXCELLENT": 0.20})
-    # The label promises the target is bpp x pixels x fps x codec factor.
-    expect = int(0.20 * _PX * 30 * 0.60 / 1000)
-    assert target_kbps(Tier.EXCELLENT, _PX, 30, OutCodec.H265,
+    # The label promises the target is bpp x pixels x fps x codec factor — where the
+    # fps term is PRICED, not multiplied straight in (the label says so; a frame costs
+    # more bits at a lower frame rate). At the 24 fps anchor the two are identical,
+    # which is the cheapest way to assert the density half of the promise.
+    expect = int(0.20 * _PX * 24 * 0.60 / 1000)
+    assert target_kbps(Tier.EXCELLENT, _PX, 24, OutCodec.H265,
                        bpp=cfg.bpp_for(), hevc=cfg.hevc_factors()) == expect
+    # And away from the anchor the priced curve is what reaches the target.
+    assert target_kbps(Tier.EXCELLENT, _PX, 60, OutCodec.H265,
+                       bpp=cfg.bpp_for(), hevc=cfg.hevc_factors()) == int(
+        0.20 * _PX * priced_fps(60) * 0.60 / 1000)
 
 
 # ── "Avoid sidecar .srt files — MKV only when a subtitle can't embed in MP4" ──

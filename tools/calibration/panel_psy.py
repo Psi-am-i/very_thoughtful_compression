@@ -19,7 +19,7 @@ from pathlib import Path
 
 CLIPS = Path("/private/tmp/claude-501/-Users-simondavis-projects-very-thoughtful-compression"
              "/392d2c74-3fe5-4b45-b77f-14e59085cbb8/scratchpad/clips")
-OUT = Path("/Volumes/Scout-3MacBackup/VTC-compare")
+OUT = Path("/Volumes/Scout-3MacBackup/VTC-TESTING/VTC-compare")
 WORK = Path("/private/tmp/claude-501/-Users-simondavis"
             "/ba0a6a5c-b5aa-4c00-bb55-aeca376a4b31/scratchpad/psy")
 WORK.mkdir(parents=True, exist_ok=True)

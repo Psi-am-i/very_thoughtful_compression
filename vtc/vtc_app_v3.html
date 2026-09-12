@@ -2210,7 +2210,7 @@ body{
             <p><b>Very Thoughtful Compression evaluates files in a video library according to the quality and device compatibility you want.</b></p>
             <p>It evaluates every file individually to make lossless changes that improve compatibility and/or to re-encode the files that are genuinely too big given your quality requirements. It leaves everything that is at, or below your quality target exactly as it is to avoid needless degradation.</p>
             <p><b>Most batch re-encoders don't work this way.</b> They apply <b>one setting to every file</b>, or aim at a <b>relative</b> target like "70% of the current bitrate". If you do this repeatedly, the same movie is ground down run after run (3.5 GB → 2.2 GB → 1.2 GB etc), bleeding a generation of quality each time. A library isn't uniform: some files were encoded with generous headroom, others were squeezed dry years ago. Re-encoding the second kind buys almost nothing and costs quality that never comes back.</p>
-            <p><b>VTC measures before it touches anything.</b> Each file's real density is read — <b>bits per pixel per frame</b>, from its bitrate, resolution and frame rate. Your desired Quality Tier is a bpp too — a density, not a bitrate — so the target for <em>this</em> file is <b>tier bpp × its pixels × its frame rate × the codec factor</b>. No resolution rules anywhere.</p>
+            <p><b>VTC measures before it touches anything.</b> Each file's real density is read — <b>bits per pixel per frame</b>, from its bitrate, resolution and frame rate. Your desired Quality Tier is a bpp too — a density, not a bitrate — so the target for <em>this</em> file is <b>tier bpp × its pixels × its frame rate × the codec factor</b> — with frame rate priced on a measured curve, because a frame costs <em>more</em> bits at a lower frame rate, so halving the frame rate does not halve the bits. No resolution rules anywhere.</p>
             <p>Because that target is <b>absolute</b> — a function of the tier you choose and the file's own pixels and fps, never a fraction of its current size — it <b>converges</b>: one encode lands a file at the tier, and every run after that sees it already there and leaves it alone.</p>
             <p>A file is only re-encoded when it's <b>more than 10% over</b> its target; at or under, it is left exactly as it is. Modern codecs (H.265, AV1, VP9) are never transcoded — that usually spends a generation of quality to save very little. Targets are floored and never set above the source, so a file is only ever shrunk, never inflated.</p>
             <p>Before encoding, the expected output is modelled: if it won't clear your saving threshold, the encode never starts. Afterwards the source is replaced only if the new file exists, is non-empty, ffprobes as a valid video, and actually beat the threshold. If not, the original stays and we report what happened in the run report.</p>
@@ -4572,7 +4572,7 @@ function drawEstimate(){
     gateStart(); return;
   }
   // The real model: a tier is a bpp, and each file's target is
-  //   tier_bpp x pixels x fps x codec_factor
+  //   tier_bpp x pixels x priced_fps(fps) x codec_factor
   // — absolute, never a fraction of what the file currently weighs. Modelled
   // here over a mixed library rather than per file, but on the same arithmetic:
   // the ratio a fat 1080p30 source lands at is target_bpp / its own bpp.
@@ -4583,10 +4583,20 @@ function drawEstimate(){
   // of a library), AV1 x0.45 — the engine's own HEVC_FACTOR_HD / AV1_FACTOR_HD,
   // so the prediction cannot drift from what the run will actually target.
   const codecF=[1.0,0.60,0.45][answers.codec];
+  // The fps term used to cancel out of this ratio exactly: it multiplied the target
+  // and the source's assumed bitrate alike, so a pure density ratio WAS the true
+  // ratio. It no longer does — the engine prices frame rate as 24*(fps/24)**0.322,
+  // which leaves a priced_fps(fps)/fps factor behind (1.00 at 24, 0.97 at 25, 0.86 at
+  // 30, 0.54 at 60). Modelled here at the library's own centre of mass rather than per
+  // file, because this estimate has never had a per-file frame rate to work with:
+  // measured over 149 shows, 89% sit at 23.98-25 where the factor is 1.00-0.97, so the
+  // anchor is the honest assumption and the residual error is a couple of percent.
+  const FPS_ASSUMED=25, FPS_ANCHOR=24, FPS_EXP=0.322;
+  const fpsF=(FPS_ANCHOR*Math.pow(FPS_ASSUMED/FPS_ANCHOR,FPS_EXP))/FPS_ASSUMED;
   // a typical fat library source sits around 0.16 bpp — WEB-DL and Blu-ray rips
   // with generous headroom. That is what the tier is measured against.
   const SRC_BPP=0.16;
-  const ratio=Math.min(1, bpp*codecF/SRC_BPP);          // never inflate a source
+  const ratio=Math.min(1, bpp*codecF*fpsF/SRC_BPP);     // never inflate a source
   // files already at or under tier are left alone entirely (>10% over gate)
   const skipped=Math.round(N*(0.22+(answers.saving??1)*0.06));
   const touched=(N-skipped)/N;

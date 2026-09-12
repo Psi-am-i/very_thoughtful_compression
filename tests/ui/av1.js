@@ -1,8 +1,8 @@
 // Ad-hoc driver (scratchpad, NOT part of the repo's test suite): does the real
 // HTML behave the way the three deliverables claim?
 const fs=require('fs'); const path=require('path');
-const {JSDOM}=require(path.join('/Users/simondavis/projects/very_thoughtful_compression/tests/ui','node_modules','jsdom'));
-const html=fs.readFileSync('/Users/simondavis/projects/very_thoughtful_compression/vtc/vtc_app_v3.html','utf8');
+const {JSDOM}=require(path.join('/Users/simondavis/projects/video-audio/very_thoughtful_compression/tests/ui','node_modules','jsdom'));
+const html=fs.readFileSync('/Users/simondavis/projects/video-audio/very_thoughtful_compression/vtc/vtc_app_v3.html','utf8');
 const dom=new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:true,url:'http://127.0.0.1/x.html',
   beforeParse(w){w.matchMedia=(q)=>({matches:/prefers-reduced-motion/.test(String(q)),addListener(){},removeListener(){},addEventListener(){},removeEventListener(){}});
    w.HTMLMediaElement.prototype.play=()=>Promise.resolve();w.HTMLMediaElement.prototype.pause=()=>{};w.HTMLMediaElement.prototype.load=()=>{};}});

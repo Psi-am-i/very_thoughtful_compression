@@ -32,7 +32,7 @@ from pathlib import Path
 
 CLIPS = Path("/private/tmp/claude-501/-Users-simondavis-projects-very-thoughtful-compression"
              "/392d2c74-3fe5-4b45-b77f-14e59085cbb8/scratchpad/clips")
-OUT = Path("/Volumes/Scout-3MacBackup/VTC-compare")
+OUT = Path("/Volumes/Scout-3MacBackup/VTC-TESTING/VTC-compare")
 WORK = Path(__file__).parent / "panelwork"
 
 # Each recipe: (ffmpeg args before the output, the CRF flag to bisect, its range).

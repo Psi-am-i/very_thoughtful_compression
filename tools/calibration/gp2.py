@@ -1,6 +1,6 @@
 """Float-CRF bisection (0.25 steps) so a panel can actually be matched."""
 import json, subprocess, sys, os
-sys.path.insert(0,'/Users/simondavis/projects/very_thoughtful_compression')
+sys.path.insert(0,'/Users/simondavis/projects/video-audio/very_thoughtful_compression')
 from vtc.model import Tier, OutCodec, target_kbps
 from vtc.encode import crf_for_tier
 from vtc.result import Mode

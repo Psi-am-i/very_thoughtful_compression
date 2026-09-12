@@ -23,6 +23,9 @@ they measure are the settings that ship.
 | `consist.py` | per-window bitrate consistency off the container index, no decode |
 | `consist2.py` | the same at 1s/2s/4s — how the mini-GOP artefact was found |
 | `acf.py` | autocorrelation of frame sizes; locates the hierarchy period directly |
+| `fps_term.py` | the fps curve's SHAPE (60/30/20/15 fps at 4K, three CRF rungs) + convergence at 4K. 25s, so superseded on absolute values |
+| `fps_term_library.py` | the exponent across five 1080p50 H.264 library shows, 30s: `a` = 0.857–1.047, and that it tracks temporal novelty |
+| `fps_term_hardest.py` | **the shipped constant** — `a` = 0.678 for the all-distinct case at a compliant 30s, i.e. `FPS_PRICE_EXPONENT` in `model.py` |
 | `gp2.py` | float-CRF bisection to match two encodes to the same bitrate |
 | `grainmontage.py` | 2-up split screen, 1:1 crops, lossless, randomised, key withheld |
 | `panel.py`, `panel_psy.py` | 4-up and staircase panel builders (from the second session) |

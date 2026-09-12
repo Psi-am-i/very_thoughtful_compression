@@ -72,17 +72,17 @@ Pick what matters for *your* library — the tool can't guess it:
 A Quality Tier is **information density**, not a fixed bitrate. Density means **bits per pixel per frame** (bpp) — `bitrate ÷ (pixels × frame-rate)` — which is what actually decides how a file *looks*, because a bitrate only means something once you know the resolution and frame rate it's paying for. 8 Mbps is lavish at 720p, fine at 1080p, and starved at 4K; bits/pixel/frame folds all three into one number.
 
 What Quality to Expect
-To make it obvious what quality to expect, we compare to Netflix with full HD videos at 30fps, then extrapolate the 'bpp' that implies. Because bpp is normalised for resolution *and* frame rate, that one anchor scales to any file automatically — a 4K clip gets ~4× the 1080p bitrate, a 60 fps clip ~2× the 30 fps bitrate — with no per-resolution rules.
+To make it obvious what quality to expect, we compare to Netflix with full HD videos at 30fps, then extrapolate the 'bpp' that implies. Because bpp is normalised for resolution *and* frame rate, that one anchor scales to any file automatically — a 4K clip gets ~4× the 1080p bitrate, with no per-resolution rules. Frame rate is the one term that is not a straight multiplication: a frame costs *more* bits at a lower frame rate, so it is priced on a measured curve and a 60 fps clip gets ~1.25× the 30 fps bitrate, not 2×.
 
 | Tier | 1080p30 H.264 | bpp | …as H.265 @1080p | What it's for |
 |------|--------------|-----|------------------|---------------|
-| **OK** | 4.0 Mbps | 0.064 | ~2.4 Mbps | Space-first. Fine for phones, tablets and softer/older content; visible softening on detailed 1080p. |
-| **GOOD** | 5.0 Mbps | 0.080 | ~3.0 Mbps | Solid streaming quality you see on the web.|
-| **EXCELLENT** *(default)* | 6.8 Mbps | 0.109 | ~4.1 Mbps | Matches the top streaming rung you would get wit hNetlix or Amazon - with some headroom for a home encoder. The safe default. |
-| **STELLAR** | 8.0 Mbps | 0.129 | ~4.8 Mbps | Above streaming, heading toward Blu-ray-lite — for films or grainy/high-motion material you want kept crisp and good for projectors. |
-| **INSANE** | 9.0 Mbps | 0.145 | ~5.4 Mbps | Near-transparent for anything sourced from streaming / WEB-DL. Past this, you may as well keep the original. |
+| **OK** | 6.0 Mbps | 0.096 | ~3.6 Mbps | Space-first. Fine for phones, tablets and softer/older content; visible softening on detailed 1080p. |
+| **GOOD** | 8.0 Mbps | 0.129 | ~4.8 Mbps | Solid streaming quality you see on the web. |
+| **EXCELLENT** *(default)* | 10.5 Mbps | 0.169 | ~6.3 Mbps | Matches the top streaming rung you would get with Netflix or Amazon - with some headroom for a home encoder. The safe default. |
+| **STELLAR** | 13.0 Mbps | 0.209 | ~7.8 Mbps | Above streaming, heading toward Blu-ray-lite — for films or grainy/high-motion material you want kept crisp and good for projectors. |
+| **INSANE** | 15.5 Mbps | 0.249 | ~9.3 Mbps | Near-transparent for anything sourced from streaming / WEB-DL. Past this, you may as well keep the original. |
 
-*Mbps shown are H.264 at 1080p30. The tool re-derives the real target for every file from its own resolution and frame rate.*
+*Mbps shown are the tier's reference density, quoted H.264 at 1080p30 — and quoted is the word: the tool re-derives the real target for every file from its own resolution and frame rate. Frame rate is priced on a measured curve rather than multiplied straight in, so a 1080p30 file lands at 86% of the figure above (9.03 Mbps at EXCELLENT), and a 1080p24 file at exactly the curve's anchor. These figures are generated from `Tier` in `vtc/model.py`.*
 
 ### What the codec choice changes
 
@@ -95,7 +95,8 @@ EXCELLENT QUALITY: in H.264 it will cost about 6.8 Mbps at 1080p, in H.265 it is
 
 ### How the target is computed
 ```
-target_kbps = tier_bpp × pixels × frame_rate × codec_factor ÷ 1000
+target_kbps = tier_bpp × pixels × priced_frame_rate × codec_factor ÷ 1000
+priced_frame_rate = 24 × (frame_rate / 24) ** 0.322
 ```
 
 - **codec_factor** is `1.0` for H.264. For H.265 it reflects HEVC's growing efficiency: **×0.60 ≤1080p, ×0.50 ≤4K, ×0.45 above** (a 40 / 50 / 55 % saving).
@@ -104,7 +105,7 @@ target_kbps = tier_bpp × pixels × frame_rate × codec_factor ÷ 1000
 
 **Sanity anchors:** EXCELLENT @1080p → 6.8 Mbps H.264 / ~4.1 Mbps H.265 (Netflix's 1080p HEVC band); EXCELLENT @4K H.265 → ~13.6 Mbps (≈ Netflix 4K).
 
-**Honesty notes.** "Quality" assumes typical film/TV at 24–30 fps; very grainy or 50/60 fps material may want a tier up. Software (libx264/libx265) uses quality-targeted capped-CRF — slightly better per bit than the hardware VideoToolbox encoder's plain bitrate targeting at the same target, though hardware like VideoToolbox is far faster. Streaming services hit their numbers with per-shot encoders you don't have, so these anchors sit a little above theirs on purpose. The full derivation lives in [`docs/quality-model.md`](docs/quality-model.md).
+**Honesty notes.** "Quality" assumes typical film/TV at 24–30 fps; very grainy material may want a tier up. 50/60 fps material is now priced on its own curve rather than linearly (a frame costs more bits at a lower frame rate), anchored at 24 fps where the encoder settings were calibrated. Software (libx264/libx265) uses quality-targeted capped-CRF — slightly better per bit than the hardware VideoToolbox encoder's plain bitrate targeting at the same target, though hardware like VideoToolbox is far faster. Streaming services hit their numbers with per-shot encoders you don't have, so these anchors sit a little above theirs on purpose. The full derivation lives in [`docs/quality-model.md`](docs/quality-model.md).
 
 
 ## What gets encoded
@@ -241,7 +242,7 @@ rm /tmp/hevc_stop      # clear the stop flag to resume/re-run
 ```
 tier_bpp     = ref_mbps × 1e6 ÷ (1920 × 1080 × 30)          # per-tier constant
 codec_factor = 1.0 (H.264) | 0.60 ≤1080p / 0.50 ≤4K / 0.45 >4K (H.265)
-target_kbps  = tier_bpp × pixels × frame_rate × codec_factor ÷ 1000
+target_kbps  = tier_bpp × pixels × priced_frame_rate × codec_factor ÷ 1000
 target_kbps  = min(source_kbps, max(BITRATE_FLOOR, target_kbps))   # floored; never inflate
 ```
 

@@ -7,7 +7,7 @@ non-monotonic ladder last time — the subsets are not comparable — so that is
 reported here only as a cross-check, never used.
 """
 import json, math, statistics, sys
-sys.path.insert(0, '/Users/simondavis/projects/very_thoughtful_compression')
+sys.path.insert(0, '/Users/simondavis/projects/video-audio/very_thoughtful_compression')
 from vtc.model import Tier, AV1_FACTOR_HD, TIER_OVER_TOLERANCE
 
 ANCHOR = 'GOOD'

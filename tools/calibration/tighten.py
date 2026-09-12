@@ -4,7 +4,7 @@ Runs the cases that breached the 1.10 gate plus controls that did not, so a fix
 that merely crushes easy content shows up as such.
 """
 import json, subprocess, os, sys
-sys.path.insert(0, '/Users/simondavis/projects/very_thoughtful_compression')
+sys.path.insert(0, '/Users/simondavis/projects/video-audio/very_thoughtful_compression')
 from vtc.model import Tier, OutCodec, target_kbps
 
 BANDS = json.load(open('bands.json'))

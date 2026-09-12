@@ -27,6 +27,71 @@ _PIXELS_4K = 3840 * 2160
 BITRATE_FLOOR_KBPS = 1500          # never target below this (avoids garbage output)
 TIER_OVER_TOLERANCE = 1.10         # re-encode only a source that is >10% over target
 
+# ── How frame rate is priced ──────────────────────────────────────────────────
+# The target used to be linear in fps, which asserts that a frame costs the same bits
+# whatever the frame rate. MEASURED 2026-09-12 and false: a slower frame rate means
+# bigger gaps between frames, larger residuals, and more bits per frame. So halving
+# the frame rate does NOT halve the bits a second of video wants.
+#
+# bits/frame ~ fps**-a, so bitrate ~ fps**(1-a) = fps**FPS_PRICE_EXPONENT.
+#
+# ⚠️ THE ANCHOR IS NOT _REF_FPS, AND THAT IS DELIBERATE. The tier's bpp is *defined*
+# arithmetically at 1080p/30fps, but the CRF bands were *fitted* on eight clips whose
+# median is 23.988 fps — that is where the model is empirically calibrated, so that is
+# where the curve has to pass through today's value. Anchoring at 30 instead would hand
+# every 24 fps file (half the library) a 15% MORE generous target, loosening the bulk of
+# the library while trying to tighten the tail. The anchor is the calibration point, not
+# the definition point.
+FPS_PRICE_ANCHOR = 24.0
+#
+# ⚠️ THIS CONSTANT IS SET AT THE HARDEST CASE, NOT THE AVERAGE, AND THE ASYMMETRY IS THE
+# WHOLE REASON. `a` is not a constant of nature — it measures how much NEW information
+# each extra frame carries, and it ran 0.678 (iPhone 4K60, 100% of frames distinct)
+# to 1.047 (Mandy, 64%) and 1.041 (Fake or Fortune!, 25% — nominally 50 fps, carrying
+# about 12 fps of actual content).
+#
+# ON THE SOFTWARE PATH the target is the -maxrate ceiling, and the two errors differ:
+#   too generous -> CRF binds, the file lands at its natural rate, quality is the tier's.
+#                   Cost: a file may stay under the gate and not be offered a shrink.
+#   too tight    -> the ceiling binds and the file is squeezed below what its CRF asked
+#                   for. Cost: quality, silently — a starved encode still probes valid,
+#                   still matches play length, still is smaller, so nothing catches it.
+# At the aggressive end (a=0.96) the all-distinct case is squeezed 32% below its CRF's
+# wish. At a=0.678 it sits in the ordinary "dense source, ceiling-bound near target"
+# regime the bands already intend.
+#
+# ⚠️ THAT ASYMMETRY DOES NOT EXIST ON THE DEFAULT PATH, AND THIS CONSTANT IS NOT
+# PROTECTED BY IT THERE. `encoder` defaults to AUTO, i.e. hardware where available —
+# VideoToolbox on any Mac — and hardware encoders have no CRF: _hw_video_args emits
+# -b:v = the target, so THE TARGET IS THE DELIVERED BITRATE, not a ceiling something
+# else may sit under. See the note in _hw_video_args: "the tier bitrate is the whole
+# quality knob". There this exponent sets a 60 fps file's bitrate to 0.537x of what it
+# used to get, flatly, with no CRF underneath to catch an over-tight number — both
+# directions cost something and only the exponent being right protects it.
+# So: the hardest case sets the number because on software it buys a real margin and on
+# hardware it is simply the least aggressive reading of the measurement.
+# The saving this declines to chase is real and measured (Fake or Fortune! at OK would go
+# 3658 -> ~948 kbps) and is why the per-file novelty probe is on the roadmap — see
+# docs/FUTURE-VERSIONS.md. Until then, under-claiming is the side to be wrong on.
+#
+# Measured on a 30s sample (the minimum; a shorter clip is one 250-frame keyint and the
+# slower arm then carries double the I-frame share, which inflated an earlier 25s run to
+# a=0.642). Harness: tools/calibration/fps_term_hardest.py.
+FPS_PRICE_EXPONENT = 1.0 - 0.678   # bitrate ~ fps**0.322
+
+
+def priced_fps(fps: float) -> float:
+    """The frame rate as the target should price it, not as the file plays it.
+
+    Identity at the anchor, below it above the line and above it below — a 60 fps file
+    is priced as 32.2 rather than 60, a 12 fps file as 19.2 rather than 12. NOTE that
+    this is only ever a bitrate calculation: VTC does not change a file's frame rate,
+    which stays as the source's.
+    """
+    if fps <= 0:
+        fps = float(_REF_FPS)
+    return FPS_PRICE_ANCHOR * (fps / FPS_PRICE_ANCHOR) ** FPS_PRICE_EXPONENT
+
 # H.265 bitrate vs H.264 at equal quality, by OUTPUT resolution. The HEVC
 # advantage grows with frame size (validated against coding-efficiency studies:
 # theoretical ~50%, practical ~25-40% at HD; 0.60 at HD hands H.265 more bitrate
@@ -216,15 +281,17 @@ def target_kbps(
 ) -> int:
     """Absolute target bitrate (kbps) for a file at this resolution/fps/codec.
 
-    target = tier_bpp * pixels * fps * codec_factor, clamped to the floor and
-    never above the source (we don't inflate). Returns an integer kbps.
+    target = tier_bpp * pixels * priced_fps(fps) * codec_factor, clamped to the floor
+    and never above the source (we don't inflate). Returns an integer kbps.
+    `priced_fps` is NOT `fps` — frame rate is priced on a measured curve rather than
+    linearly; see FPS_PRICE_EXPONENT above.
 
     `bpp` overrides the tier's own density — that is how a user-edited tier (see
     RunConfig.tier_bpp) reaches the arithmetic without mutating the shared enum.
     """
     fps = fps if fps > 0 else float(_REF_FPS)
     density = tier.bpp if bpp is None else bpp
-    raw = density * pixels * fps * codec_factor(out_codec, pixels, hevc, av1) / 1000.0
+    raw = density * pixels * priced_fps(fps) * codec_factor(out_codec, pixels, hevc, av1) / 1000.0
     target = max(float(floor_kbps), raw)
     if src_kbps is not None and src_kbps > 0:
         target = min(target, src_kbps)

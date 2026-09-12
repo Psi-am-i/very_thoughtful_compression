@@ -240,13 +240,23 @@ def interactive_config(src: Path | None) -> RunConfig:
         ["H.265 / HEVC — ~40-55% smaller, modern players",
          "H.264 / AVC  — universal playback, larger"], default=1) - 1]
 
-    tier = [Tier.OK, Tier.GOOD, Tier.EXCELLENT, Tier.STELLAR, Tier.INSANE][_menu(
-        "Quality tier? (Mbps are H.264 @1080p30; scales with resolution/fps)",
-        ["OK        — ~4 Mbps   (space-first)",
-         "GOOD      — ~5 Mbps   (solid streaming)",
-         "EXCELLENT — ~6.8 Mbps (matches top streaming, with headroom)",
-         "STELLAR   — ~8 Mbps   (above streaming, approaching Blu-ray)",
-         "INSANE    — ~9 Mbps   (near-transparent for streaming sources)"], default=3) - 1]
+    # The Mbps in each label is DERIVED from the tier, never typed in. Hand-written
+    # figures here drifted from Tier for long enough that the menu offered
+    # "EXCELLENT — ~6.8 Mbps" and the banner on the very next screen (which does derive
+    # from tier.bpp) answered "density of 10.5 Mbps".
+    _TIER_BLURB = {
+        Tier.OK: "space-first",
+        Tier.GOOD: "solid streaming",
+        Tier.EXCELLENT: "matches top streaming, with headroom",
+        Tier.STELLAR: "above streaming, approaching Blu-ray",
+        Tier.INSANE: "near-transparent for streaming sources",
+    }
+    _tiers = [Tier.OK, Tier.GOOD, Tier.EXCELLENT, Tier.STELLAR, Tier.INSANE]
+    tier = _tiers[_menu(
+        "Quality tier? (Mbps are a density, quoted H.264 @1080p30; scales with "
+        "resolution, and with frame rate on a measured curve)",
+        [f"{t.label:<9s} — ~{t.ref_mbps:.1f} Mbps ({_TIER_BLURB[t]})" for t in _tiers],
+        default=3) - 1]
 
     min_saving = {1: 0.25, 2: 0.15, 3: 0.35, 4: 0.0}[_menu(
         "Minimum size saving to keep a re-encode?",
@@ -315,8 +325,13 @@ def _print_header(cfg: RunConfig, dry: bool = False) -> None:
         *( [banner, ""] if banner else [] ),
         f"SRC:       {cfg.src}",
         f"CODEC:     {cfg.out_codec.value.upper()}",
-        f"TIER:      {tier.label} — {ref_mbps:.1f} Mbps H.264 @1080p30{h265}, "
-        f"scales with resolution & fps{tuned}",
+        # The Mbps is the tier's reference DENSITY, quoted at 1080p30 as it always has
+        # been — but a 1080p30 file no longer receives exactly it, because frame rate is
+        # priced on a measured curve rather than multiplied straight in (a frame costs
+        # more bits at a lower frame rate). Saying "scales with fps" would now overstate
+        # what happens: doubling the frame rate does not double the target.
+        f"TIER:      {tier.label} — density of {ref_mbps:.1f} Mbps H.264 @1080p30{h265}; "
+        f"scales with resolution, and with frame rate on a measured curve{tuned}",
         # A frame-size cap silently rewrites what every target means, so it is
         # stated up front rather than left to be inferred from the results.
         *([f"FRAME:     capped at {cfg.max_short_edge}p on the short edge — aspect kept, "

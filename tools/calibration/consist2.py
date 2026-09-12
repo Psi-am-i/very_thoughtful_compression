@@ -6,7 +6,7 @@ inflate AV1's per-second variance for structural reasons rather than perceptual
 ones. If the gap survives a bucket wider than the mini-GOP, it is real.
 """
 import json, subprocess, statistics, sys
-sys.path.insert(0, '/Users/simondavis/projects/very_thoughtful_compression')
+sys.path.insert(0, '/Users/simondavis/projects/video-audio/very_thoughtful_compression')
 from vtc.model import Tier, OutCodec, target_kbps
 from vtc.encode import crf_for_tier, AV1_MBR_OVERSHOOT_PCT
 from vtc.result import Mode

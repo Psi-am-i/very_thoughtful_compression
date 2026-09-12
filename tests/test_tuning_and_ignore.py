@@ -39,9 +39,11 @@ def _touch(path: Path, size: int = 1024) -> Path:
 # ── tier densities ────────────────────────────────────────────────────────────
 def test_bpp_override_moves_the_target():
     # Double the density -> double the target, exactly. This is the whole model.
-    assert target_kbps(Tier.EXCELLENT, _PX_1080P, 30, OutCodec.H264) == 10500
-    assert target_kbps(Tier.EXCELLENT, _PX_1080P, 30, OutCodec.H264,
-                       bpp=Tier.EXCELLENT.bpp * 2) == 21000
+    # At 24 fps, the frame-rate anchor, so these numbers test density alone and are
+    # not also a restatement of how frame rate is priced (see test_model.py).
+    assert target_kbps(Tier.EXCELLENT, _PX_1080P, 24, OutCodec.H264) == 8400
+    assert target_kbps(Tier.EXCELLENT, _PX_1080P, 24, OutCodec.H264,
+                       bpp=Tier.EXCELLENT.bpp * 2) == 16800
 
 
 def test_bpp_for_falls_back_to_the_tier():
@@ -68,14 +70,41 @@ def test_retuned_tier_changes_the_ledger_signature():
     assert tuned.settings_signature() != base.settings_signature()
 
 
+def test_the_target_formula_is_in_the_ledger_signature():
+    """Changing how a target is computed must re-evaluate a library, or it can't land.
+
+    A file judged "already at tier" is recorded as done under a key of
+    signature+path+size+mtime, and a file that was LEFT ALONE has the same size and
+    mtime for ever — so on the next run the ledger returns RESUME before the file is
+    probed. That makes the high-frame-rate files a re-priced fps term exists to reach
+    exactly the files it would never look at again. The signature therefore has to name
+    the target formula itself, not just the settings fed into it.
+    """
+    import vtc.config as config_mod
+
+    cfg = RunConfig(src=Path("."), tier=Tier.EXCELLENT)
+    sig = cfg.settings_signature()
+    assert f"fps{config_mod.FPS_PRICE_EXPONENT:.3f}" in sig
+
+    # Unconditional, unlike the retune/frame-cap/modern tokens: a DEFAULT run must
+    # also stop matching ledgers written under the old formula.
+    original = config_mod.FPS_PRICE_EXPONENT
+    try:
+        config_mod.FPS_PRICE_EXPONENT = 1.0          # the old linear term
+        assert RunConfig(src=Path("."), tier=Tier.EXCELLENT).settings_signature() != sig
+    finally:
+        config_mod.FPS_PRICE_EXPONENT = original
+
+
 def test_hevc_factors_reach_the_target():
     # These three were settable but unread before; a changed factor must move the
     # H.265 target and leave H.264 alone.
-    assert target_kbps(Tier.EXCELLENT, _PX_1080P, 30, OutCodec.H265) == 6300
-    assert target_kbps(Tier.EXCELLENT, _PX_1080P, 30, OutCodec.H265,
-                       hevc=(0.30, 0.50, 0.45)) == 3150
-    assert target_kbps(Tier.EXCELLENT, _PX_1080P, 30, OutCodec.H264,
-                       hevc=(0.30, 0.50, 0.45)) == 10500
+    # At the 24 fps anchor, for the same reason as above.
+    assert target_kbps(Tier.EXCELLENT, _PX_1080P, 24, OutCodec.H265) == 5040
+    assert target_kbps(Tier.EXCELLENT, _PX_1080P, 24, OutCodec.H265,
+                       hevc=(0.30, 0.50, 0.45)) == 2520
+    assert target_kbps(Tier.EXCELLENT, _PX_1080P, 24, OutCodec.H264,
+                       hevc=(0.30, 0.50, 0.45)) == 8400
 
 
 # ── ignore rules ──────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
 // behind the other up-front sheets rather than stacked on them, and recorded on
 // every route out so it cannot nag.
 const fs=require('fs'); const {JSDOM}=require('jsdom');
-const SRC='/Users/simondavis/projects/very_thoughtful_compression/vtc/vtc_app_v3.html';
+const SRC='/Users/simondavis/projects/video-audio/very_thoughtful_compression/vtc/vtc_app_v3.html';
 function boot(){
   const dom=new JSDOM(fs.readFileSync(SRC,'utf8'),
    {runScripts:'dangerously',pretendToBeVisual:true,url:'http://127.0.0.1/x.html',

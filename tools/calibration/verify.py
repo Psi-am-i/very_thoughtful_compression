@@ -2,7 +2,7 @@
 shapes against the tier's AV1 target. Reports ratio-to-target; the convergence
 gate is 1.10."""
 import json, subprocess, os, sys, time
-sys.path.insert(0, '/Users/simondavis/projects/very_thoughtful_compression')
+sys.path.insert(0, '/Users/simondavis/projects/video-audio/very_thoughtful_compression')
 from vtc.model import Tier, OutCodec, target_kbps
 
 BANDS = json.load(open('bands.json'))     # {"OK": 24, ...}

@@ -4,7 +4,7 @@ key withheld — and the KEY records the FULL argument list (the shadowTools les
 """
 import json, subprocess, sys, random, datetime, os
 
-OUT = os.environ.get('VTC_PANEL_DIR', '/Volumes/Scout-3MacBackup/VTC-compare')
+OUT = os.environ.get('VTC_PANEL_DIR', '/Volumes/Scout-3MacBackup/VTC-TESTING/VTC-compare')
 CROP_X = 480          # centre 960-wide band of a 1920 frame, at 1:1
 random.seed()
 
