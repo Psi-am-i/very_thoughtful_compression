@@ -1,20 +1,20 @@
 # very_thoughtful_compression
 
-Selectively repackages and/or re-encodes your videos so that they are a sane size at the quality you want and are as comaptible as you need them to be.
+Selectively repackages and/or re-encodes your videos so that they are a sane size at the quality you want and are as compatible as you need them to be.
 
 ## Why "thoughtful"
 
-The tool never applies one dumb rule (like "half the bitrate") to every file. It adjusts it's settings for every file:
+The tool never applies one dumb rule (like "half the bitrate") to every file. It adjusts its settings for every file:
 
 1. **Reads the source video's information density** — not just bitrate, it looks at bitrate, resolution and frame rate → giving bits per pixel per frame.
-2. **Compares against an absolute tier target**, based on your quality requirement, it  works out what *this* resolution/fps should cost at your chosen tier and only re-encodes a file that is **more than 10 % over** the density required for the quality you want at the resolution and frame rate you want (`SKIP: already at tier` otherwise). A file already at or under its target is left exactly as it is.
+2. **Compares against an absolute tier target**, based on your quality requirement, it works out what *this* resolution/fps should cost at your chosen tier and only re-encodes a file that is **more than 10 % over** the density required for the quality you want at the resolution and frame rate you want (`SKIP: already at tier` otherwise). A file already at or under its target is left exactly as it is.
 3. **Converges instead of grinding files down.** Because the target is absolute, running the tool twice is safe: once a file has been brought to its tier, a second run sees it's at target and skips it. It never shaves the same file smaller and smaller across runs — which is what normal batch processing generally does. 
-4. **Never re-encodes an already-efficient codec** — H.265/AV1/VP9 are only ever remuxed, never transcoded (that just costs a generation of quality). Optimizing these codecs might be added in future .
-5.  **Never wastes time** It pre-scans each file, models the expected output size, and skips files that definitely won't meet your space-saving threshold before spending hours encoding them.
-5. **Verifies after encoding** — a shrink replaces the source only if the new file exists, is non-empty, and is meaningfully smaller than your minimum-saving threshold; otherwise the original stays and the file is reported.
-6. **Remembers what it did.** A resume ledger (`.vtc_processed.log` at the scan root) lets a re-run skip files already handled under the same settings, so a big job you stopped picks up where it left off.
-7. **Will never destroy subtitle tracks silently** — it preserves and embeds all subtitles if it can, or it uses sidecar `.srt` files when they cannot be embedded. It can optionally, leave containers like MKV alone.
-9. Fully configurable
+4. **Never re-encodes an already-efficient codec** — H.265/AV1/VP9 are only ever remuxed, never transcoded (that just costs a generation of quality). Optimizing these codecs might be added in future.
+5. **Never wastes time.** It pre-scans each file, models the expected output size, and skips files that definitely won't meet your space-saving threshold before spending hours encoding them.
+6. **Verifies after encoding** — a shrink replaces the source only if the new file exists, is non-empty, and is meaningfully smaller than your minimum-saving threshold; otherwise the original stays and the file is reported.
+7. **Remembers what it did.** A resume ledger (`.vtc_processed.log` at the scan root) lets a re-run skip files already handled under the same settings, so a big job you stopped picks up where it left off.
+8. **Will never destroy subtitle tracks silently** — it preserves and embeds all subtitles if it can, or it uses sidecar `.srt` files when they cannot be embedded. It can optionally leave containers like MKV alone.
+9. **Fully configurable.**
 
 
 If you would like to know more details, read on...
@@ -27,14 +27,14 @@ Everyone wants the same four things — **quality, small size, fast encoding, wi
 - **The codec** (H.264, H.265, AV1, VP9, Xvid…) does the actual compression. It decides the **file size at a given quality** and **how long encoding takes**. Nearly all the size difference between two files comes from here.
 - **The container** (MP4, MKV, WebM, AVI) is just the wrapper holding the video bitstream plus its audio and subtitle tracks. It adds only rounding-error overhead to the size — what it really decides is **compatibility**, **streaming behaviour**, and **which subtitle/audio track types can ride along**.
 
-> **Myth: "MKV is smaller than MP4."** It isn't. The same H.264 video is the same size in either container. MKV files are used because they're can contain high-bitrate video with multiple audio and subtitle tracks in multiple formats. They make distribution easier but they are not as compatible as MP4, especially when they have exotic qualities. Most users only want some of what these fat MKV's contain, so we enable you to choose and move everything to a more compatible container without any quality loss. 
+> **Myth: "MKV is smaller than MP4."** It isn't. The same H.264 video is the same size in either container. MKV files are used because they can contain high-bitrate video with multiple audio and subtitle tracks in multiple formats. They make distribution easier but they are not as compatible as MP4, especially when they have exotic qualities. Most users only want some of what these fat MKVs contain, so we enable you to choose and move everything to a more compatible container without any quality loss. 
 
 
 ### An unscientific comparison of Containers and Codecs
 
 There are always trade-offs, so you need to decide which is the most important: file size, playback compatibility or the speed at which files can be made. 
 
-So using a scale of 1–10 (higher is better). **Space** = how small at equal quality · **Compat** = how well does it play out-of-the-box across today's phones, TVs and browsers · **Stream** = progressive + adaptive (HLS/DASH) friendliness · **Speed** = encode speed. an Asterisk * means *if your machine has a hardware encoder for that codec*.
+So using a scale of 1–10 (higher is better). **Space** = how small at equal quality · **Compat** = how well does it play out-of-the-box across today's phones, TVs and browsers · **Stream** = progressive + adaptive (HLS/DASH) friendliness · **Speed** = encode speed. An asterisk (*) means *if your machine has a hardware encoder for that codec*.
 
 To make files of the same perceptual quality this is roughly how containers and codecs perform.
 
@@ -89,9 +89,9 @@ To make it obvious what quality to expect, we compare to Netflix with full HD vi
 The **tier** fixes the quality; the **output codec** fixes how many bits that quality costs.
 
 - **H.265 / HEVC** *(default)* — reaches the same quality as H.264 at roughly **40–55% less bitrate**, the advantage growing with resolution. Plays on essentially all 2015-and-newer hardware. Pick this unless you have a specific reason not to.
-- **H.264 / AVC** — the universal baseline that direct-plays on virtually anything, but ~2× larger at the same quality and increasingly wasteful above 1080p. If you are streaming to many people or all sorts of devices, this offers maximum compatibility (all modern equipmen, old TVs, projectors, ancient phones).
+- **H.264 / AVC** — the universal baseline that direct-plays on virtually anything, but ~2× larger at the same quality and increasingly wasteful above 1080p. If you are streaming to many people or all sorts of devices, this offers maximum compatibility (all modern equipment, old TVs, projectors, ancient phones).
 
-EXCELLENT QUALITY: in H.264 it will cost about 6.8 Mbps at 1080p, in H.265 it is only 4.1 Mbps — same picture, half the size.
+EXCELLENT QUALITY: in H.264 it costs about 8.4 Mbps at 1080p24, in H.265 about 5.0 Mbps — same picture, 40% smaller.
 
 ### How the target is computed
 ```
@@ -103,7 +103,7 @@ priced_frame_rate = 24 × (frame_rate / 24) ** 0.322
 - Clamped to a **floor of 1500 kbps**, and **never set above the source** — a file is only ever shrunk, never inflated.
 - The target is **absolute** — a function of the tier and the file's own pixels/fps, *not* a fraction of the file's current bitrate. This is what makes repeated runs safe (see [Why "thoughtful"](#why-thoughtful)).
 
-**Sanity anchors:** EXCELLENT @1080p → 6.8 Mbps H.264 / ~4.1 Mbps H.265 (Netflix's 1080p HEVC band); EXCELLENT @4K H.265 → ~13.6 Mbps (≈ Netflix 4K).
+**Sanity anchors** (at the 24 fps anchor, where the encoder bands were calibrated): EXCELLENT @1080p → 8.4 Mbps H.264 / ~5.0 Mbps H.265; EXCELLENT @4K H.265 → ~16.8 Mbps. A 30 fps file gets ~7% more than these, a 50 fps file ~28% more — frame rate is priced on a curve, not multiplied in.
 
 **Honesty notes.** "Quality" assumes typical film/TV at 24–30 fps; very grainy material may want a tier up. 50/60 fps material is now priced on its own curve rather than linearly (a frame costs more bits at a lower frame rate), anchored at 24 fps where the encoder settings were calibrated. Software (libx264/libx265) uses quality-targeted capped-CRF — slightly better per bit than the hardware VideoToolbox encoder's plain bitrate targeting at the same target, though hardware like VideoToolbox is far faster. Streaming services hit their numbers with per-shot encoders you don't have, so these anchors sit a little above theirs on purpose. The full derivation lives in [`docs/quality-model.md`](docs/quality-model.md).
 
@@ -114,7 +114,7 @@ The scan covers `.mkv`, `.mp4`, `.mov`, `.avi`, `.webm`, `.m4v`, `.ts`, `.wmv`, 
 
 | Source codec | Action |
 |---|---|
-| **H.264** (`h264`/`avc`) | **Shrink** if it's fat and worth it (see below). If it's already efficient but sits in a non-MP4 container, it's **remuxed** to MP4 instead - so you get better compatibilty and no loss of quality. |
+| **H.264** (`h264`/`avc`) | **Shrink** if it's fat and worth it (see below). If it's already efficient but sits in a non-MP4 container, it's **remuxed** to MP4 instead - so you get better compatibility and no loss of quality. |
 | **H.265 / AV1 / VP9** (modern, efficient) | **Never transcoded** — re-encoding these only costs a generation of quality. If in a non-MP4 container they're **remuxed** losslessly into MP4; if already MP4, left alone. |
 | **Legacy / MP4-incompatible** (MPEG-2, VC-1, Xvid/DivX, WMV, MS-MPEG4, …) | **Transcoded** to your chosen codec at **maximum fidelity** (quality-targeted CRF capped at the *source's own* bitrate, so quality is preserved rather than squeezed to a tier) and written as MP4. |
 | **Mezzanine / other** (ProRes, DNxHD, FFV1, raw, …) | Left untouched. |
@@ -124,13 +124,13 @@ The last two behaviours are opt-in, asked once at startup:
 - *"If possible, convert files into MP4 for maximum compatibility with NO loss of quality?"* — the lossless **remux** (a fast `-c copy`, no re-encode; also fixes MP4 faststart). Default yes.
 - *"If a file uses a codec incompatible with MP4, transcode it with maximum fidelity and convert it to MP4?"* — the legacy **transcode**. Default yes.
 
-The **minimum-saving** gate is a second safety net: even when a file is over target, the re-encode is only *kept* if the output turns out to be smaller by at least your threshold. It's codec-aware — a healthy H.265 re-encode saves 30–45 %, so its default is **25 %**; H.264→H.264 only trims fat, so its default is **15 %**. The gate applies only to a shrink — a remux (lossless) and a compatibility transcode (fidelity-first) are kept regardless of size.
+The **minimum-saving** gate is a second safety net: even when a file is over target, the re-encode is only *kept* if the output turns out to be smaller by at least your threshold. It's codec-aware — an H.265 re-encode genuinely worth doing normally clears this comfortably, so its default is **25 %**; H.264→H.264 only trims fat, so its default is **15 %**. The gate applies only to a shrink — a remux (lossless) and a compatibility transcode (fidelity-first) are kept regardless of size.
 
 At the end of the run a **space-saved** summary reports the total original size, new size, and bytes/percent saved across every file replaced.
 
 ## Streams: video, audio, subtitles
 
-**Video profiles.** H.265 output uses the `main` profile — or `main10` when the source is 10-bit — tagged `hvc1` so Apple players recognise it. H.264 output forces 8-bit `yuv420p` + High profile for maximum player compatibility.
+**Video profiles.** H.265 output uses the `main` profile — or `main10` when the source is 10-bit — tagged `hvc1` so Apple players recognise it. AV1 output is always 10-bit, even from an 8-bit source — 10-bit is part of AV1's Main profile so it costs nothing in compatibility — and runs SVT-AV1's subjective tune with variance boost, capped-CRF like the H.26x paths. Film-grain synthesis is deliberately **off**: it has the decoder invent a noise pattern that was never in the source, and this tool's first rule is never to make a file worse — fabricating detail is a different act from keeping it. H.264 output forces 8-bit `yuv420p` + High profile for maximum player compatibility.
 
 **Audio.** All audio tracks are stream-copied untouched (original codec, channels and quality preserved). Only if the audio codec can't live in an MP4 container does the script fall back to re-encoding to AAC at 384 kbps.
 
@@ -211,7 +211,7 @@ vtc [SRC] [options]     # or, from source: python -m vtc.cli [SRC]
 `SRC` is the directory to scan recursively; omit it (or pass `-i`) for the
 interactive prompts. Everything the app asks is a flag:
 
-**Quality** — `--codec {h265,h264}` · `--tier {ok,good,excellent,stellar,insane}` ·
+**Quality** — `--codec {h265,h264,av1}` · `--tier {ok,good,excellent,stellar,insane}` ·
 `--min-saving 0.25` (fraction a shrink must save to be kept) · `--bpp 0.12`
 (retune the chosen tier's density — see [the quality model](docs/quality-model.md)).
 **Ignore rules** — `--ignore-under MB` · `--ignore-over MB` · `--ignore-ext .avi` ·
@@ -254,7 +254,7 @@ If the source bitrate cannot be probed, the tier target for that resolution is u
 
 Attempts are ordered so a normal file takes exactly one pass: embed text subs + stream-copy audio → then AAC audio fallback → then (only if subtitles were the problem) the same two without embedded subs, followed by sidecar `.srt` extraction.
 
-On macOS, VideoToolbox hardware encoding is used when available. Otherwise — or with `--encoder software` — `libx265` / `libx264` runs at `crf=21` / `crf=20` `preset=medium`, quality-targeted but capped **at** the tier target with a tight `-maxrate` / `-bufsize` (≈1 s). Capping at the target rather than above it is what lets a software re-encode land at tier and be recognised as done on the next run, so repeated runs converge.
+On macOS, VideoToolbox hardware encoding is used when available. Otherwise — or with `--encoder software` — `libx265` / `libx264` runs `preset=medium` at **the CRF band measured for that tier** (x265 24 / 21 / 19 / 18 / 16 and x264 21 / 18 / 16 / 15 / 14, from OK to Insane; a TRANSCODE pass sits two lower still), quality-targeted but capped **at** the tier target with a tight `-maxrate` / `-bufsize` (≈1 s). Capping at the target rather than above it is what lets a software re-encode land at tier and be recognised as done on the next run, so repeated runs converge.
 
 Output always includes `-movflags +faststart` so files are immediately streamable.
 

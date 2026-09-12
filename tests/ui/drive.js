@@ -59,12 +59,16 @@ setTimeout(() => {
   // ── Quality tiers ─────────────────────────────────────────────────────────
   type($('#adv-bpp-EXCELLENT'), '0.15');
   check('typing a tier bpp updates ADV', ADV.bpp.EXCELLENT, 0.15);
-  check('...and leaves the other tiers alone', ADV.bpp.OK, 0.0965);
-  // The Advanced editor states the concrete cost at a common reference (1080p30)
+  check('...and leaves the other tiers alone', ADV.bpp.OK, 0.09645);
+  // The Advanced editor states the concrete cost at the fps ANCHOR (1080p24), not at
+  // 1080p30: the tier's density is defined at 30fps, but frame rate is priced on a
+  // curve, so a 1080p30 file receives ~86% of the 30fps figure while a 1080p24 file
+  // receives exactly the anchor one. Quoting a number no file gets is what this checks
+  // against.
   // for BOTH codecs — no 4K/60fps brackets, no math notation (that's in About).
   const note = d.querySelector('[data-bpp-note="EXCELLENT"]').textContent;
-  check('...and the row states the bitrate at 1080p30',
-        /Mbps at 1080p30/.test(note), true);
+  check('...and the row states the bitrate at the fps anchor',
+        /Mbps at 1080p24/.test(note), true);
   check('...for both codecs', /H\.264/.test(note) && /H\.265/.test(note), true);
   // The FLOW states density only. A bitrate there is true at exactly one
   // resolution and frame rate, so it is the misleading half of the story —
@@ -82,7 +86,7 @@ setTimeout(() => {
   click($('#adv-bpp-reset'));
   check('Reset tiers restores the anchors', ADV.bpp.EXCELLENT, 0.1688);
   check('...for every tier', [ADV.bpp.OK, ADV.bpp.GOOD, ADV.bpp.STELLAR, ADV.bpp.INSANE],
-        [0.0965, 0.1286, 0.2090, 0.2492]);
+        [0.09645, 0.1286, 0.2090, 0.2492]);
   check('...and clears the warning', $('#adv-bpp-summary').classList.contains('warn'), false);
 
   // ── Ignore rules ──────────────────────────────────────────────────────────
@@ -151,7 +155,7 @@ setTimeout(() => {
         [1500, 'auto', 'passthrough', 'convert', 1, 0.1688]);
   check('...including the subtitle kinds', ADV.subKinds, ['normal', 'forced', 'hoh']);
   check('...and does not share state with the defaults object',
-        (() => { window.ADV.bpp.OK = 9; click($('#adv-reset')); return window.ADV.bpp.OK; })(), 0.0965);
+        (() => { window.ADV.bpp.OK = 9; click($('#adv-reset')); return window.ADV.bpp.OK; })(), 0.09645);
 
   // ── every section heading must look like a section heading ────────────────
   // Missed by the first version of this harness and caught by eye in a browser:

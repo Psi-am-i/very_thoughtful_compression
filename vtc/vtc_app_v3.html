@@ -2132,7 +2132,7 @@ body{
               </span>
             </div>
             <!-- Only present when the RUN's codec is AV1 (renderPreviewCodecNote). -->
-            <p class="pv-av1" id="pv-av1" hidden="">These panels are <b>H.265</b> five-second samples whatever the run is set to — AV1 is not sampled. Measured across eight sources, an AV1 run lands anywhere from <b>30% under</b> these sizes to slightly <b>over</b> them depending on the footage, so the panels will not tell you what AV1 costs. Judge the tiers here on how they look.</p>
+            <p class="pv-av1" id="pv-av1" hidden="">These panels are <b>H.265</b> five-second samples whatever the run is set to — AV1 is not sampled. An AV1 run will not land on these sizes — how far off depends on the footage, and the spread has not been re-measured since AV1's encoder settings changed, so no figure is quoted here rather than a stale one. The panels will not tell you what AV1 costs. Judge the tiers here on how they look.</p>
             <!-- The two pulldowns and the button that acts on them are one group:
                  pick two encodes, then compare them full screen. "All tiers" and
                  "Refresh" are separate — they don't depend on the chosen pair. -->
@@ -2225,7 +2225,7 @@ body{
                 <thead><tr><th>Tier</th><th class="num">Score*</th><th class="num">H.264</th><th class="num">H.265</th><th>What it's for</th></tr></thead>
                 <tbody id="a-tiers-body"></tbody>
               </table>
-              <div class="ref-n"><b>*&nbsp;Score</b> — the tier's H.264 bits-per-pixel-per-frame&nbsp;× 1000. Every other codec's target is derived from it by the relative compression strength between them. The <b>H.264</b> and <b>H.265</b> columns are Mbps at 1080p30; each file re-derives its own target from its real pixels and frame rate (4K ~4×, 60fps ~2×). Floor 1500 kbps; never above the source.</div>
+              <div class="ref-n"><b>*&nbsp;Score</b> — the tier's H.264 bits-per-pixel-per-frame&nbsp;× 1000. Every other codec's target is derived from it by the relative compression strength between them. The <b>H.264</b> and <b>H.265</b> columns are Mbps at 1080p30 — the density's <em>reference</em>, not a figure any file receives: each file re-derives its own target from its real pixels and frame rate. Pixels multiply straight in (4K ~4×), but frame rate is priced on a measured curve, because a frame costs <em>more</em> bits at a lower frame rate — so 60fps is ~1.25×, not ~2×, and a real 1080p30 file lands at ~86% of the column (a 1080p24 file at ~80%). Floor 1500 kbps; never above the source.</div>
               <div class="ref-n" style="margin-top:8px">These are the shipped defaults — retune any tier in <b>Settings → Quality tiers</b> and this table shows your values. A source already at or under a tier's density is already efficient and barely shrinks; the number to watch is your source's own score, shown under each preview.</div>
             </div>
           </div>
@@ -2248,8 +2248,8 @@ body{
             <p>VTC outputs H.264, H.265 or AV1; what it does with a source depends on how modern that codec already is.</p>
             <ul class="a-list">
               <li><b>H.264 / AVC</b> (2003) — the universal baseline, plays on virtually anything, but ~2× the size of H.265.</li>
-              <li><b>H.265 / HEVC</b> (2013) — H.264 quality in 40–55% of the space (~60% smaller at 4K); plays on most things since ~2015, bar some smart TVs and Firefox browser. This is VTC's default output but worth considering H.264 if you are streaming to a wide variety of devices.</li>
-              <li><b>AV1</b> (2018) — royalty-free and the most efficient of the three: VTC targets it about 25% under H.265 at the same quality. The cost is playback — decoding needs an M3 or newer Mac, an RTX 30-series or newer, Intel 11th-gen or newer, an AMD RDNA2 card or newer, or a TV from 2023 on — and there is no hardware AV1 encoder on any Mac, so it is made in software at roughly software-H.265 speed. An output option; as a <i>source</i> it is already modern, so it is left alone.</li>
+              <li><b>H.265 / HEVC</b> (2013) — H.264 quality in 45–60% of the space — a 40% saving at 1080p, 50% at 4K, 55% above that; plays on most things since ~2015, bar some smart TVs and Firefox browser. This is VTC's default output but worth considering H.264 if you are streaming to a wide variety of devices.</li>
+              <li><b>AV1</b> (2018) — royalty-free and the most efficient of the three: VTC targets it about 25% under H.265 at the same quality. The cost is playback — decoding needs an M3 or newer Mac, an RTX 30-series or newer, Intel 11th-gen or newer, an AMD RDNA2 card or newer, or a TV from 2023 on — and there is no hardware AV1 encoder on any Mac, so it is made in software — slower than software H.265 at 1080p (1.6× realtime against 2.6×), faster at 4K. An output option; as a <i>source</i> it is already modern, so it is left alone.</li>
               <li><b>VP9</b> (2013) — Google's codec, roughly H.265-efficient, common on YouTube and WebM. Modern: left alone, not currently an output option.</li>
               <li><b>Legacy — MPEG-2, VC-1, Xvid/DivX, WMV</b> — old and inefficient (2–4× H.264). VTC rescues these: transcoded to your chosen modern codec near their original bitrate, so quality holds while the file shrinks, usually dramatically.</li>
             </ul>
@@ -2778,31 +2778,31 @@ body{
             <span class="tier-name">OK</span>
             <div class="tier-bar"><i data-bpp-bar="OK" style="--fill: 38.7;"></i></div>
             <div class="tier-box"><input type="number" id="adv-bpp-OK" data-bpp="OK" min="0.005" max="1" step="0.001"><span class="adv-unit">bpp</span></div>
-            <span class="tier-read" data-bpp-note="OK">quality 97 · H.264 6.0 Mbps · H.265 3.6 Mbps at 1080p30</span>
+            <span class="tier-read" data-bpp-note="OK">quality 96 · H.264 4.8 Mbps · H.265 2.9 Mbps at 1080p24</span>
           </div>
           <div class="tier-rung">
             <span class="tier-name">Good</span>
             <div class="tier-bar"><i data-bpp-bar="GOOD" style="--fill: 51.6;"></i></div>
             <div class="tier-box"><input type="number" id="adv-bpp-GOOD" data-bpp="GOOD" min="0.005" max="1" step="0.001"><span class="adv-unit">bpp</span></div>
-            <span class="tier-read" data-bpp-note="GOOD">quality 129 · H.264 8.0 Mbps · H.265 4.8 Mbps at 1080p30</span>
+            <span class="tier-read" data-bpp-note="GOOD">quality 129 · H.264 6.4 Mbps · H.265 3.8 Mbps at 1080p24</span>
           </div>
           <div class="tier-rung">
             <span class="tier-name">Excellent</span>
             <div class="tier-bar"><i data-bpp-bar="EXCELLENT" style="--fill: 67.7;"></i></div>
             <div class="tier-box"><input type="number" id="adv-bpp-EXCELLENT" data-bpp="EXCELLENT" min="0.005" max="1" step="0.001"><span class="adv-unit">bpp</span></div>
-            <span class="tier-read" data-bpp-note="EXCELLENT">quality 169 · H.264 10.5 Mbps · H.265 6.3 Mbps at 1080p30</span>
+            <span class="tier-read" data-bpp-note="EXCELLENT">quality 169 · H.264 8.4 Mbps · H.265 5.0 Mbps at 1080p24</span>
           </div>
           <div class="tier-rung">
             <span class="tier-name">Stellar</span>
             <div class="tier-bar"><i data-bpp-bar="STELLAR" style="--fill: 83.9;"></i></div>
             <div class="tier-box"><input type="number" id="adv-bpp-STELLAR" data-bpp="STELLAR" min="0.005" max="1" step="0.001"><span class="adv-unit">bpp</span></div>
-            <span class="tier-read" data-bpp-note="STELLAR">quality 209 · H.264 13.0 Mbps · H.265 7.8 Mbps at 1080p30</span>
+            <span class="tier-read" data-bpp-note="STELLAR">quality 209 · H.264 10.4 Mbps · H.265 6.2 Mbps at 1080p24</span>
           </div>
           <div class="tier-rung">
             <span class="tier-name">Insane</span>
             <div class="tier-bar"><i data-bpp-bar="INSANE" style="--fill: 100.0;"></i></div>
             <div class="tier-box"><input type="number" id="adv-bpp-INSANE" data-bpp="INSANE" min="0.005" max="1" step="0.001"><span class="adv-unit">bpp</span></div>
-            <span class="tier-read" data-bpp-note="INSANE">quality 249 · H.264 15.5 Mbps · H.265 9.3 Mbps at 1080p30</span>
+            <span class="tier-read" data-bpp-note="INSANE">quality 249 · H.264 12.4 Mbps · H.265 7.4 Mbps at 1080p24</span>
           </div>
           <div class="tier-sum adv-subs-summary" id="adv-bpp-summary"></div>
         </div>
@@ -3625,7 +3625,7 @@ const M = [
       {k:'GOOD', recap:'Good', tag:'', name:'Good',
        t:'Solid streaming quality — what most websites deliver, and a little under Netflix and Amazon. On a laptop or smaller TV it is usually more than enough.', m:[4,10,9,8], hot:0},
       {k:'EXCELLENT', recap:'Excellent', tag:'', name:'Excellent',
-       t:'Matches Netflix\'s top streaming quality. They manage that with 5.8 Mbps but they have per-shot encoding you do not have, so our bitrate is higher to achieve the same quality. For almost every library, this is the answer. For truly excellent sources you want to maintain — or if you use a projector — consider Stellar.', m:[6,9,9,7], hot:0},
+       t:'Matches Netflix\'s top streaming quality. They reach it at about 5.8 Mbps using per-shot encoding you do not have, so this tier deliberately spends well over that — roughly half as much again — to land in the same place. For almost every library, this is the answer. For truly excellent sources you want to maintain — or if you use a projector — consider Stellar.', m:[6,9,9,7], hot:0},
       {k:'STELLAR', recap:'Stellar', tag:'', name:'Stellar',
        t:'If your source is great, this beats streaming from the big players — heading into Blu-ray territory. For high-quality films, grainy or high-motion footage, or a projector, choose this.', m:[8,7,6,4], hot:0},
       {k:'INSANE', recap:'Insane', tag:'', name:'Insane',
@@ -3677,7 +3677,7 @@ const M = [
       {k:'Hardware', tag:'VideoToolbox · default', name:'Hardware (VideoToolbox)',
        t:'Many times faster, using a fixed-function block on the chip. It targets an average bitrate rather than a quality level, so here the tier target IS the quality knob — which is exactly why the bpp calibration matters most on this path. Slightly blunter than software at the same target; the size difference is small to moderate and the time saved is huge.', m:[6,9,9,10], hot:3},
       {k:'Software', tag:'libx265 / libx264', name:'Software (libx26x)',
-       t:'Capped CRF: crf=21 for H.265, crf=20 for H.264, preset medium. CRF is a constant-quality target and the tier bitrate becomes a ceiling on peaks via maxrate and bufsize — quality first, with the target as a limit rather than a goal. Better per bit. Considerably slower. Correct if time is genuinely no object.', m:[8,9,9,3], hot:0},
+       t:'Capped CRF at each tier&rsquo;s own measured band — x265 crf 24 at OK down to 16 at Insane, x264 21 down to 14 — preset medium. CRF is a constant-quality target and the tier bitrate becomes a ceiling on peaks via maxrate and bufsize — quality first, with the target as a limit rather than a goal. Better per bit. Considerably slower. Correct if time is genuinely no object.', m:[8,9,9,3], hot:0},
     ]},
   { id:'dest', short:'DESTINATION',
     title:'What happens to the originals?',
@@ -3844,13 +3844,13 @@ function syncEncoderQuestion(){
     if(answers.encoder===0) answers.encoder = 1;         // the saved answer would
     if(M[step] && M[step].id==='encoder' && armed===0) armed = 1;   // otherwise lie
   }
-  // …and the software option names the encoder it will actually run. AV1 is not
-  // capped CRF at a measured band, like the H.26x paths — SVT-AV1 does take it,
+  // …and the software option names the encoder it will actually run. AV1 IS now
+  // capped CRF at a measured band, like the H.26x paths — SVT-AV1 does take one,
   // once --mbr-overshoot-pct is set (docs/quality-model.md, "AV1").
   if(ci===2){
     SW.tag  = 'SVT-AV1';
     SW.name = 'Software (SVT-AV1)';
-    SW.t    = 'SVT-AV1 at preset 6, capped CRF at the tier\'s measured band — the same shape the H.26x paths use, so the tier sets quality first and the bitrate is a ceiling on peaks. AV1 needs its own band: it takes 8.6 CRF to double its bitrate against about 5.2 on x265, so the numbers do not transfer. Preset 6 measured 2.72× realtime against libx265 medium\'s 2.89×: near enough the same cost as software H.265, and the preset that earns the 25% the targets assume.';
+    SW.t    = 'SVT-AV1 at preset 6, capped CRF at the tier\'s measured band — the same shape the H.26x paths use, so the tier sets quality first and the bitrate is a ceiling on peaks. AV1 needs its own band: it takes about 10 CRF to double its bitrate against roughly 5 on x265, so the numbers do not transfer. Speed depends on the frame size and the ranking flips: on 1080p television preset 6 measured 1.6× realtime against libx265 medium\'s 2.6× — the slowest path offered — while at 4K it is the faster of the two. It is the preset that earns the 25% the targets assume.';
   } else {
     SW.tag = SW._tag; SW.name = SW._name; SW.t = SW._t;
   }
@@ -4323,6 +4323,17 @@ function renderDestExtra(){
 // The five preset rungs, by option index; index 5 is Custom (ADV.resizeCustom).
 // Keep in step with _RESIZE_HEIGHTS in webapp.py — the engine maps the same answer.
 const RESIZE_HEIGHTS = [0, 2160, 1440, 1080, 720];
+
+// How the engine prices frame rate — model.py's FPS_PRICE_ANCHOR / FPS_PRICE_EXPONENT.
+// A frame costs MORE bits at a lower frame rate (bigger gaps between frames, larger
+// residuals), so the target is not linear in fps: doubling the frame rate multiplies
+// it by about 1.25, not 2. Mirrored here so every figure this file quotes is derived
+// from the same curve the run will use — a hardcoded "60fps ~2x" is how this text
+// drifted from the engine in the first place. KEEP IN STEP WITH model.py.
+const FPS_ANCHOR = 24, FPS_EXP = 0.322;
+const pricedFps = f => FPS_ANCHOR * Math.pow(f / FPS_ANCHOR, FPS_EXP);
+// What a file at `f` fps actually receives, against the density quoted at 1080p30.
+const fpsShare = f => pricedFps(f) / 30;
 function resizeHeight(){
   const i = answers.resize;
   if(i===undefined) return 0;
@@ -4654,7 +4665,7 @@ const TIER_LABEL = { OK:'OK', GOOD:'Good', EXCELLENT:'Excellent', STELLAR:'Stell
 // indistinguishable from source on demanding footage) and the rest cascade down
 // from it. H.264 @1080p30 anchors = 6.0 / 8.0 / 10.5 / 13.0 / 15.5 Mbps (must match
 // Tier in model.py). "Reset tiers" restores exactly these.
-const BPP_DEFAULTS = { OK:0.0965, GOOD:0.1286, EXCELLENT:0.1688, STELLAR:0.2090, INSANE:0.2492 };
+const BPP_DEFAULTS = { OK:0.09645, GOOD:0.1286, EXCELLENT:0.1688, STELLAR:0.2090, INSANE:0.2492 };
 // One source of truth for every tier number the UI shows. A tier IS its H.264 bpp;
 // the score is that bpp ×1000 (a readable integer), the H.264 Mbps is the bpp at
 // 1080p30, and H.265 is that × the HEVC-HD factor. Reads the LIVE value from ADV.bpp,
@@ -4794,16 +4805,21 @@ const fmtBpp = b => (+b.toFixed(4)).toString();
 // decimals (109, 129) and x1000 still separates a hand-tuned tier by one unit.
 const qNum = b => String(Math.round(b*1000));
 // The Advanced editor is the one place the FULL implication belongs: this density,
-// for the codec you picked, is this many Mbps at 1080p30 and this many at 4K —
-// and frame rate multiplies it. Everywhere else says BPP alone, because a bitrate
-// quoted without its resolution and frame rate is the misleading half of the story.
+// for the codec you picked, is this many Mbps at the reference — and frame rate is
+// then priced on a curve, not multiplied in. Everywhere else says BPP alone, because
+// a bitrate quoted without its resolution and frame rate is the misleading half.
 function advBppImplication(v){
   // A plain, concrete read of the density: what it costs in each codec at a common
-  // reference (1080p30). No 4K/60fps brackets, no math notation — the full model
-  // lives behind "Learn more". The box holds the H.264 bpp; H.265 is derived.
-  const px1080 = 1920*1080*30/1e6;                 // Mpix/s at 1080p30
+  // reference. No 4K/60fps brackets, no math notation — the full model lives behind
+  // "Learn more". The box holds the H.264 bpp; H.265 is derived.
+  //
+  // Quoted at the ANCHOR (1080p24), not at 1080p30. The tier's density is DEFINED at
+  // 1080p30, but frame rate is priced as 24*(fps/24)**0.322, so a 1080p30 file
+  // receives only ~86% of the 30fps figure while a 1080p24 file receives exactly the
+  // anchor one. Quoting a number no file actually gets is how the old copy misled.
+  const mpixAnchor = 1920*1080*FPS_ANCHOR/1e6;     // Mpix/s at the fps anchor
   const hHd = ADV.hevcHd || 0.60;
-  return `quality ${qNum(v)} · H.264 ${(v*px1080).toFixed(1)} Mbps · H.265 ${(v*hHd*px1080).toFixed(1)} Mbps at 1080p30`;
+  return `quality ${qNum(v)} · H.264 ${(v*mpixAnchor).toFixed(1)} Mbps · H.265 ${(v*hHd*mpixAnchor).toFixed(1)} Mbps at 1080p24`;
 }
 function advBppNotes(){
   // The densest tier fills the ladder; every other rung's bar is its share of that,

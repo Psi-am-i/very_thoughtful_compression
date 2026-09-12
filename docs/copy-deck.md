@@ -27,10 +27,10 @@
     - Description: The universal baseline — direct-plays on virtually anything since 2003 — but about twice the size for the same quality as H.265/AV1, and increasingly wasteful above 1080p. Choose it for maximum compatibility, or for great performance on old devices.
   - `codec.1` **H.265 / HEVC**
     - Tag: Efficiency · suggested
-    - Description: A truly modern codec with wide — not universal — support. Same quality as H.264 in roughly 40–55% less space, and the advantage grows with resolution: up to ~60% smaller at 4K and above. Plays on most devices since 2015 — Apple, recent TVs, Plex, VLC, Infuse. The big exceptions are some SmartTV's and Firefox Browser. For most this is a good middle ground - unless you have a specific reason not to, like running a media server and you want video as widely as possible. 
-  - `codec.2` **AV1** _(coming soon)_
-    - Tag: Next-gen · coming later
-    - Description: Likely the future — files 30–50% smaller than H.265 at equal quality, royalty-free and backed by the Alliance for Open Media (Apple, Google, Microsoft, Netflix). BUT software encoding is glacial and hardware decoders are only starting to roll out (Apple plays it from the M3 on), and a five-year-old TV probably won't play it at all. Genuinely good; genuinely early.
+    - Description: A truly modern codec with wide — not universal — support. Same quality as H.264 in roughly 45–60% of the space — a 40% saving at 1080p, 50% at 4K, 55% above that; the advantage grows with resolution. Plays on most devices since 2015 — Apple, recent TVs, Plex, VLC, Infuse. The big exceptions are some smart TVs and the Firefox browser. For most this is a good middle ground - unless you have a specific reason not to, like running a media server and wanting the video to play as widely as possible. 
+  - `codec.2` **AV1**
+    - Tag: Next-gen
+    - Description: Likely the future — royalty-free, backed by the Alliance for Open Media (Apple, Google, Microsoft, Netflix), and targeted here about 25% under H.265 at the same quality. There is no hardware AV1 encoder on any Mac, so it is made in software: slower than software H.265 at 1080p (1.6× realtime against 2.6×), faster at 4K. Hardware decoders are only starting to roll out — Apple plays it from the M3 on — and a five-year-old TV probably won't play it at all. Genuinely good; genuinely early.
   - `codec.3` **H.266 / VVC** _(coming soon)_
     - Tag: Bleeding-edge · coming later
     - Description: In objective tests VVC is slightly more efficient than AV1 at high resolutions (4K/UHD), but AV1 has a big head start on support and tooling — and almost no consumer devices decode VVC yet.
@@ -40,24 +40,24 @@
 - **Subtitle:** Quality is part objective — how much information is in each frame (bits per pixel per frame) — and part subjective: what you think that looks like. Our baseline is the perceptual quality of a Netflix TV show. We call that quality Excellent and that is what you will get (assuming your source is that good or better). Resolution doesn't matter: we set the right bits per pixel per frame, which decides the bitrate for any resolution + quality automatically.
 - **Options:**
   - `quality.0` **OK**
-    - Tag: 0.064 bpp · 4.0 Mbps at 1080p30
-    - Recap label (Start modal): OK · 0.064 bpp
+    - Tag: 0.096 bpp · 4.8 Mbps at 1080p24
+    - Recap label (Start modal): OK · 0.096 bpp
     - Description: Uses little space. Fine for phones, tablets and older or low-quality material. On a big 1080p TV you will see it soften.
   - `quality.1` **GOOD**
-    - Tag: 0.080 bpp · 5.0 Mbps at 1080p30
-    - Recap label (Start modal): Good · 0.080 bpp
+    - Tag: 0.129 bpp · 6.4 Mbps at 1080p24
+    - Recap label (Start modal): Good · 0.129 bpp
     - Description: Solid streaming quality — what most websites deliver, and a little under Netflix and Amazon. On a laptop or smaller TV it is usually more than enough.
   - `quality.2` **EXCELLENT**
-    - Tag: 0.109 bpp · 6.8 Mbps at 1080p30 · default
-    - Recap label (Start modal): Excellent · 0.109 bpp
-    - Description: Matches Netflix's top streaming quality. They manage 5.8 Mbps with per-shot encoding you do not have, so we bump our number deliberately above theirs. For almost every library, this is the answer. For excellent sources you want to maintain — or if you use a projector — consider Stellar.
+    - Tag: 0.169 bpp · 8.4 Mbps at 1080p24 · default
+    - Recap label (Start modal): Excellent · 0.169 bpp
+    - Description: Matches Netflix's top streaming quality. They reach it at about 5.8 Mbps using per-shot encoding you do not have, so we deliberately spend well over that — roughly half as much again — to land in the same place. For almost every library, this is the answer. For excellent sources you want to maintain — or if you use a projector — consider Stellar.
   - `quality.3` **STELLAR**
-    - Tag: 0.129 bpp · 8.0 Mbps at 1080p30
-    - Recap label (Start modal): Stellar · 0.129 bpp
+    - Tag: 0.209 bpp · 10.4 Mbps at 1080p24
+    - Recap label (Start modal): Stellar · 0.209 bpp
     - Description: If your source is great, this beats streaming from the big players — heading into Blu-ray territory. For high-quality films, grainy or high-motion footage, or a projector, choose this.
   - `quality.4` **INSANE**
-    - Tag: 0.145 bpp · 9.0 Mbps at 1080p30
-    - Recap label (Start modal): Insane · 0.145 bpp
+    - Tag: 0.249 bpp · 12.4 Mbps at 1080p24
+    - Recap label (Start modal): Insane · 0.249 bpp
     - Description: Near-transparent from the original on most devices. Past this you may as well keep the original or use a lossless format — archival means lossless, not more bits.
 
 ### 3.3 SAVING  `q:saving`
@@ -71,7 +71,7 @@
   - `saving.1` **25%**
     - Tag: The healthy-encode bar
     - Recap label (Start modal): Must be 25% smaller — or else keep the original
-    - Description: The sensible pick if you chose H.265 or AV1: a healthy re-encode there saves 35–50%, so anything predicting under 25% was already pretty efficient — and re-encoding it spends a generation of quality for almost nothing.
+    - Description: The sensible pick if you chose H.265 or AV1: a re-encode genuinely worth doing normally clears this comfortably, so anything predicting under 25% was already pretty efficient — and re-encoding it spends a generation of quality for almost nothing.
   - `saving.2` **40%**
     - Tag: Only the truly bloated
     - Recap label (Start modal): Must be 40% smaller — or else keep the original
@@ -103,7 +103,7 @@
     - Description: Many times faster, using a fixed-function block on the chip. It targets an average bitrate rather than a quality level, so here the tier target IS the quality knob — which is exactly why the bpp calibration matters most on this path. Slightly blunter than software at the same target; the difference is small and the time saved is not.
   - `encoder.1` **Software**
     - Tag: {something-encoder} / {something-encoder}
-    - Description: Capped CRF: crf=21 for H.265, crf=20 for H.264, preset medium. CRF is a constant-quality target and the tier bitrate becomes a ceiling on peaks via maxrate and bufsize — quality first, with the target as a limit rather than a goal. Better per bit. Considerably slower. Correct if time is genuinely no object.
+    - Description: Capped CRF at each tier's own measured band — x265 crf 24 at OK down to 16 at Insane, x264 21 down to 14 — preset medium. CRF is a constant-quality target and the tier bitrate becomes a ceiling on peaks via maxrate and bufsize — quality first, with the target as a limit rather than a goal. Better per bit. Considerably slower. Correct if time is genuinely no object.
 
 ### 3.6 DESTINATION  `q:dest`
 - **Title:** What happens to the originals?
@@ -176,7 +176,7 @@
 - Myth: MKV is smaller than MP4. It isn't. The same H.264 video is the same size in either container. MKV files are often big because they're used for high-bitrate rips — not because of the wrapper. The container decides compatibility. The codec decides size.
 - Subtitles are never silently destroyed. Text tracks (SRT, ASS/SSA, WebVTT) are embedded into the MP4 as mov_text, all of them. If embedding fails they are extracted to sidecar .srt files beside the output, which Plex, VLC and Infuse pick up automatically. Image-based tracks — PGS from Blu-ray, DVD bitmaps — cannot exist in an MP4 and cannot become .srt without OCR, so they have to be dropped. When that happens the original is archived instead of deleted, even if you chose delete. Nothing is irrecoverable, and every case is named in the run report.
 - A stopped run picks up where it left off. Every file that reaches a decision is recorded in a resume ledger at the scan root, tagged with a signature of the settings that produced it. Re-run with the same settings and those files are skipped without re-probing. Change any setting and the signature changes, so everything is re-evaluated. Correctness never depends on it — the absolute target already prevents re-cutting — so the ledger is only ever a speed optimisation.
-- Honesty note. Quality assumes typical film and TV at 24–30 fps; very grainy or 50/60 fps material may want a tier up. Software (libx264/libx265) uses quality-targeted capped-CRF and is slightly better per bit than hardware VideoToolbox at the same target — hardware is simply much faster. Streaming services hit their numbers with per-shot encoders you don't have, so these anchors sit above theirs on purpose.
+- Honesty note. Quality assumes typical film and TV at 24–30 fps; very grainy material may want a tier up. 50/60 fps material is priced on its own measured curve rather than linearly (a frame costs more bits at a lower frame rate), anchored at 24 fps where the encoder bands were calibrated. Software (libx264/libx265) uses quality-targeted capped-CRF and is slightly better per bit than hardware VideoToolbox at the same target — hardware is simply much faster. Streaming services hit their numbers with per-shot encoders you don't have, so these anchors sit above theirs on purpose.
 
 ## 10 · Reference tables (right column of "How it decides")
 - **Quality tiers** table: Tier / bpp / H.264 / H.265 / What it's for (OK, Good, Excellent, Stellar, Insane)
