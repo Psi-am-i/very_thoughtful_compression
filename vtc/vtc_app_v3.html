@@ -2914,6 +2914,21 @@ body{
               is most efficient of all — typically the lowest factor.</span></div>
             <div class="adv-ctrl"><input type="number" id="adv-hevc-8k" min="0.2" max="1" step="0.01"></div>
           </div>
+          <div class="adv-row">
+            <div class="adv-lab"><b>AV1 factor · HD</b><span>The same thing for AV1 output, for
+              files ≤1080p. AV1 target = H.264 target × this. ⚠️ Unlike the HEVC factors, these
+              three are <b>not measured</b> — they are the HEVC ones scaled by a constant, so
+              they assert AV1's advantage is identical at every resolution.</span></div>
+            <div class="adv-ctrl"><input type="number" id="adv-av1-hd" min="0.2" max="1" step="0.01"></div>
+          </div>
+          <div class="adv-row">
+            <div class="adv-lab"><b>AV1 factor · 4K</b><span>For files &gt;1080p up to 4K.</span></div>
+            <div class="adv-ctrl"><input type="number" id="adv-av1-4k" min="0.2" max="1" step="0.01"></div>
+          </div>
+          <div class="adv-row">
+            <div class="adv-lab"><b>AV1 factor · 8K+</b><span>For files above 4K.</span></div>
+            <div class="adv-ctrl"><input type="number" id="adv-av1-8k" min="0.2" max="1" step="0.01"></div>
+          </div>
         </div>
       </section>
 
@@ -4698,6 +4713,7 @@ function renderAboutTiers(){
 }
 const ADV_DEFAULTS = { format:'convert', subKinds:['normal','forced','hoh'], subLangs:[],
   floor:1500, tol:10, hevcHd:0.60, hevc4k:0.50, hevc8k:0.45,
+  av1Hd:0.45, av1_4k:0.38, av1_8k:0.34,
   container:'auto', audio:'passthrough', abStereo:256, abMulti:448,
   imageSubs:true, keepMkvAudio:true, forceMkvSubs:false, jobs:1, ledger:true,
   bpp:Object.assign({}, BPP_DEFAULTS),
@@ -4934,7 +4950,9 @@ function advHistoryInfo(){
 
 function advToForm(){                                  // ADV -> controls
   [['#adv-floor','floor'],['#adv-tol','tol'],['#adv-hevc-hd','hevcHd'],
-   ['#adv-hevc-4k','hevc4k'],['#adv-hevc-8k','hevc8k'],['#adv-ab-stereo','abStereo'],
+   ['#adv-hevc-4k','hevc4k'],['#adv-hevc-8k','hevc8k'],
+   ['#adv-av1-hd','av1Hd'],['#adv-av1-4k','av1_4k'],['#adv-av1-8k','av1_8k'],
+   ['#adv-ab-stereo','abStereo'],
    ['#adv-ab-multi','abMulti'],['#adv-jobs','jobs']
   ].forEach(([id,key])=>{ const el=$(id); if(el) el.value=ADV[key]; });
   $('#adv-audio').value = ADV.audio;
@@ -4998,6 +5016,9 @@ function advBind(){                                    // controls -> ADV
   num('#adv-hevc-hd','hevcHd',{min:0.2,max:1,float:true});
   num('#adv-hevc-4k','hevc4k',{min:0.2,max:1,float:true});
   num('#adv-hevc-8k','hevc8k',{min:0.2,max:1,float:true});
+  num('#adv-av1-hd','av1Hd',{min:0.2,max:1,float:true});
+  num('#adv-av1-4k','av1_4k',{min:0.2,max:1,float:true});
+  num('#adv-av1-8k','av1_8k',{min:0.2,max:1,float:true});
   num('#adv-ab-stereo','abStereo',{min:64,max:640});
   num('#adv-ab-multi','abMulti',{min:128,max:1024});
   num('#adv-jobs','jobs',{min:1,max:16});
@@ -6578,7 +6599,7 @@ function confirmWork(){
 
 function openConfirm(){
   if(!SRC || !M.every(q=>answers[q.id]!==undefined)) return;   // not fully decided
-  $('#c-go').textContent='Yes, start'; $('#c-go').onclick=runNow;
+  $('#c-go').textContent='Yes, start'; $('#c-go').onclick=()=>window.runNow();
   $('.recap-sum').style.display=''; $('#recap-extra')?.remove();
   const hint=$('#recap-hint'); if(hint) hint.style.display='';
   $('#c-n').textContent=SRC.k.split('/').pop();
@@ -6634,7 +6655,13 @@ $('#confirm-sheet').onclick=e=>{ if(e.target===$('#confirm-sheet')) shutSheet('#
 // point — what changed, what didn't, and what went wrong, with the failures
 // reachable in one click rather than buried in a log.
 let RUN=null;
-$('#c-go').onclick=runNow;
+// LATE-BOUND DELIBERATELY. Binding `runNow` itself here captures the MOCK, because
+// this line runs at parse time and the bridge replaces window.runNow later, on
+// window.events.loaded. openConfirm() happens to re-assign it, so the mock cannot
+// fire today — but any future path that shows the confirm sheet without going
+// through openConfirm would run the simulator inside the real app. Calling through
+// window.runNow() removes the whole class of bug.
+$('#c-go').onclick=()=>window.runNow();
 function modelRun(){
   const N=SRC.files, rnd=(n=>()=>((n=n*16807%2147483647)/2147483647))(N*7919+13);
   const tier=M.find(q=>q.id==='quality').opts[answers.quality].k;
@@ -8819,7 +8846,15 @@ function wEdValid(){
   const e=W.editing;
   return !!(e && e.name && e.name.trim() && e.watch && e.out && wHasSeq(e));
 }
-function wEdSyncSave(){ $('#w-ed-save').disabled = !wEdValid(); }
+function wEdSyncSave(){
+  // Folder Actions is designed, not wired (the mode carries a 'soon' badge). It
+  // persists to localStorage, so an enabled Save would let someone create a watcher
+  // that looks saved and will never run. The screens stay browsable; only the
+  // promise is withdrawn. Re-enable this with the backend, not before.
+  const b = $('#w-ed-save');
+  b.disabled = true;
+  b.title = 'Folder Actions is not wired up yet — the screens are here to look at';
+}
 function wOpenEditor(id){
   const existing = id ? wAct(id) : null;
   W.editing = existing

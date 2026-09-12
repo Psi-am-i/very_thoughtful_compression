@@ -87,6 +87,32 @@ def test_hevc_factor_label():
     assert h265 == int(h264 * 0.30), (h264, h265)
 
 
+# ── "AV1 factor · HD / 4K / 8K+ — target = H.264 target × this" ────────────────
+def test_av1_factor_label():
+    """The AV1 boxes must move the AV1 target and leave H.264 and H.265 alone.
+
+    These three reached the engine long before they reached a control: RunConfig
+    carried them and pipeline passed them to the model, but neither front end could
+    set them — the mirror image of the failure this file was written for. A test
+    beside the HEVC one is what stops them drifting back apart.
+    """
+    cfg = _cfg(av1Hd=0.30)
+    assert cfg.av1_factors() == (0.30, 0.38, 0.34)
+    h264 = target_kbps(Tier.EXCELLENT, _PX, 30, OutCodec.H264)
+    av1 = target_kbps(Tier.EXCELLENT, _PX, 30, OutCodec.AV1, av1=cfg.av1_factors())
+    assert av1 == int(h264 * 0.30), (h264, av1)
+    # and the HEVC path is untouched by an AV1 override
+    assert target_kbps(Tier.EXCELLENT, _PX, 30, OutCodec.H265,
+                       hevc=cfg.hevc_factors()) == int(h264 * 0.60)
+
+
+def test_av1_factors_default_to_the_model():
+    """An untouched panel must hand the engine model.py's own constants."""
+    from vtc.model import AV1_FACTOR_4K, AV1_FACTOR_8K, AV1_FACTOR_HD
+
+    assert _cfg().av1_factors() == (AV1_FACTOR_HD, AV1_FACTOR_4K, AV1_FACTOR_8K)
+
+
 # ── "Quality tiers · bits per pixel per frame" ────────────────────────────────
 def test_tier_bpp_label():
     cfg = _cfg(bpp={"EXCELLENT": 0.20})

@@ -445,6 +445,16 @@ def _apply_advanced(cfg: RunConfig, adv: dict) -> None:
         cfg.hevc_factor_4k = v
     if (v := _num("hevc8k", float, 0.2, 1.0)) is not None:
         cfg.hevc_factor_8k = v
+    # The AV1 equivalents. These existed on RunConfig and were honoured by the model
+    # (pipeline passes config.av1_factors() alongside the HEVC ones) but had no control
+    # at either front end — the mirror image of the bug these tests were written for:
+    # not a control that reaches nothing, but engine behaviour nobody could reach.
+    if (v := _num("av1Hd", float, 0.2, 1.0)) is not None:
+        cfg.av1_factor_hd = v
+    if (v := _num("av1_4k", float, 0.2, 1.0)) is not None:
+        cfg.av1_factor_4k = v
+    if (v := _num("av1_8k", float, 0.2, 1.0)) is not None:
+        cfg.av1_factor_8k = v
     if (v := _num("abStereo", int, 64, 640)) is not None:
         cfg.audio_bitrate_stereo = v
     if (v := _num("abMulti", int, 128, 1024)) is not None:
