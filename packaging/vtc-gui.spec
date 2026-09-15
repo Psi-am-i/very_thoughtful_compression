@@ -14,8 +14,21 @@ cross-compile — the Windows build uses vtc-gui-win.spec on a Windows runner.
 """
 
 import os
+import re
 
 repo_root = os.path.dirname(SPECPATH)
+
+# The version comes from the package, never typed here. These two keys were
+# hardcoded at 1.0.1 and Finder reported 1.0.1 for every release from August
+# onwards — the .app's own Get Info was two minor versions behind the code it
+# contained. Parsed rather than imported so the build does not depend on the
+# package being importable in the spec's interpreter.
+_init = os.path.join(repo_root, 'vtc', '__init__.py')
+with open(_init, encoding='utf-8') as _f:
+    _m = re.search(r'^__version__\s*=\s*[\'"]([^\'"]+)[\'"]', _f.read(), re.M)
+if not _m:
+    raise SystemExit(f'cannot find __version__ in {_init} — refusing to build an unlabelled app')
+VTC_VERSION = _m.group(1)
 ffmpeg = os.environ.get('FFMPEG_BINARY_PATH')
 ffprobe = os.environ.get('FFPROBE_BINARY_PATH')
 for label, path in (('FFMPEG_BINARY_PATH', ffmpeg), ('FFPROBE_BINARY_PATH', ffprobe)):
@@ -71,8 +84,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'Very Thoughtful Compression',
         'CFBundleDisplayName': 'Very Thoughtful Compression',
-        'CFBundleShortVersionString': '1.0.1',
-        'CFBundleVersion': '1.0.1',        # Finder shows Short; this is the build number
+        'CFBundleShortVersionString': VTC_VERSION,
+        'CFBundleVersion': VTC_VERSION,    # Finder shows Short; this is the build number
         'NSHighResolutionCapable': True,
         'LSMinimumSystemVersion': '10.14',
     },
