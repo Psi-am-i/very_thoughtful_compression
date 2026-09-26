@@ -170,6 +170,37 @@ def test_stop_flag_skips_everything():
         pipeline.STOP_FILE.unlink(missing_ok=True)
 
 
+def test_shutdown_kill_latches_the_abort():
+    """Killing children at exit must ALSO latch, or the run just starts another.
+
+    The run worker is a daemon thread that keeps executing while the app shuts
+    down. A bare kill reads to it as an ordinary failure, so it drops the temp and
+    starts the next rung of the attempt ladder — spawning a fresh ffmpeg moments
+    after the shutdown sweep, which is the orphan the sweep exists to prevent.
+    """
+    encode.clear_abort()
+    assert not encode.aborted()
+    encode.kill_running_children()               # nothing running: still must latch
+    assert encode.aborted(), "shutdown kill left the abort latch down"
+    encode.clear_abort()
+    print("  ok  shutdown kill latches abort (no replacement child)")
+
+
+def test_run_tracked_registers_the_child():
+    """The preview encodes go through run_tracked so a shutdown can reach them.
+
+    They used to be bare subprocess.run calls: invisible to the killer, and so
+    they outlived the app exactly as run encodes once did.
+    """
+    r = encode.run_tracked([sys.executable, "-c", "print('hi')"],
+                           capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout.strip() == "hi", f"run_tracked broke: {r}"
+    # and it deregisters on the way out, so a later kill has nothing stale to touch
+    with encode._live_lock:
+        assert not encode._live_procs, "run_tracked left a finished child registered"
+    print("  ok  run_tracked runs, registers and deregisters the child")
+
+
 def _run_all():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

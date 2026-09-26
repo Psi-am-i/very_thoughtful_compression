@@ -571,6 +571,10 @@ def _print_benchmark(cfg: RunConfig, samples: int, seconds: int) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
+    # Same sweep the GUI does at startup: a CLI run killed by a crash, a power cut
+    # or a SIGKILL leaves its part-encoded temp behind, and nothing else collects it.
+    pipeline.sweep_stale_scratch()
+
     if args.interactive or args.src is None:
         cfg = interactive_config(args.src)
     else:
